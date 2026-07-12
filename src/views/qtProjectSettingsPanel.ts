@@ -71,9 +71,36 @@ const PATH_BROWSE_FIELDS: Record<string, { kind: BrowseFieldKind; relative?: boo
   packagingOutputDirectory: { kind: 'folder', relative: true },
   packagingWindowsManifestFile: { kind: 'file', relative: true },
   packagingResourceCompilerPath: { kind: 'file' },
+  installerOutputDirectory: { kind: 'folder', relative: true },
+  installerQtIfwBinaryCreatorPath: { kind: 'file' },
+  installerQtIfwRepogenPath: { kind: 'file' },
+  installerQtIfwInstallerBasePath: { kind: 'file' },
+  installerQtIfwRepositoryOutputDirectory: { kind: 'folder', relative: true },
+  installerQtIfwControlScript: { kind: 'file', relative: true },
+  installerQtIfwComponentScript: { kind: 'file', relative: true },
+  installerInnoIsccPath: { kind: 'file' },
+  installerInnoScriptFile: { kind: 'file', relative: true },
+  installerNsisMakensisPath: { kind: 'file' },
+  installerNsisScriptFile: { kind: 'file', relative: true },
+  installerSignToolPath: { kind: 'file' },
+  installerCertificateFile: { kind: 'file', relative: true },
+  publicationOutputDirectory: { kind: 'folder', relative: true },
+  publicationReleaseNotesFile: { kind: 'file', relative: true },
+  publicationMsixMakeAppxPath: { kind: 'file' },
+  publicationMsixLogo44: { kind: 'file', relative: true },
+  publicationMsixLogo150: { kind: 'file', relative: true },
+  publicationMsixStoreLogo: { kind: 'file', relative: true },
+  publicationWingetPath: { kind: 'file' },
+  publicationWingetCreatePath: { kind: 'file' },
+  publicationGithubGhPath: { kind: 'file' },
+  publicationLocalDirectory: { kind: 'folder' },
+  publicationScpPath: { kind: 'file' },
+  publicationRsyncPath: { kind: 'file' },
   profilingOutputDirectory: { kind: 'folder', relative: true },
   profilingQmlProfilerPath: { kind: 'file' },
   profilingCppcheckSuppressionsFile: { kind: 'file', relative: true },
+  qmlLanguageServerExecutable: { kind: 'file' },
+  qmlModuleImportRoot: { kind: 'folder', relative: true },
   testCtestExecutable: { kind: 'file' },
   testCtestBuildDirectory: { kind: 'folder', relative: true }
 };
@@ -100,8 +127,22 @@ const FIELD_DATALISTS: Record<string, string[]> = {
   platformAndroidBuildToolsVersion: ['36.0.0', '35.0.0'],
   packagingCategories: ['Utility', 'Development', 'Education', 'Graphics', 'AudioVideo', 'Network'],
   packagingNamePattern: ['${productName}-${version}-${platform}-${arch}', '${productName}-${version}-${configuration}-${arch}', '${target}-${version}'],
+  installerFileNamePattern: ['${productName}-${version}-${arch}-setup', '${productName}-${version}-${platform}-${arch}-installer', '${target}-${version}-setup'],
+  installerQtIfwRepositoryUrl: ['https://updates.example.com/repository'],
+  installerTimestampUrl: ['http://timestamp.digicert.com', 'http://timestamp.sectigo.com'],
+  installerCertificatePasswordEnvironment: ['QPM_SIGN_CERT_PASSWORD'],
+  publicationBaseUrl: ['https://downloads.example.com/application', 'https://github.com/owner/repository/releases/download/v${version}'],
+  publicationMsixPackageUri: ['https://downloads.example.com/application/Application.msix'],
+  publicationMsixAppInstallerUri: ['https://downloads.example.com/application/Application.appinstaller'],
+  publicationWingetInstallerUrl: ['https://downloads.example.com/application/Application-1.0.0-setup.exe'],
+  publicationGithubRepository: ['owner/repository'],
+  publicationGithubTagPattern: ['v${version}', '${channel}-${version}'],
+  publicationGithubReleaseNamePattern: ['${productName} ${version}', '${productName} ${version} (${channel})'],
+  publicationSshDirectory: ['/var/www/downloads/application', '/srv/releases/application'],
   profilingQmlServices: ['CanvasFrameRate,EngineControl,DebugMessages', 'CanvasFrameRate,EngineControl,DebugMessages,QmlProfiler', 'QmlProfiler'],
-  profilingCppcheckChecks: ['warning,style,performance,portability', 'warning,performance,portability', 'all']
+  profilingCppcheckChecks: ['warning,style,performance,portability', 'warning,performance,portability', 'all'],
+  qmlModuleUri: ['Company.Application', 'Company.Controls', 'Qpm.Application'],
+  qmlModuleResourcePrefix: ['/qt/qml', '/qml']
 };
 
 const FIELD_HELP: Record<string, string> = {
@@ -145,7 +186,12 @@ const FIELD_HELP: Record<string, string> = {
   environmentOptions: 'Environment variables written as NAME=value, separated by semicolons or new lines.',
   externalProcessPath: 'Host executable used when debugging a shared library instead of a standalone application.',
   platformName: 'Display name of the active platform profile.',
-  platformType: 'Execution target: desktop, local Linux, Remote Linux, Docker, WebAssembly or Android.',
+  platformType: 'Execution target: desktop, local Linux, Remote Linux, Docker, WebAssembly, Android, macOS or iOS.',
+  platformAppleDeveloperDirectory: 'Active Xcode developer directory. Leave empty to use xcode-select.',
+  platformAppleBundleIdentifier: 'Reverse-DNS bundle identifier used by macOS and iOS.',
+  platformAppleDevelopmentTeam: 'Apple Developer Team identifier used by Xcode automatic signing.',
+  platformAppleCodeSignIdentity: 'Certificate identity used by codesign and macdeployqt.',
+  platformAppleNotaryProfile: 'Keychain profile previously created for xcrun notarytool.',
   platformBuildLocation: 'Where the build command runs: local host, remote host or container.',
   platformKitId: 'Qt kit used by the active platform profile.',
   platformBuildProfileId: 'Build profile selected for platform workflows.',
@@ -216,6 +262,24 @@ const FIELD_HELP: Record<string, string> = {
   platformAndroidUninstallBeforeInstall: 'Removes the existing package before installation.',
   platformAndroidOpenLogcatAfterRun: 'Starts a filtered logcat stream after launching the application.',
 
+  qmlLanguageServerEnabled: 'Enables the QPM-managed qmlls client for this project.',
+  qmlLanguageServerAutoStart: 'Starts qmlls automatically when the project contains QML files and becomes active.',
+  qmlLanguageServerExecutable: 'Optional qmlls executable override. Leave empty to use the executable from the selected Qt kit.',
+  qmlLanguageServerBuildDirectories: 'Additional build directories published to qmlls. QPM also adds the active build directory automatically.',
+  qmlLanguageServerImportPaths: 'Additional QML import roots, one per line. The Qt qml directory, module root and project QML folders are added automatically.',
+  qmlLanguageServerUseEnvironment: 'Lets qmlls read QML_IMPORT_PATH and QML2_IMPORT_PATH in addition to explicit -I paths.',
+  qmlLanguageServerNoCmakeCalls: 'Prevents qmlls from invoking CMake itself. QPM supplies build directories directly.',
+  qmlLanguageServerCmakeJobs: 'Maximum parallel CMake jobs when qmlls is allowed to invoke CMake. Zero uses its default.',
+  qmlLanguageServerMaxFiles: 'Maximum number of files qmlls may search while resolving imports.',
+  qmlLanguageServerTrace: 'Controls Language Server Protocol tracing in the dedicated QPM trace output channel.',
+  qmlLanguageServerVerbose: 'Keeps detailed qmlls diagnostics in the QPM language-server output channel.',
+  qmlLanguageServerConflictPolicy: 'Avoid duplicate prevents QPM from starting qmlls when the official Qt QML extension is installed.',
+  qmlLanguageServerGenerateConfig: 'Generates and maintains a project .qmlls.ini before starting qmlls.',
+  qmlLanguageServerArguments: 'Additional raw qmlls command-line arguments, one per line.',
+  qmlModuleUri: 'Dotted URI used by the QML module, for example Company.Controls.',
+  qmlModuleVersion: 'Major.minor version written to generated qmldir metadata.',
+  qmlModuleImportRoot: 'Project-relative directory used as the QML module import root.',
+  qmlModuleResourcePrefix: 'Resource prefix used by generated QML module metadata, normally /qt/qml.',
   debugName: 'Display name of the active debug profile.',
   debugRequest: 'Launches a program, attaches to a process, connects to GDB Server, opens a dump, or attaches to QML.',
   debuggerType: 'Debugger adapter selected explicitly or inferred from the active kit.',
@@ -279,6 +343,35 @@ const FIELD_HELP: Record<string, string> = {
   customBuildActions: 'Custom commands executed as part of the build workflow.',
   postBuildActions: 'Shell commands executed after a successful build.',
   packagingEnabled: 'Enables QPM product metadata generation and portable packaging for this project.',
+  installerEnabled: 'Enables desktop installer generation independently from portable archive creation.',
+  installerBackend: 'Selects Qt Installer Framework, Inno Setup or NSIS as the installer compiler.',
+  installerBuildPortablePackage: 'Rebuilds the portable staging directory before compiling the installer.',
+  installerOutputDirectory: 'Directory receiving generated desktop installers.',
+  installerFileNamePattern: 'Installer base name. Supports ${productName}, ${version}, ${platform}, ${arch}, ${configuration} and ${target}.',
+  installerQtIfwMode: 'Offline embeds packages, online downloads them from a repository, and hybrid combines both modes.',
+  installerQtIfwRepositoryUrl: 'Remote Qt IFW repository URL referenced by online and hybrid installers.',
+  installerQtIfwComponentId: 'Stable reverse-domain component identifier used by Qt Installer Framework.',
+  installerCertificatePasswordEnvironment: 'Name of the environment variable containing the PFX password. The password itself is never stored.',
+  installerCertificateThumbprint: 'SHA-1 certificate thumbprint used to select a certificate from the Windows certificate store.',
+  installerTimestampUrl: 'RFC 3161 timestamp server used by SignTool so signatures remain valid after certificate expiration.',
+  installerSignTargetBinary: 'Signs the staged application executable before installer compilation.',
+  installerSignInstaller: 'Signs the final installer executable after it is generated.',
+  publicationEnabled: 'Enables release bundle creation and publication commands for this project.',
+  publicationOutputDirectory: 'Directory receiving release bundles, MSIX packages, App Installer files and publication metadata.',
+  publicationChannel: 'Release channel written to release.json and used in the generated bundle name.',
+  publicationBaseUrl: 'Public base URL used to derive artifact and update URLs when a more specific URI is empty.',
+  publicationReleaseNotesFile: 'Optional Markdown release notes copied into each generated release bundle.',
+  publicationMsixEnabled: 'Creates a Windows MSIX package from the portable Qt staging directory.',
+  publicationMsixPublisher: 'Publisher subject that must match the certificate used to sign the MSIX package.',
+  publicationMsixVersion: 'Four-part numeric MSIX version, for example 1.2.0.0.',
+  publicationMsixGenerateAppInstaller: 'Generates an .appinstaller descriptor for installation and update checks.',
+  publicationMsixUpdateOnLaunch: 'Checks for an updated MSIX package when the application is launched.',
+  publicationWingetEnabled: 'Generates the version, installer and default-locale WinGet manifests.',
+  publicationWingetIdentifier: 'Stable WinGet package identifier, normally Publisher.Product.',
+  publicationWingetInstallerUrl: 'Public HTTPS URL of the exact installer referenced by the WinGet manifest.',
+  publicationGithubRepository: 'GitHub repository in owner/repository form used by gh release create or upload.',
+  publicationPublishTarget: 'Selects local directory, SSH/rsync or GitHub release publication.',
+  publicationDeleteRemote: 'Allows rsync --delete to remove remote files that no longer exist locally. Use with care.',
 
   profilingOutputDirectory: 'Directory used for QML traces, CPU profiles, memory reports, Cppcheck XML and system traces.',
   profilingBuildBeforeRun: 'Builds the active target before starting a runtime profiler.',
@@ -356,6 +449,7 @@ const SECTION_HELP: Record<string, string> = {
   tests: 'Test discovery, execution environment and timeout settings.',
   quality: 'Clang-Tidy, Clazy, sanitizers and coverage-related configuration.',
   packaging: 'Product identity, executable metadata, runtime staging and portable distribution archives.',
+  publication: 'MSIX, App Installer, WinGet manifests, release metadata and publication destinations.',
   steps: 'Commands executed before, during or after the selected build backend.',
   files: 'Summary of files registered in the native Qt project manifest.'
 };
@@ -634,6 +728,25 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     manifest.profiling.tracing.timestamps = payload.profilingTraceTimestamps === true;
     manifest.profiling.tracing.outputFile = String(payload.profilingTraceOutputFile ?? '${target}-trace.log').trim() || '${target}-trace.log';
 
+    manifest.qml.languageServer.enabled = payload.qmlLanguageServerEnabled === true;
+    manifest.qml.languageServer.autoStart = payload.qmlLanguageServerAutoStart === true;
+    manifest.qml.languageServer.executable = String(payload.qmlLanguageServerExecutable ?? '').trim();
+    manifest.qml.languageServer.buildDirectories = normalizeList(payload.qmlLanguageServerBuildDirectories);
+    manifest.qml.languageServer.importPaths = normalizeList(payload.qmlLanguageServerImportPaths);
+    manifest.qml.languageServer.useQmlImportPathEnvironment = payload.qmlLanguageServerUseEnvironment === true;
+    manifest.qml.languageServer.noCmakeCalls = payload.qmlLanguageServerNoCmakeCalls === true;
+    manifest.qml.languageServer.cmakeJobs = Math.min(256, normalizeNonNegativeInteger(payload.qmlLanguageServerCmakeJobs, 0));
+    manifest.qml.languageServer.maxFilesToSearch = Math.min(1_000_000, normalizeNonNegativeInteger(payload.qmlLanguageServerMaxFiles, 20000));
+    manifest.qml.languageServer.trace = normalizeQmlLanguageTrace(payload.qmlLanguageServerTrace);
+    manifest.qml.languageServer.verboseOutput = payload.qmlLanguageServerVerbose === true;
+    manifest.qml.languageServer.conflictPolicy = payload.qmlLanguageServerConflictPolicy === 'allow-parallel' ? 'allow-parallel' : 'avoid-duplicate';
+    manifest.qml.languageServer.generateConfigurationFile = payload.qmlLanguageServerGenerateConfig === true;
+    manifest.qml.languageServer.additionalArguments = normalizeList(payload.qmlLanguageServerArguments);
+    manifest.qml.module.uri = String(payload.qmlModuleUri ?? manifest.qml.module.uri).trim() || manifest.qml.module.uri;
+    manifest.qml.module.version = String(payload.qmlModuleVersion ?? manifest.qml.module.version).trim() || manifest.qml.module.version;
+    manifest.qml.module.importRoot = String(payload.qmlModuleImportRoot ?? manifest.qml.module.importRoot).trim() || manifest.qml.module.importRoot;
+    manifest.qml.module.resourcePrefix = String(payload.qmlModuleResourcePrefix ?? manifest.qml.module.resourcePrefix).trim() || manifest.qml.module.resourcePrefix;
+
     manifest.packaging.enabled = payload.packagingEnabled === true;
     manifest.packaging.productName = String(payload.packagingProductName ?? manifest.name).trim() || manifest.name;
     manifest.packaging.productVersion = normalizePackagingVersion(payload.packagingProductVersion);
@@ -666,6 +779,133 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     manifest.packaging.linux.categories = normalizeList(payload.packagingCategories);
     manifest.packaging.linux.comment = String(payload.packagingLinuxComment ?? '').trim() || manifest.packaging.description;
     manifest.packaging.linux.installPrefix = String(payload.packagingInstallPrefix ?? '').trim() || '/usr/local';
+
+    const installer = manifest.packaging.installer;
+    installer.enabled = payload.installerEnabled === true;
+    installer.backend = normalizeInstallerBackend(payload.installerBackend);
+    installer.buildPortablePackage = payload.installerBuildPortablePackage === true;
+    installer.outputDirectory = String(payload.installerOutputDirectory ?? 'dist/installers').trim() || 'dist/installers';
+    installer.fileNamePattern = String(payload.installerFileNamePattern ?? '').trim() || '${productName}-${version}-${arch}-setup';
+    installer.installDirectoryName = String(payload.installerInstallDirectoryName ?? manifest.packaging.productName).trim() || manifest.packaging.productName;
+    installer.createDesktopShortcut = payload.installerDesktopShortcut === true;
+    installer.createStartMenuShortcut = payload.installerStartMenuShortcut === true;
+    installer.runAfterInstall = payload.installerRunAfterInstall === true;
+    installer.qtIfw.mode = normalizeQtIfwMode(payload.installerQtIfwMode);
+    installer.qtIfw.binaryCreatorPath = String(payload.installerQtIfwBinaryCreatorPath ?? '').trim();
+    installer.qtIfw.repogenPath = String(payload.installerQtIfwRepogenPath ?? '').trim();
+    installer.qtIfw.installerBasePath = String(payload.installerQtIfwInstallerBasePath ?? '').trim();
+    installer.qtIfw.componentId = String(payload.installerQtIfwComponentId ?? manifest.packaging.identifier).trim() || manifest.packaging.identifier;
+    installer.qtIfw.componentDisplayName = String(payload.installerQtIfwComponentDisplayName ?? manifest.packaging.productName).trim() || manifest.packaging.productName;
+    installer.qtIfw.componentDescription = String(payload.installerQtIfwComponentDescription ?? manifest.packaging.description).trim() || manifest.packaging.description;
+    installer.qtIfw.releaseDate = String(payload.installerQtIfwReleaseDate ?? '').trim();
+    installer.qtIfw.repositoryUrl = String(payload.installerQtIfwRepositoryUrl ?? '').trim();
+    installer.qtIfw.repositoryOutputDirectory = String(payload.installerQtIfwRepositoryOutputDirectory ?? 'dist/repository').trim() || 'dist/repository';
+    installer.qtIfw.maintenanceToolName = String(payload.installerQtIfwMaintenanceToolName ?? 'maintenancetool').trim() || 'maintenancetool';
+    installer.qtIfw.wizardStyle = normalizeQtIfwWizardStyle(payload.installerQtIfwWizardStyle);
+    installer.qtIfw.controlScript = String(payload.installerQtIfwControlScript ?? '').trim();
+    installer.qtIfw.componentScript = String(payload.installerQtIfwComponentScript ?? '').trim();
+    installer.qtIfw.archiveFormat = normalizeQtIfwArchiveFormat(payload.installerQtIfwArchiveFormat);
+    installer.qtIfw.compression = Math.max(0, Math.min(9, Number(payload.installerQtIfwCompression) || 7));
+    installer.qtIfw.additionalArguments = normalizeList(payload.installerQtIfwArguments);
+    installer.inno.isccPath = String(payload.installerInnoIsccPath ?? '').trim();
+    installer.inno.scriptFile = String(payload.installerInnoScriptFile ?? '').trim();
+    installer.inno.languages = normalizeList(payload.installerInnoLanguages);
+    installer.inno.privilegesRequired = normalizeInnoPrivileges(payload.installerInnoPrivileges);
+    installer.inno.architecture = normalizeInnoArchitecture(payload.installerInnoArchitecture);
+    installer.inno.compression = String(payload.installerInnoCompression ?? 'lzma2').trim() || 'lzma2';
+    installer.inno.solidCompression = payload.installerInnoSolidCompression === true;
+    installer.inno.additionalDirectives = normalizeList(payload.installerInnoDirectives);
+    installer.nsis.makensisPath = String(payload.installerNsisMakensisPath ?? '').trim();
+    installer.nsis.scriptFile = String(payload.installerNsisScriptFile ?? '').trim();
+    installer.nsis.requestExecutionLevel = normalizeNsisExecutionLevel(payload.installerNsisExecutionLevel);
+    installer.nsis.compressor = normalizeNsisCompressor(payload.installerNsisCompressor);
+    installer.nsis.additionalDefines = normalizeList(payload.installerNsisDefines);
+    installer.signing.enabled = payload.installerSigningEnabled === true;
+    installer.signing.signToolPath = String(payload.installerSignToolPath ?? '').trim();
+    installer.signing.certificateFile = String(payload.installerCertificateFile ?? '').trim();
+    installer.signing.certificateThumbprint = String(payload.installerCertificateThumbprint ?? '').trim();
+    installer.signing.certificateSubject = String(payload.installerCertificateSubject ?? '').trim();
+    installer.signing.certificatePasswordEnvironment = String(payload.installerCertificatePasswordEnvironment ?? 'QPM_SIGN_CERT_PASSWORD').trim() || 'QPM_SIGN_CERT_PASSWORD';
+    installer.signing.timestampUrl = String(payload.installerTimestampUrl ?? '').trim();
+    installer.signing.fileDigest = normalizeSigningDigest(payload.installerFileDigest);
+    installer.signing.timestampDigest = normalizeSigningDigest(payload.installerTimestampDigest);
+    installer.signing.signTargetBinary = payload.installerSignTargetBinary === true;
+    installer.signing.signInstaller = payload.installerSignInstaller === true;
+    installer.signing.verifyAfterSigning = payload.installerVerifyAfterSigning === true;
+    installer.signing.additionalArguments = normalizeList(payload.installerSigningArguments);
+
+    const publication = manifest.publication;
+    publication.enabled = payload.publicationEnabled === true;
+    publication.outputDirectory = String(payload.publicationOutputDirectory ?? 'dist/publication').trim() || 'dist/publication';
+    publication.channel = normalizePublicationChannel(payload.publicationChannel);
+    publication.baseUrl = String(payload.publicationBaseUrl ?? '').trim().replace(/\/+$/, '');
+    publication.releaseNotesFile = String(payload.publicationReleaseNotesFile ?? '').trim();
+    publication.includePortablePackage = payload.publicationIncludePortablePackage === true;
+    publication.includeInstaller = payload.publicationIncludeInstaller === true;
+    publication.includeQtIfwRepository = payload.publicationIncludeQtIfwRepository === true;
+    publication.generateChecksums = payload.publicationGenerateChecksums === true;
+    publication.generateLatestManifest = payload.publicationGenerateLatestManifest === true;
+    publication.msix.enabled = payload.publicationMsixEnabled === true;
+    publication.msix.makeAppxPath = String(payload.publicationMsixMakeAppxPath ?? '').trim();
+    publication.msix.packageIdentityName = String(payload.publicationMsixIdentity ?? '').trim();
+    publication.msix.publisher = String(payload.publicationMsixPublisher ?? 'CN=QPM Development').trim() || 'CN=QPM Development';
+    publication.msix.publisherDisplayName = String(payload.publicationMsixPublisherDisplayName ?? '').trim();
+    publication.msix.displayName = String(payload.publicationMsixDisplayName ?? manifest.packaging.productName).trim() || manifest.packaging.productName;
+    publication.msix.description = String(payload.publicationMsixDescription ?? manifest.packaging.description).trim() || manifest.packaging.description;
+    publication.msix.version = normalizeFourPartUiVersion(payload.publicationMsixVersion, manifest.packaging.productVersion);
+    publication.msix.architecture = normalizeMsixArchitecture(payload.publicationMsixArchitecture);
+    publication.msix.minimumOsVersion = normalizeFourPartUiVersion(payload.publicationMsixMinimumOsVersion, '10.0.19041.0');
+    publication.msix.targetOsVersion = normalizeFourPartUiVersion(payload.publicationMsixTargetOsVersion, '10.0.26100.0');
+    publication.msix.logo44 = String(payload.publicationMsixLogo44 ?? '').trim();
+    publication.msix.logo150 = String(payload.publicationMsixLogo150 ?? '').trim();
+    publication.msix.storeLogo = String(payload.publicationMsixStoreLogo ?? '').trim();
+    publication.msix.signPackage = payload.publicationMsixSignPackage === true;
+    publication.msix.generateAppInstaller = payload.publicationMsixGenerateAppInstaller === true;
+    publication.msix.packageUri = String(payload.publicationMsixPackageUri ?? '').trim();
+    publication.msix.appInstallerUri = String(payload.publicationMsixAppInstallerUri ?? '').trim();
+    publication.msix.updateOnLaunch = payload.publicationMsixUpdateOnLaunch === true;
+    publication.msix.hoursBetweenUpdateChecks = Math.max(0, Math.min(255, Number(payload.publicationMsixHoursBetweenChecks) || 0));
+    publication.msix.showPrompt = payload.publicationMsixShowPrompt === true;
+    publication.msix.updateBlocksActivation = payload.publicationMsixUpdateBlocksActivation === true;
+    publication.msix.forceUpdateFromAnyVersion = payload.publicationMsixForceUpdateFromAnyVersion === true;
+    publication.msix.automaticBackgroundTask = payload.publicationMsixAutomaticBackgroundTask === true;
+    publication.winget.enabled = payload.publicationWingetEnabled === true;
+    publication.winget.wingetPath = String(payload.publicationWingetPath ?? '').trim();
+    publication.winget.wingetCreatePath = String(payload.publicationWingetCreatePath ?? '').trim();
+    publication.winget.packageIdentifier = String(payload.publicationWingetIdentifier ?? '').trim();
+    publication.winget.publisher = String(payload.publicationWingetPublisher ?? '').trim();
+    publication.winget.packageName = String(payload.publicationWingetPackageName ?? manifest.packaging.productName).trim() || manifest.packaging.productName;
+    publication.winget.shortDescription = String(payload.publicationWingetDescription ?? manifest.packaging.description).trim() || manifest.packaging.description;
+    publication.winget.license = String(payload.publicationWingetLicense ?? 'Proprietary').trim() || 'Proprietary';
+    publication.winget.licenseUrl = String(payload.publicationWingetLicenseUrl ?? '').trim();
+    publication.winget.publisherUrl = String(payload.publicationWingetPublisherUrl ?? '').trim();
+    publication.winget.packageUrl = String(payload.publicationWingetPackageUrl ?? '').trim();
+    publication.winget.installerUrl = String(payload.publicationWingetInstallerUrl ?? '').trim();
+    publication.winget.installerType = normalizeWingetInstallerType(payload.publicationWingetInstallerType);
+    publication.winget.scope = payload.publicationWingetScope === 'user' ? 'user' : 'machine';
+    publication.winget.locale = String(payload.publicationWingetLocale ?? 'en-US').trim() || 'en-US';
+    publication.winget.tags = normalizeList(payload.publicationWingetTags);
+    publication.winget.releaseNotesUrl = String(payload.publicationWingetReleaseNotesUrl ?? '').trim();
+    publication.winget.minimumOsVersion = normalizeFourPartUiVersion(payload.publicationWingetMinimumOsVersion, '10.0.0.0');
+    publication.github.enabled = payload.publicationGithubEnabled === true;
+    publication.github.ghPath = String(payload.publicationGithubGhPath ?? '').trim();
+    publication.github.repository = String(payload.publicationGithubRepository ?? '').trim();
+    publication.github.tagPattern = String(payload.publicationGithubTagPattern ?? 'v${version}').trim() || 'v${version}';
+    publication.github.releaseNamePattern = String(payload.publicationGithubReleaseNamePattern ?? '${productName} ${version}').trim() || '${productName} ${version}';
+    publication.github.draft = payload.publicationGithubDraft === true;
+    publication.github.prerelease = payload.publicationGithubPrerelease === true;
+    publication.github.generateNotes = payload.publicationGithubGenerateNotes === true;
+    publication.github.clobberAssets = payload.publicationGithubClobberAssets === true;
+    publication.publish.target = normalizePublicationTarget(payload.publicationPublishTarget);
+    publication.publish.localDirectory = String(payload.publicationLocalDirectory ?? '').trim();
+    publication.publish.sshHost = String(payload.publicationSshHost ?? '').trim();
+    publication.publish.sshUser = String(payload.publicationSshUser ?? '').trim();
+    publication.publish.sshPort = normalizePort(payload.publicationSshPort, 22);
+    publication.publish.sshDirectory = String(payload.publicationSshDirectory ?? '').trim();
+    publication.publish.scpPath = String(payload.publicationScpPath ?? '').trim();
+    publication.publish.rsyncPath = String(payload.publicationRsyncPath ?? '').trim();
+    publication.publish.useRsync = payload.publicationUseRsync === true;
+    publication.publish.deleteRemote = payload.publicationDeleteRemote === true;
 
     const requestedArchitecture = payload.buildArchitecture === 'x86' ? 'x86' : 'x64';
     const representativeMode: QpmBuildMode = this.variant === 'release'
@@ -779,6 +1019,35 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     platformProfile.androidKeystoreAlias = String(payload.platformAndroidKeystoreAlias ?? '').trim();
     platformProfile.androidStorePasswordEnvironment = String(payload.platformAndroidStorePasswordEnvironment ?? 'QPM_ANDROID_STORE_PASSWORD').trim() || 'QPM_ANDROID_STORE_PASSWORD';
     platformProfile.androidKeyPasswordEnvironment = String(payload.platformAndroidKeyPasswordEnvironment ?? 'QPM_ANDROID_KEY_PASSWORD').trim() || 'QPM_ANDROID_KEY_PASSWORD';
+
+    platformProfile.appleDeveloperDirectory = String(payload.platformAppleDeveloperDirectory ?? '').trim();
+    platformProfile.appleXcodebuildPath = String(payload.platformAppleXcodebuildPath ?? '').trim();
+    platformProfile.appleXcrunPath = String(payload.platformAppleXcrunPath ?? '').trim();
+    platformProfile.appleMacDeployQtPath = String(payload.platformAppleMacDeployQtPath ?? '').trim();
+    platformProfile.appleBundleIdentifier = String(payload.platformAppleBundleIdentifier ?? '').trim();
+    platformProfile.appleDeploymentTarget = String(payload.platformAppleDeploymentTarget ?? '').trim();
+    platformProfile.appleArchitectures = normalizeList(payload.platformAppleArchitectures).flatMap((entry) => entry.split(',')).map((entry) => entry.trim()).filter(Boolean);
+    if (!platformProfile.appleArchitectures.length) platformProfile.appleArchitectures = ['arm64'];
+    platformProfile.appleDevelopmentTeam = String(payload.platformAppleDevelopmentTeam ?? '').trim();
+    platformProfile.appleCodeSignIdentity = String(payload.platformAppleCodeSignIdentity ?? '').trim();
+    platformProfile.appleProvisioningProfile = String(payload.platformAppleProvisioningProfile ?? '').trim();
+    platformProfile.appleEntitlementsFile = String(payload.platformAppleEntitlementsFile ?? '').trim();
+    platformProfile.appleAutomaticSigning = payload.platformAppleAutomaticSigning === true;
+    platformProfile.appleAllowProvisioningUpdates = payload.platformAppleAllowProvisioningUpdates === true;
+    platformProfile.appleScheme = String(payload.platformAppleScheme ?? '').trim();
+    platformProfile.appleConfiguration = payload.platformAppleConfiguration === 'Release' ? 'Release' : 'Debug';
+    platformProfile.appleSimulatorId = String(payload.platformAppleSimulatorId ?? '').trim();
+    platformProfile.appleDeviceId = String(payload.platformAppleDeviceId ?? '').trim();
+    platformProfile.appleCreateDmg = payload.platformAppleCreateDmg === true;
+    platformProfile.appleDmgFileSystem = payload.platformAppleDmgFileSystem === 'APFS' ? 'APFS' : 'HFS+';
+    platformProfile.appleNotaryProfile = String(payload.platformAppleNotaryProfile ?? '').trim();
+    platformProfile.appleStapleAfterNotarization = payload.platformAppleStapleAfterNotarization === true;
+    platformProfile.appleAppStoreCompliant = payload.platformAppleAppStoreCompliant === true;
+    platformProfile.appleHardenedRuntime = payload.platformAppleHardenedRuntime === true;
+    platformProfile.appleTimestamp = payload.platformAppleTimestamp === true;
+    platformProfile.appleAdditionalCMakeArguments = normalizeList(payload.platformAppleAdditionalCMakeArguments);
+    platformProfile.appleAdditionalXcodebuildArguments = normalizeList(payload.platformAppleAdditionalXcodebuildArguments);
+    platformProfile.appleAdditionalMacDeployQtArguments = normalizeList(payload.platformAppleAdditionalMacDeployQtArguments);
 
 
     debugProfile.name = String(payload.debugName ?? debugProfile.name).trim() || debugProfile.name;
@@ -927,7 +1196,7 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
       ? `Linguist ${installation.linguistPath ? 'ready' : 'missing'} · lupdate ${installation.lupdatePath ? 'ready' : 'missing'} · lrelease ${installation.lreleasePath ? 'ready' : 'missing'}`
       : 'Qt Linguist tools not resolved';
     const qmlToolDetails = installation
-      ? `qmllint ${installation.qmlLintPath ? 'ready' : 'missing'} · qmlformat ${installation.qmlFormatPath ? 'ready' : 'missing'} · preview ${installation.qmlRuntimePath || installation.qmlScenePath ? 'ready' : 'missing'}`
+      ? `qmllint ${installation.qmlLintPath ? 'ready' : 'missing'} · qmlformat ${installation.qmlFormatPath ? 'ready' : 'missing'} · qmlls ${installation.qmlLanguageServerPath ? 'ready' : 'missing'} · preview ${installation.qmlRuntimePath || installation.qmlScenePath ? 'ready' : 'missing'}`
       : 'QML tools not resolved';
     const nonce = makeNonce();
     return `<!DOCTYPE html>
@@ -938,25 +1207,27 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Qt Project Settings</title>
 <style>
-:root{color-scheme:light dark}*{box-sizing:border-box}body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:22px;max-width:1380px;margin:auto}h1{margin:0 0 4px;font-size:26px}h2{font-size:16px;margin:0}.subtitle,.muted{color:var(--vscode-descriptionForeground)}.toolbar{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);margin-bottom:12px}.toolbar .actions,.actions{display:flex;gap:8px;flex-wrap:wrap}.settings-nav{position:sticky;top:72px;z-index:3;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,320px) auto;gap:10px;align-items:center;padding:10px 0 14px;background:var(--vscode-editor-background)}.dirty{font-size:12px;color:var(--vscode-descriptionForeground);white-space:nowrap}.dirty.changed{color:var(--vscode-editorWarning-foreground);font-weight:600}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid var(--vscode-panel-border);border-radius:7px;background:var(--vscode-sideBar-background);padding:16px;min-width:0;scroll-margin-top:150px}.wide{grid-column:1/-1}.card h2{margin-bottom:13px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.wide{grid-column:1/-1}.field-label{display:inline-flex;align-items:center;gap:6px;font-weight:600}.input-row{display:flex;gap:6px;align-items:stretch}.input-row input{min-width:0;flex:1}.browse{min-width:34px;padding:6px 9px}.help{position:relative;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid var(--vscode-textLink-foreground);border-radius:50%;font-size:11px;line-height:1;color:var(--vscode-textLink-foreground);cursor:help;font-weight:700;outline:none}.help:hover::after,.help:focus::after{content:attr(data-help);position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-20%);width:min(360px,70vw);padding:9px 11px;border:1px solid var(--vscode-widget-border,var(--vscode-panel-border));border-radius:5px;background:var(--vscode-editorHoverWidget-background);color:var(--vscode-editorHoverWidget-foreground);box-shadow:0 4px 16px var(--vscode-widget-shadow);font-size:12px;font-weight:400;line-height:1.4;white-space:normal;pointer-events:none}.section-hidden{display:none!important}.conditional-group{display:contents}.conditional-group.hidden{display:none}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.control-group{border:1px solid var(--vscode-panel-border);border-radius:5px;padding:11px;background:var(--vscode-editorWidget-background)}.control-group h3{font-size:13px;margin:0 0 9px}.control-group .actions{gap:6px}.control-group button{font-size:12px;padding:6px 9px}label{font-weight:600}input,select,textarea{width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:7px 8px;font:inherit;border-radius:2px}input:focus,select:focus,textarea:focus,button:focus,.help:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}textarea{min-height:92px;resize:vertical;font-family:var(--vscode-editor-font-family);font-size:12px}.checkbox{display:flex;align-items:center;gap:8px;font-weight:400}.checkbox input,.module input{width:auto}.kit{font-family:var(--vscode-editor-font-family);font-size:12px;padding:10px;background:var(--vscode-textCodeBlock-background);border-radius:4px;overflow-wrap:anywhere;border-left:4px solid var(--vscode-testing-iconPassed)}.kit.warning{border-left-color:var(--vscode-editorWarning-foreground)}.kit.error{border-left-color:var(--vscode-errorForeground)}.modules{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}.module{display:flex;align-items:center;gap:6px;font-weight:400;border:1px solid var(--vscode-panel-border);padding:7px;border-radius:4px}.module small{margin-left:auto;color:var(--vscode-errorForeground);font-size:10px}.module.missing{opacity:.72}.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}.stats{display:flex;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--vscode-panel-border);border-radius:999px;padding:4px 9px;font-size:12px;color:var(--vscode-descriptionForeground)}button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 11px;border-radius:3px;cursor:pointer;font:inherit}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:hover{background:var(--vscode-button-hoverBackground)}code{font-family:var(--vscode-editor-font-family)}@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}.wide{grid-column:auto}.toolbar{position:static;align-items:flex-start;flex-direction:column}.settings-nav{position:static;grid-template-columns:1fr}.help:hover::after,.help:focus::after{left:0;transform:none}}
+:root{color-scheme:light dark;--qpm-sticky-offset:150px}*{box-sizing:border-box}body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:22px;max-width:1380px;margin:auto}h1{margin:0 0 4px;font-size:26px}h2{font-size:16px;margin:0}.subtitle,.muted{color:var(--vscode-descriptionForeground)}.settings-sticky-header{position:sticky;top:0;z-index:4;background:var(--vscode-editor-background);isolation:isolate;margin-bottom:12px}.toolbar{position:static;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);margin:0}.toolbar .actions,.actions{display:flex;gap:8px;flex-wrap:wrap}.settings-nav{position:static;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,320px) auto;gap:10px;align-items:center;padding:10px 0 14px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border)}.dirty{font-size:12px;color:var(--vscode-descriptionForeground);white-space:nowrap}.dirty.changed{color:var(--vscode-editorWarning-foreground);font-weight:600}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid var(--vscode-panel-border);border-radius:7px;background:var(--vscode-sideBar-background);padding:16px;min-width:0;scroll-margin-top:var(--qpm-sticky-offset)}.wide{grid-column:1/-1}.card h2{margin-bottom:13px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.wide{grid-column:1/-1}.field-label{display:inline-flex;align-items:center;gap:6px;font-weight:600}.input-row{display:flex;gap:6px;align-items:stretch}.input-row input{min-width:0;flex:1}.browse{min-width:34px;padding:6px 9px}.help{position:relative;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid var(--vscode-textLink-foreground);border-radius:50%;font-size:11px;line-height:1;color:var(--vscode-textLink-foreground);cursor:help;font-weight:700;outline:none}.help:hover::after,.help:focus::after{content:attr(data-help);position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-20%);width:min(360px,70vw);padding:9px 11px;border:1px solid var(--vscode-widget-border,var(--vscode-panel-border));border-radius:5px;background:var(--vscode-editorHoverWidget-background);color:var(--vscode-editorHoverWidget-foreground);box-shadow:0 4px 16px var(--vscode-widget-shadow);font-size:12px;font-weight:400;line-height:1.4;white-space:normal;pointer-events:none}.section-hidden{display:none!important}.conditional-group{display:contents}.conditional-group.hidden{display:none}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.control-group{border:1px solid var(--vscode-panel-border);border-radius:5px;padding:11px;background:var(--vscode-editorWidget-background)}.control-group h3{font-size:13px;margin:0 0 9px}.control-group .actions{gap:6px}.control-group button{font-size:12px;padding:6px 9px}label{font-weight:600}input,select,textarea{width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:7px 8px;font:inherit;border-radius:2px}input:focus,select:focus,textarea:focus,button:focus,.help:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}textarea{min-height:92px;resize:vertical;font-family:var(--vscode-editor-font-family);font-size:12px}.checkbox{display:flex;align-items:center;gap:8px;font-weight:400}.checkbox input,.module input{width:auto}.kit{font-family:var(--vscode-editor-font-family);font-size:12px;padding:10px;background:var(--vscode-textCodeBlock-background);border-radius:4px;overflow-wrap:anywhere;border-left:4px solid var(--vscode-testing-iconPassed)}.kit.warning{border-left-color:var(--vscode-editorWarning-foreground)}.kit.error{border-left-color:var(--vscode-errorForeground)}.modules{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}.module{display:flex;align-items:center;gap:6px;font-weight:400;border:1px solid var(--vscode-panel-border);padding:7px;border-radius:4px}.module small{margin-left:auto;color:var(--vscode-errorForeground);font-size:10px}.module.missing{opacity:.72}.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}.stats{display:flex;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--vscode-panel-border);border-radius:999px;padding:4px 9px;font-size:12px;color:var(--vscode-descriptionForeground)}button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 11px;border-radius:3px;cursor:pointer;font:inherit}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:hover{background:var(--vscode-button-hoverBackground)}code{font-family:var(--vscode-editor-font-family)}@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}.wide{grid-column:auto}.settings-sticky-header{position:static}.toolbar{align-items:flex-start;flex-direction:column}.settings-nav{grid-template-columns:1fr}.help:hover::after,.help:focus::after{left:0;transform:none}}
 </style>
 </head>
 <body>
 <h1>Qt Project Settings</h1>
 <div class="subtitle">${escapeHtml(manifest.name)} · schema v${manifest.schemaVersion} · ${escapeHtml(buildProfile.name)} / ${escapeHtml(kitProfile.name)} · <code>${escapeHtml(ref.absolutePath)}</code></div>
-<div class="toolbar">
-  <div>${selectField('Edited build variant', 'variant', `<option value="debug" ${this.variant === 'debug' ? 'selected' : ''}>Debug</option><option value="release" ${this.variant === 'release' ? 'selected' : ''}>Release</option>`)}</div>
-  <div class="actions"><button id="save">Save Qt settings</button><button class="secondary" id="reloadSettings" title="Discard unsaved edits and reload the manifest">Reload</button><button class="secondary" id="manageProfiles">Manage profiles</button><button class="secondary" id="manageDebugProfiles">Debug profiles</button><button class="secondary" id="managePlatformProfiles">Platforms</button><button class="secondary" id="manageNamedKits">Manage named kits</button><button class="secondary" id="selectKit">Select Qt installation</button><button class="secondary" id="repairToolchain">Repair compiler</button><button class="secondary" id="selectDesigner">Locate Designer</button><button class="secondary" id="openManifest">Open manifest JSON</button></div>
-</div>
-<div class="settings-nav">
-  <input id="settingsFilter" type="search" placeholder="Filter settings, fields or tools…" aria-label="Filter project settings">
-  <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section…</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
-  <span id="dirtyState" class="dirty">Saved state</span>
+<div id="settingsStickyHeader" class="settings-sticky-header">
+  <div id="settingsToolbar" class="toolbar">
+    <div>${selectField('Edited build variant', 'variant', `<option value="debug" ${this.variant === 'debug' ? 'selected' : ''}>Debug</option><option value="release" ${this.variant === 'release' ? 'selected' : ''}>Release</option>`)}</div>
+    <div class="actions"><button id="save">Save Qt settings</button><button class="secondary" id="reloadSettings" title="Discard unsaved edits and reload the manifest">Reload</button><button class="secondary" id="manageProfiles">Manage profiles</button><button class="secondary" id="manageDebugProfiles">Debug profiles</button><button class="secondary" id="managePlatformProfiles">Platforms</button><button class="secondary" id="manageNamedKits">Manage named kits</button><button class="secondary" id="selectKit">Select Qt installation</button><button class="secondary" id="repairToolchain">Repair compiler</button><button class="secondary" id="selectDesigner">Locate Designer</button><button class="secondary" id="openManifest">Open manifest JSON</button></div>
+  </div>
+  <div id="settingsNavigation" class="settings-nav">
+    <input id="settingsFilter" type="search" placeholder="Filter settings, fields or tools…" aria-label="Filter project settings">
+    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section…</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
+    <span id="dirtyState" class="dirty">Saved state</span>
+  </div>
 </div>
 <section id="section-control" data-settings-section class="card wide" style="margin-bottom:18px"><h2>${sectionHeading('control','Project control center')}</h2><div class="control-grid">
   <div class="control-group"><h3>Build and run</h3><div class="actions"><button class="secondary" data-command="qpm.selectBuildMode">Build mode</button><button class="secondary" data-command="qpm.selectQtBackend">Backend</button><button class="secondary" data-command="qpm.configureQtBackend">Configure</button><button class="secondary" data-command="qpm.chooseBuildAction">Build / rebuild / clean</button><button class="secondary" data-command="qpm.chooseRunAction">Run options</button><button class="secondary" data-command="qpm.startQtDebugProfile">Start debugging</button></div></div>
   <div class="control-group"><h3>Project and kits</h3><div class="actions"><button class="secondary" id="manageProfilesControl">Profiles</button><button class="secondary" id="manageNamedKitsControl">Named kits</button><button class="secondary" data-command="qpm.syncCppTools">IntelliSense</button><button class="secondary" data-command="qpm.openProjectHealthReport">Project health</button><button class="secondary" data-command="qpm.editQtModules">Qt modules</button></div></div>
-  <div class="control-group"><h3>Qt tools</h3><div class="actions"><button class="secondary" id="selectDesignerControl">Designer</button><button class="secondary" data-command="qpm.updateTranslations">Update translations</button><button class="secondary" data-command="qpm.releaseTranslations">Release translations</button><button class="secondary" data-command="qpm.qmlLintProject">Lint QML</button><button class="secondary" data-command="qpm.qmlFormatProject">Format QML</button><button class="secondary" data-command="qpm.openQtDocumentation">Documentation</button></div></div>
+  <div class="control-group"><h3>Qt tools</h3><div class="actions"><button class="secondary" id="selectDesignerControl">Designer</button><button class="secondary" data-command="qpm.updateTranslations">Update translations</button><button class="secondary" data-command="qpm.releaseTranslations">Release translations</button><button class="secondary" data-command="qpm.qmlLintProject">Lint QML</button><button class="secondary" data-command="qpm.qmlFormatProject">Format QML</button><button class="secondary" data-command="qpm.restartQmlLanguageServer">Restart qmlls</button><button class="secondary" data-command="qpm.openQtDocumentation">Documentation</button></div></div>
   <div class="control-group"><h3>Tests and quality</h3><div class="actions"><button class="secondary" data-command="qpm.openTestExplorer">Test Explorer</button><button class="secondary" data-command="qpm.runAllTests">Run tests</button><button class="secondary" data-command="qpm.runClangTidyProject">Clang-Tidy</button><button class="secondary" data-command="qpm.runClazyProject">Clazy</button><button class="secondary" data-command="qpm.runAllTestsWithCoverage">Coverage</button><button class="secondary" data-command="qpm.openQualityReport">Quality report</button></div></div>
   <div class="control-group"><h3>Platforms</h3><div class="actions"><button class="secondary" id="managePlatformProfilesControl">Profiles</button><button class="secondary" data-command="qpm.selectQtPlatform">Active platform</button><button class="secondary" data-command="qpm.detectPlatformCapabilities">Detect tools</button><button class="secondary" data-command="qpm.buildDeployRunPlatform">Build / deploy / run</button><button class="secondary" data-command="qpm.openPlatformReport">Report</button></div></div>
   <div class="control-group"><h3>Profiling and diagnostics</h3><div class="actions"><button class="secondary" data-command="qpm.profileQmlApplication">QML Profiler</button><button class="secondary" data-command="qpm.profileCpu">CPU</button><button class="secondary" data-command="qpm.profileMemory">Memory</button><button class="secondary" data-command="qpm.runCppcheck">Cppcheck</button><button class="secondary" data-command="qpm.openProfilingReport">Report</button></div></div>
@@ -1052,6 +1323,34 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     ${field('WebAssembly HTML entry', 'platformWasmHtmlEntry', platformProfile.wasmHtmlEntry)}
     ${area('WebAssembly server arguments', 'platformWasmServerArguments', platformProfile.wasmServerArguments, true)}
   </div>
+  <div class="conditional-group" data-platform-types="macos ios-simulator ios-device">
+    ${field('Xcode developer directory', 'platformAppleDeveloperDirectory', platformProfile.appleDeveloperDirectory)}
+    ${field('xcodebuild executable', 'platformAppleXcodebuildPath', platformProfile.appleXcodebuildPath)}
+    ${field('xcrun executable', 'platformAppleXcrunPath', platformProfile.appleXcrunPath)}
+    ${field('Bundle identifier', 'platformAppleBundleIdentifier', platformProfile.appleBundleIdentifier)}
+    ${field('Deployment target', 'platformAppleDeploymentTarget', platformProfile.appleDeploymentTarget)}
+    ${field('Architectures', 'platformAppleArchitectures', platformProfile.appleArchitectures.join(', '))}
+    ${field('Apple development team', 'platformAppleDevelopmentTeam', platformProfile.appleDevelopmentTeam)}
+    ${field('Code-sign identity', 'platformAppleCodeSignIdentity', platformProfile.appleCodeSignIdentity)}
+    ${field('Provisioning profile', 'platformAppleProvisioningProfile', platformProfile.appleProvisioningProfile)}
+    ${field('Entitlements file', 'platformAppleEntitlementsFile', platformProfile.appleEntitlementsFile)}
+    ${field('Xcode scheme', 'platformAppleScheme', platformProfile.appleScheme)}
+    ${selectField('Xcode configuration', 'platformAppleConfiguration', appleConfigurationOptions(platformProfile.appleConfiguration))}
+    ${area('Additional Apple CMake arguments', 'platformAppleAdditionalCMakeArguments', platformProfile.appleAdditionalCMakeArguments)}
+    ${area('Additional xcodebuild arguments', 'platformAppleAdditionalXcodebuildArguments', platformProfile.appleAdditionalXcodebuildArguments)}
+  </div>
+  <div class="conditional-group" data-platform-types="macos">
+    ${field('macdeployqt executable', 'platformAppleMacDeployQtPath', platformProfile.appleMacDeployQtPath)}
+    ${selectField('DMG file system', 'platformAppleDmgFileSystem', appleDmgFileSystemOptions(platformProfile.appleDmgFileSystem))}
+    ${field('notarytool keychain profile', 'platformAppleNotaryProfile', platformProfile.appleNotaryProfile)}
+    ${area('Additional macdeployqt arguments', 'platformAppleAdditionalMacDeployQtArguments', platformProfile.appleAdditionalMacDeployQtArguments)}
+  </div>
+  <div class="conditional-group" data-platform-types="ios-simulator">
+    ${field('iOS simulator UDID', 'platformAppleSimulatorId', platformProfile.appleSimulatorId)}
+  </div>
+  <div class="conditional-group" data-platform-types="ios-device">
+    ${field('Physical iOS device identifier', 'platformAppleDeviceId', platformProfile.appleDeviceId)}
+  </div>
   <div class="conditional-group" data-platform-types="android">
     ${field('Android SDK root', 'platformAndroidSdkRoot', platformProfile.androidSdkRoot)}
     ${field('Android NDK root', 'platformAndroidNdkRoot', platformProfile.androidNdkRoot)}
@@ -1085,8 +1384,10 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
   <span class="conditional-group" data-platform-types="remote-linux">${check('platformUseRsync','Prefer rsync for Remote Linux synchronization',platformProfile.useRsync)}${check('platformStartGdbServer','Start gdbserver when running remotely',platformProfile.startGdbServer)}</span>
   <span class="conditional-group" data-platform-types="docker">${check('platformDockerKeepContainer','Keep Docker container after execution',platformProfile.dockerKeepContainer)}${check('platformDockerForwardDisplay','Forward X11 display',platformProfile.dockerForwardDisplay)}${check('platformDockerHostNetwork','Use Docker host network',platformProfile.dockerHostNetwork)}</span>
   <span class="conditional-group" data-platform-types="webassembly">${check('platformWasmOpenBrowser','Open WebAssembly application in browser',platformProfile.wasmOpenBrowser)}</span>
+  <span class="conditional-group" data-platform-types="macos ios-simulator ios-device">${check('platformAppleAutomaticSigning','Use Xcode automatic signing',platformProfile.appleAutomaticSigning)}${check('platformAppleAllowProvisioningUpdates','Allow Xcode provisioning updates',platformProfile.appleAllowProvisioningUpdates)}</span>
+  <span class="conditional-group" data-platform-types="macos">${check('platformAppleCreateDmg','Create a DMG after deployment',platformProfile.appleCreateDmg)}${check('platformAppleStapleAfterNotarization','Staple notarization ticket automatically',platformProfile.appleStapleAfterNotarization)}${check('platformAppleAppStoreCompliant','Use App Store compliant deployment',platformProfile.appleAppStoreCompliant)}${check('platformAppleHardenedRuntime','Enable hardened runtime',platformProfile.appleHardenedRuntime)}${check('platformAppleTimestamp','Timestamp signatures',platformProfile.appleTimestamp)}</span>
   <span class="conditional-group" data-platform-types="android">${check('platformAndroidBuildAllAbis','Build all installed Qt Android ABIs',platformProfile.androidBuildAllAbis)}${check('platformAndroidInstallReplace','Replace existing APK during installation',platformProfile.androidInstallReplace)}${check('platformAndroidUninstallBeforeInstall','Uninstall before installation',platformProfile.androidUninstallBeforeInstall)}${check('platformAndroidOpenLogcatAfterRun','Open logcat after run',platformProfile.androidOpenLogcatAfterRun)}</span>
-</div><div class="actions"><button class="secondary" id="managePlatformProfilesInline">Manage platform profiles</button><button class="secondary" data-command="qpm.detectPlatformCapabilities">Detect capabilities</button><button class="secondary" data-command="qpm.buildForPlatform">Build platform</button><button class="secondary" data-command="qpm.deployToPlatform">Deploy platform</button><button class="secondary" data-command="qpm.runOnPlatform">Run platform</button><span class="conditional-group" data-platform-types="android"><button class="secondary" data-command="qpm.configureAndroidEnvironment">Configure Android</button><button class="secondary" data-command="qpm.buildAndroidApk">Build APK</button><button class="secondary" data-command="qpm.buildInstallRunAndroid">Build / install / run</button><button class="secondary" data-command="qpm.openAndroidReport">Android report</button></span></div><p class="muted">Fields that do not apply to the selected platform type are preserved but ignored.</p></section>
+</div><div class="actions"><button class="secondary" id="managePlatformProfilesInline">Manage platform profiles</button><button class="secondary" data-command="qpm.detectPlatformCapabilities">Detect capabilities</button><button class="secondary" data-command="qpm.buildForPlatform">Build platform</button><button class="secondary" data-command="qpm.deployToPlatform">Deploy platform</button><button class="secondary" data-command="qpm.runOnPlatform">Run platform</button><span class="conditional-group" data-platform-types="macos ios-simulator ios-device"><button class="secondary" data-command="qpm.configureAppleEnvironment">Configure Apple</button><button class="secondary" data-command="qpm.buildAppleTarget">Build Apple target</button><button class="secondary" data-command="qpm.openAppleReport">Apple report</button></span><span class="conditional-group" data-platform-types="macos"><button class="secondary" data-command="qpm.createMacDmg">Create DMG</button><button class="secondary" data-command="qpm.notarizeAppleArtifact">Notarize</button></span><span class="conditional-group" data-platform-types="ios-simulator"><button class="secondary" data-command="qpm.selectAppleSimulator">Select simulator</button><button class="secondary" data-command="qpm.installRunIosSimulator">Build / install / run</button></span><span class="conditional-group" data-platform-types="android"><button class="secondary" data-command="qpm.configureAndroidEnvironment">Configure Android</button><button class="secondary" data-command="qpm.buildAndroidApk">Build APK</button><button class="secondary" data-command="qpm.buildInstallRunAndroid">Build / install / run</button><button class="secondary" data-command="qpm.openAndroidReport">Android report</button></span></div><p class="muted">Fields that do not apply to the selected platform type are preserved but ignored.</p></section>
 <section id="section-debug" data-settings-section class="card wide"><h2>${sectionHeading('debugging','Advanced debugging')}</h2><div class="fields">
   ${field('Profile name', 'debugName', debugProfile.name)}
   ${selectField('Request', 'debugRequest', debugRequestOptions(debugProfile.request))}
@@ -1156,6 +1457,24 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
   ${field('Clazy checks', 'clazyChecks', manifest.quality.clazyChecks, true)}
   ${field('Header filter regular expression', 'qualityHeaderFilter', manifest.quality.headerFilter, true)}
 </div><p class="muted">Use the Qt Tests & Quality view to run analyzers and create sanitizer or coverage profiles.</p></section>
+<section id="section-qml-language" data-settings-section class="card wide"><h2>${sectionHeading('qml-language','QML language and modules')}</h2>
+<p class="muted">Project-scoped QML code intelligence powered by qmlls, with explicit build/import directories and duplicate-server protection.</p>
+<h3>QML Language Server</h3><div class="fields">
+  ${field('qmlls executable override', 'qmlLanguageServerExecutable', manifest.qml.languageServer.executable, true)}
+  ${selectField('LSP trace level', 'qmlLanguageServerTrace', qmlLanguageTraceOptions(manifest.qml.languageServer.trace))}
+  ${selectField('Official extension conflict policy', 'qmlLanguageServerConflictPolicy', qmlLanguageConflictOptions(manifest.qml.languageServer.conflictPolicy))}
+  ${numberField('CMake jobs', 'qmlLanguageServerCmakeJobs', manifest.qml.languageServer.cmakeJobs)}
+  ${numberField('Maximum files to search', 'qmlLanguageServerMaxFiles', manifest.qml.languageServer.maxFilesToSearch)}
+  ${area('Additional build directories', 'qmlLanguageServerBuildDirectories', manifest.qml.languageServer.buildDirectories)}
+  ${area('Additional QML import paths', 'qmlLanguageServerImportPaths', manifest.qml.languageServer.importPaths)}
+  ${area('Additional qmlls arguments', 'qmlLanguageServerArguments', manifest.qml.languageServer.additionalArguments, true)}
+</div><div class="checks">${check('qmlLanguageServerEnabled','Enable QML Language Server',manifest.qml.languageServer.enabled)}${check('qmlLanguageServerAutoStart','Start automatically',manifest.qml.languageServer.autoStart)}${check('qmlLanguageServerUseEnvironment','Read QML import-path environment',manifest.qml.languageServer.useQmlImportPathEnvironment)}${check('qmlLanguageServerNoCmakeCalls','Disable qmlls CMake calls',manifest.qml.languageServer.noCmakeCalls)}${check('qmlLanguageServerVerbose','Verbose server output',manifest.qml.languageServer.verboseOutput)}${check('qmlLanguageServerGenerateConfig','Maintain .qmlls.ini',manifest.qml.languageServer.generateConfigurationFile)}</div>
+<h3 style="margin-top:18px">QML module metadata</h3><div class="fields">
+  ${field('Module URI', 'qmlModuleUri', manifest.qml.module.uri, true)}
+  ${field('Module version', 'qmlModuleVersion', manifest.qml.module.version)}
+  ${field('Module import root', 'qmlModuleImportRoot', manifest.qml.module.importRoot)}
+  ${field('Resource prefix', 'qmlModuleResourcePrefix', manifest.qml.module.resourcePrefix, true)}
+</div><div class="actions"><button class="secondary" data-command="qpm.startQmlLanguageServer">Start qmlls</button><button class="secondary" data-command="qpm.restartQmlLanguageServer">Restart qmlls</button><button class="secondary" data-command="qpm.stopQmlLanguageServer">Stop qmlls</button><button class="secondary" data-command="qpm.generateQmllsConfiguration">Generate .qmlls.ini</button><button class="secondary" data-command="qpm.openQmllsConfiguration">Open .qmlls.ini</button><button class="secondary" data-command="qpm.generateQmldir">Generate qmldir</button><button class="secondary" data-command="qpm.openQmlLanguageReport">Open report</button></div></section>
 <section id="section-profiling" data-settings-section class="card wide"><h2>${sectionHeading('profiling','Profiling and diagnostics')}</h2><div class="fields">
   ${field('Profiling output directory', 'profilingOutputDirectory', manifest.profiling.outputDirectory)}
   ${numberField('Profiler timeout (ms)', 'profilingTimeoutMs', manifest.profiling.timeoutMs)}
@@ -1226,6 +1545,149 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
   ${area('Desktop categories', 'packagingCategories', manifest.packaging.linux.categories)}
 </div><div class="checks">${check('packagingLinuxDesktop','Generate Linux desktop entry',manifest.packaging.linux.generateDesktopEntry)}</div>
 <div class="actions"><button class="secondary" data-command="qpm.generateProductMetadata">Generate metadata</button><button class="secondary" data-command="qpm.createPortablePackage">Create portable package</button><button class="secondary" data-command="qpm.openPackagingReport">Open report</button><button class="secondary" data-command="qpm.cleanPackagingOutput">Clean output</button></div></section>
+<section id="section-installers" data-settings-section class="card wide"><h2>${sectionHeading('installers','Desktop installers, updates and signing')}</h2><div class="fields">
+  ${selectField('Installer backend', 'installerBackend', installerBackendOptions(manifest.packaging.installer.backend))}
+  ${field('Installer output directory', 'installerOutputDirectory', manifest.packaging.installer.outputDirectory)}
+  ${field('Installer filename pattern', 'installerFileNamePattern', manifest.packaging.installer.fileNamePattern, true)}
+  ${field('Installation directory name', 'installerInstallDirectoryName', manifest.packaging.installer.installDirectoryName)}
+</div><div class="checks">
+  ${check('installerEnabled','Enable desktop installers',manifest.packaging.installer.enabled)}
+  ${check('installerBuildPortablePackage','Rebuild portable package before installer',manifest.packaging.installer.buildPortablePackage)}
+  ${check('installerDesktopShortcut','Create desktop shortcut',manifest.packaging.installer.createDesktopShortcut)}
+  ${check('installerStartMenuShortcut','Create Start menu shortcut',manifest.packaging.installer.createStartMenuShortcut)}
+  ${check('installerRunAfterInstall','Offer to run application after installation',manifest.packaging.installer.runAfterInstall)}
+</div><h3 style="margin-top:18px">Qt Installer Framework</h3><div class="fields">
+  ${selectField('Installer mode', 'installerQtIfwMode', qtIfwModeOptions(manifest.packaging.installer.qtIfw.mode))}
+  ${field('binarycreator override', 'installerQtIfwBinaryCreatorPath', manifest.packaging.installer.qtIfw.binaryCreatorPath)}
+  ${field('repogen override', 'installerQtIfwRepogenPath', manifest.packaging.installer.qtIfw.repogenPath)}
+  ${field('installerbase override', 'installerQtIfwInstallerBasePath', manifest.packaging.installer.qtIfw.installerBasePath)}
+  ${field('Component ID', 'installerQtIfwComponentId', manifest.packaging.installer.qtIfw.componentId)}
+  ${field('Component display name', 'installerQtIfwComponentDisplayName', manifest.packaging.installer.qtIfw.componentDisplayName)}
+  ${field('Component description', 'installerQtIfwComponentDescription', manifest.packaging.installer.qtIfw.componentDescription, true)}
+  ${field('Release date (YYYY-MM-DD)', 'installerQtIfwReleaseDate', manifest.packaging.installer.qtIfw.releaseDate)}
+  ${field('Repository URL', 'installerQtIfwRepositoryUrl', manifest.packaging.installer.qtIfw.repositoryUrl)}
+  ${field('Repository output directory', 'installerQtIfwRepositoryOutputDirectory', manifest.packaging.installer.qtIfw.repositoryOutputDirectory)}
+  ${field('Maintenance tool name', 'installerQtIfwMaintenanceToolName', manifest.packaging.installer.qtIfw.maintenanceToolName)}
+  ${selectField('Wizard style', 'installerQtIfwWizardStyle', qtIfwWizardOptions(manifest.packaging.installer.qtIfw.wizardStyle))}
+  ${field('Controller script', 'installerQtIfwControlScript', manifest.packaging.installer.qtIfw.controlScript)}
+  ${field('Component script', 'installerQtIfwComponentScript', manifest.packaging.installer.qtIfw.componentScript)}
+  ${selectField('Archive format', 'installerQtIfwArchiveFormat', qtIfwArchiveOptions(manifest.packaging.installer.qtIfw.archiveFormat))}
+  ${field('Compression level (0-9)', 'installerQtIfwCompression', String(manifest.packaging.installer.qtIfw.compression))}
+  ${area('Additional binarycreator arguments', 'installerQtIfwArguments', manifest.packaging.installer.qtIfw.additionalArguments, true)}
+</div><h3 style="margin-top:18px">Inno Setup</h3><div class="fields">
+  ${field('ISCC compiler override', 'installerInnoIsccPath', manifest.packaging.installer.inno.isccPath)}
+  ${field('Custom .iss script', 'installerInnoScriptFile', manifest.packaging.installer.inno.scriptFile)}
+  ${selectField('Privileges', 'installerInnoPrivileges', innoPrivilegeOptions(manifest.packaging.installer.inno.privilegesRequired))}
+  ${selectField('Architecture', 'installerInnoArchitecture', innoArchitectureOptions(manifest.packaging.installer.inno.architecture))}
+  ${field('Compression', 'installerInnoCompression', manifest.packaging.installer.inno.compression)}
+  ${area('Languages', 'installerInnoLanguages', manifest.packaging.installer.inno.languages)}
+  ${area('Additional directives', 'installerInnoDirectives', manifest.packaging.installer.inno.additionalDirectives, true)}
+</div><div class="checks">${check('installerInnoSolidCompression','Enable solid compression',manifest.packaging.installer.inno.solidCompression)}</div>
+<h3 style="margin-top:18px">NSIS</h3><div class="fields">
+  ${field('makensis override', 'installerNsisMakensisPath', manifest.packaging.installer.nsis.makensisPath)}
+  ${field('Custom .nsi script', 'installerNsisScriptFile', manifest.packaging.installer.nsis.scriptFile)}
+  ${selectField('Execution level', 'installerNsisExecutionLevel', nsisExecutionOptions(manifest.packaging.installer.nsis.requestExecutionLevel))}
+  ${selectField('Compressor', 'installerNsisCompressor', nsisCompressorOptions(manifest.packaging.installer.nsis.compressor))}
+  ${area('Additional defines', 'installerNsisDefines', manifest.packaging.installer.nsis.additionalDefines, true)}
+</div><h3 style="margin-top:18px">Authenticode / SignTool</h3><div class="fields">
+  ${field('SignTool override', 'installerSignToolPath', manifest.packaging.installer.signing.signToolPath)}
+  ${field('PFX certificate', 'installerCertificateFile', manifest.packaging.installer.signing.certificateFile)}
+  ${field('Certificate thumbprint', 'installerCertificateThumbprint', manifest.packaging.installer.signing.certificateThumbprint)}
+  ${field('Certificate subject', 'installerCertificateSubject', manifest.packaging.installer.signing.certificateSubject)}
+  ${field('PFX password environment variable', 'installerCertificatePasswordEnvironment', manifest.packaging.installer.signing.certificatePasswordEnvironment)}
+  ${field('Timestamp URL', 'installerTimestampUrl', manifest.packaging.installer.signing.timestampUrl)}
+  ${selectField('File digest', 'installerFileDigest', signingDigestOptions(manifest.packaging.installer.signing.fileDigest))}
+  ${selectField('Timestamp digest', 'installerTimestampDigest', signingDigestOptions(manifest.packaging.installer.signing.timestampDigest))}
+  ${area('Additional SignTool arguments', 'installerSigningArguments', manifest.packaging.installer.signing.additionalArguments, true)}
+</div><div class="checks">
+  ${check('installerSigningEnabled','Enable Authenticode signing',manifest.packaging.installer.signing.enabled)}
+  ${check('installerSignTargetBinary','Sign target executable',manifest.packaging.installer.signing.signTargetBinary)}
+  ${check('installerSignInstaller','Sign final installer',manifest.packaging.installer.signing.signInstaller)}
+  ${check('installerVerifyAfterSigning','Verify signatures after signing',manifest.packaging.installer.signing.verifyAfterSigning)}
+</div><p class="muted">Certificate passwords are read only from the configured environment variable and are never written to .qtproject.json.</p>
+<div class="actions"><button class="secondary" data-command="qpm.detectInstallerTools">Detect tools</button><button class="secondary" data-command="qpm.generateInstallerProject">Generate sources</button><button class="secondary" data-command="qpm.createDesktopInstaller">Create installer</button><button class="secondary" data-command="qpm.createQtIfwRepository">Create update repository</button><button class="secondary" data-command="qpm.signDistributionArtifacts">Sign artifacts</button><button class="secondary" data-command="qpm.verifyDistributionSignatures">Verify signatures</button><button class="secondary" data-command="qpm.openInstallerReport">Open report</button></div></section>
+<section id="section-publication" data-settings-section class="card wide"><h2>${sectionHeading('publication','Publication and application updates')}</h2><div class="fields">
+  ${selectField('Release channel', 'publicationChannel', publicationChannelOptions(manifest.publication.channel))}
+  ${field('Publication output directory', 'publicationOutputDirectory', manifest.publication.outputDirectory)}
+  ${field('Public base URL', 'publicationBaseUrl', manifest.publication.baseUrl, true)}
+  ${field('Release notes file', 'publicationReleaseNotesFile', manifest.publication.releaseNotesFile)}
+</div><div class="checks">
+  ${check('publicationEnabled','Enable publication workflows',manifest.publication.enabled)}
+  ${check('publicationIncludePortablePackage','Include portable package',manifest.publication.includePortablePackage)}
+  ${check('publicationIncludeInstaller','Include desktop installer',manifest.publication.includeInstaller)}
+  ${check('publicationIncludeQtIfwRepository','Include Qt IFW update repository',manifest.publication.includeQtIfwRepository)}
+  ${check('publicationGenerateChecksums','Generate SHA-256 checksums',manifest.publication.generateChecksums)}
+  ${check('publicationGenerateLatestManifest','Generate latest.json update manifest',manifest.publication.generateLatestManifest)}
+</div><h3 style="margin-top:18px">Microsoft MSIX and App Installer</h3><div class="fields">
+  ${field('MakeAppx override', 'publicationMsixMakeAppxPath', manifest.publication.msix.makeAppxPath)}
+  ${field('Package identity name', 'publicationMsixIdentity', manifest.publication.msix.packageIdentityName)}
+  ${field('Publisher subject', 'publicationMsixPublisher', manifest.publication.msix.publisher)}
+  ${field('Publisher display name', 'publicationMsixPublisherDisplayName', manifest.publication.msix.publisherDisplayName)}
+  ${field('Application display name', 'publicationMsixDisplayName', manifest.publication.msix.displayName)}
+  ${field('MSIX description', 'publicationMsixDescription', manifest.publication.msix.description, true)}
+  ${field('MSIX version', 'publicationMsixVersion', manifest.publication.msix.version)}
+  ${selectField('MSIX architecture', 'publicationMsixArchitecture', msixArchitectureOptions(manifest.publication.msix.architecture))}
+  ${field('Minimum Windows version', 'publicationMsixMinimumOsVersion', manifest.publication.msix.minimumOsVersion)}
+  ${field('Tested Windows version', 'publicationMsixTargetOsVersion', manifest.publication.msix.targetOsVersion)}
+  ${field('44 × 44 logo', 'publicationMsixLogo44', manifest.publication.msix.logo44)}
+  ${field('150 × 150 logo', 'publicationMsixLogo150', manifest.publication.msix.logo150)}
+  ${field('Store logo', 'publicationMsixStoreLogo', manifest.publication.msix.storeLogo)}
+  ${field('MSIX package URI', 'publicationMsixPackageUri', manifest.publication.msix.packageUri, true)}
+  ${field('App Installer URI', 'publicationMsixAppInstallerUri', manifest.publication.msix.appInstallerUri, true)}
+  ${field('Hours between update checks', 'publicationMsixHoursBetweenChecks', String(manifest.publication.msix.hoursBetweenUpdateChecks))}
+</div><div class="checks">
+  ${check('publicationMsixEnabled','Enable MSIX packaging',manifest.publication.msix.enabled)}
+  ${check('publicationMsixSignPackage','Sign generated MSIX package',manifest.publication.msix.signPackage)}
+  ${check('publicationMsixGenerateAppInstaller','Generate .appinstaller file',manifest.publication.msix.generateAppInstaller)}
+  ${check('publicationMsixUpdateOnLaunch','Check for updates on launch',manifest.publication.msix.updateOnLaunch)}
+  ${check('publicationMsixShowPrompt','Show update prompt',manifest.publication.msix.showPrompt)}
+  ${check('publicationMsixUpdateBlocksActivation','Block activation until required update',manifest.publication.msix.updateBlocksActivation)}
+  ${check('publicationMsixForceUpdateFromAnyVersion','Allow downgrade / force update from any version',manifest.publication.msix.forceUpdateFromAnyVersion)}
+  ${check('publicationMsixAutomaticBackgroundTask','Enable background update task',manifest.publication.msix.automaticBackgroundTask)}
+</div><h3 style="margin-top:18px">WinGet manifests</h3><div class="fields">
+  ${field('WinGet CLI override', 'publicationWingetPath', manifest.publication.winget.wingetPath)}
+  ${field('WinGetCreate override', 'publicationWingetCreatePath', manifest.publication.winget.wingetCreatePath)}
+  ${field('Package identifier', 'publicationWingetIdentifier', manifest.publication.winget.packageIdentifier)}
+  ${field('Publisher', 'publicationWingetPublisher', manifest.publication.winget.publisher)}
+  ${field('Package name', 'publicationWingetPackageName', manifest.publication.winget.packageName)}
+  ${field('Short description', 'publicationWingetDescription', manifest.publication.winget.shortDescription, true)}
+  ${field('License', 'publicationWingetLicense', manifest.publication.winget.license)}
+  ${field('License URL', 'publicationWingetLicenseUrl', manifest.publication.winget.licenseUrl)}
+  ${field('Publisher URL', 'publicationWingetPublisherUrl', manifest.publication.winget.publisherUrl)}
+  ${field('Package URL', 'publicationWingetPackageUrl', manifest.publication.winget.packageUrl)}
+  ${field('Installer URL', 'publicationWingetInstallerUrl', manifest.publication.winget.installerUrl, true)}
+  ${selectField('Installer type', 'publicationWingetInstallerType', wingetInstallerTypeOptions(manifest.publication.winget.installerType))}
+  ${selectField('Install scope', 'publicationWingetScope', wingetScopeOptions(manifest.publication.winget.scope))}
+  ${field('Locale', 'publicationWingetLocale', manifest.publication.winget.locale)}
+  ${area('Tags', 'publicationWingetTags', manifest.publication.winget.tags)}
+  ${field('Release notes URL', 'publicationWingetReleaseNotesUrl', manifest.publication.winget.releaseNotesUrl)}
+  ${field('Minimum Windows version', 'publicationWingetMinimumOsVersion', manifest.publication.winget.minimumOsVersion)}
+</div><div class="checks">${check('publicationWingetEnabled','Generate WinGet manifests',manifest.publication.winget.enabled)}</div>
+<h3 style="margin-top:18px">GitHub Releases</h3><div class="fields">
+  ${field('GitHub CLI override', 'publicationGithubGhPath', manifest.publication.github.ghPath)}
+  ${field('Repository (owner/repository)', 'publicationGithubRepository', manifest.publication.github.repository)}
+  ${field('Tag pattern', 'publicationGithubTagPattern', manifest.publication.github.tagPattern)}
+  ${field('Release name pattern', 'publicationGithubReleaseNamePattern', manifest.publication.github.releaseNamePattern, true)}
+</div><div class="checks">
+  ${check('publicationGithubEnabled','Enable GitHub release settings',manifest.publication.github.enabled)}
+  ${check('publicationGithubDraft','Create release as draft',manifest.publication.github.draft)}
+  ${check('publicationGithubPrerelease','Mark as prerelease',manifest.publication.github.prerelease)}
+  ${check('publicationGithubGenerateNotes','Generate release notes from GitHub history',manifest.publication.github.generateNotes)}
+  ${check('publicationGithubClobberAssets','Replace assets on an existing release',manifest.publication.github.clobberAssets)}
+</div><h3 style="margin-top:18px">Publication target</h3><div class="fields">
+  ${selectField('Target', 'publicationPublishTarget', publicationTargetOptions(manifest.publication.publish.target))}
+  ${field('Local destination directory', 'publicationLocalDirectory', manifest.publication.publish.localDirectory)}
+  ${field('SSH host', 'publicationSshHost', manifest.publication.publish.sshHost)}
+  ${field('SSH user', 'publicationSshUser', manifest.publication.publish.sshUser)}
+  ${field('SSH port', 'publicationSshPort', String(manifest.publication.publish.sshPort))}
+  ${field('Remote directory', 'publicationSshDirectory', manifest.publication.publish.sshDirectory)}
+  ${field('scp override', 'publicationScpPath', manifest.publication.publish.scpPath)}
+  ${field('rsync override', 'publicationRsyncPath', manifest.publication.publish.rsyncPath)}
+</div><div class="checks">
+  ${check('publicationUseRsync','Use rsync instead of scp',manifest.publication.publish.useRsync)}
+  ${check('publicationDeleteRemote','Delete obsolete remote files with rsync',manifest.publication.publish.deleteRemote)}
+</div><p class="muted">QPM stores no GitHub token, SSH password or certificate password. Authentication remains delegated to gh, SSH keys and the configured certificate environment variable.</p>
+<div class="actions"><button class="secondary" data-command="qpm.detectPublicationTools">Detect tools</button><button class="secondary" data-command="qpm.generatePublicationSources">Generate sources</button><button class="secondary" data-command="qpm.createMsixPackage">Create MSIX</button><button class="secondary" data-command="qpm.generateAppInstaller">Generate App Installer</button><button class="secondary" data-command="qpm.generateWingetManifests">Generate WinGet</button><button class="secondary" data-command="qpm.validateWingetManifests">Validate WinGet</button><button class="secondary" data-command="qpm.createReleaseBundle">Create release bundle</button><button class="secondary" data-command="qpm.publishRelease">Publish release</button><button class="secondary" data-command="qpm.openPublicationReport">Open report</button></div></section>
 <section id="section-build-steps" data-settings-section class="card wide"><h2>${sectionHeading('steps','Build steps')}</h2><div class="fields">
   ${area('Pre-build actions', 'preBuildActions', projectSettings.preBuildActions)}
   ${area('Custom build actions', 'customBuildActions', projectSettings.customBuildActions)}
@@ -1278,6 +1740,19 @@ on('debugRequest', 'change', updateConditionalVisibility);
 on('buildSystem', 'change', updateConditionalVisibility);
 on('testFramework', 'change', updateConditionalVisibility);
 updateConditionalVisibility();
+const updateStickyOffsets = () => {
+  const stickyHeader = byId('settingsStickyHeader');
+  if (!stickyHeader || window.matchMedia('(max-width: 800px)').matches) return;
+  const stickyOffset = Math.ceil(stickyHeader.getBoundingClientRect().height + 8);
+  document.documentElement.style.setProperty('--qpm-sticky-offset', stickyOffset + 'px');
+};
+if (typeof ResizeObserver !== 'undefined') {
+  const stickyObserver = new ResizeObserver(updateStickyOffsets);
+  const stickyHeader = byId('settingsStickyHeader');
+  if (stickyHeader) stickyObserver.observe(stickyHeader);
+}
+window.addEventListener('resize', updateStickyOffsets);
+window.requestAnimationFrame(updateStickyOffsets);
 on('sectionNav', 'change', () => { const target = byId(byId('sectionNav').value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
 on('settingsFilter', 'input', () => {
   const query = byId('settingsFilter').value.trim().toLowerCase();
@@ -1300,7 +1775,7 @@ on('save', 'click', () => {
     defines:value('defines'), includeDirectories:value('includeDirectories'), libraryDirectories:value('libraryDirectories'), libraries:value('libraries'),
     variantDefines:value('variantDefines'), compilerFlags:value('compilerFlags'), linkerFlags:value('linkerFlags'), sourceDirectory:value('sourceDirectory'), projectFile:value('projectFile'), cmakeConfigurePreset:value('cmakeConfigurePreset'), cmakeBuildPreset:value('cmakeBuildPreset'), precompiledHeader:value('precompiledHeader'), configureArguments:value('configureArguments'), buildArguments:value('buildArguments'), cleanArguments:value('cleanArguments'),
     runArguments:value('runArguments'), workingDirectory:value('workingDirectory'), environmentOptions:value('environmentOptions'), externalProcessPath:value('externalProcessPath'),
-    platformName:value('platformName'), platformType:value('platformType'), platformBuildLocation:value('platformBuildLocation'), platformKitId:value('platformKitId'), platformBuildProfileId:value('platformBuildProfileId'), platformRunProfileId:value('platformRunProfileId'), platformDeployProfileId:value('platformDeployProfileId'), platformDebugProfileId:value('platformDebugProfileId'), platformEnvironment:value('platformEnvironment'), platformSysroot:value('platformSysroot'), platformSshHost:value('platformSshHost'), platformSshUser:value('platformSshUser'), platformSshPort:value('platformSshPort'), platformSshExecutable:value('platformSshExecutable'), platformScpExecutable:value('platformScpExecutable'), platformRsyncExecutable:value('platformRsyncExecutable'), platformRemoteProjectDirectory:value('platformRemoteProjectDirectory'), platformRemoteDeployDirectory:value('platformRemoteDeployDirectory'), platformRemoteBuildCommand:value('platformRemoteBuildCommand'), platformRemoteRunCommand:value('platformRemoteRunCommand'), platformUseRsync:checked('platformUseRsync'), platformStartGdbServer:checked('platformStartGdbServer'), platformGdbServerPort:value('platformGdbServerPort'), platformDockerExecutable:value('platformDockerExecutable'), platformDockerImage:value('platformDockerImage'), platformDockerContainerName:value('platformDockerContainerName'), platformDockerWorkspace:value('platformDockerWorkspace'), platformDockerBuildCommand:value('platformDockerBuildCommand'), platformDockerRunCommand:value('platformDockerRunCommand'), platformDockerArguments:value('platformDockerArguments'), platformDockerKeepContainer:checked('platformDockerKeepContainer'), platformDockerForwardDisplay:checked('platformDockerForwardDisplay'), platformDockerHostNetwork:checked('platformDockerHostNetwork'), platformEmsdkRoot:value('platformEmsdkRoot'), platformEmsdkEnvironmentScript:value('platformEmsdkEnvironmentScript'), platformWasmServerExecutable:value('platformWasmServerExecutable'), platformWasmServerPort:value('platformWasmServerPort'), platformWasmHtmlEntry:value('platformWasmHtmlEntry'), platformWasmOpenBrowser:checked('platformWasmOpenBrowser'), platformWasmServerArguments:value('platformWasmServerArguments'), platformAndroidSdkRoot:value('platformAndroidSdkRoot'), platformAndroidNdkRoot:value('platformAndroidNdkRoot'), platformAndroidJdkRoot:value('platformAndroidJdkRoot'), platformAndroidDeployQtPath:value('platformAndroidDeployQtPath'), platformAndroidAdbPath:value('platformAndroidAdbPath'), platformAndroidEmulatorPath:value('platformAndroidEmulatorPath'), platformAndroidAvdManagerPath:value('platformAndroidAvdManagerPath'), platformAndroidSdkManagerPath:value('platformAndroidSdkManagerPath'), platformAndroidAbis:value('platformAndroidAbis'), platformAndroidBuildAllAbis:checked('platformAndroidBuildAllAbis'), platformAndroidCompileSdk:value('platformAndroidCompileSdk'), platformAndroidTargetSdk:value('platformAndroidTargetSdk'), platformAndroidMinSdk:value('platformAndroidMinSdk'), platformAndroidBuildToolsVersion:value('platformAndroidBuildToolsVersion'), platformAndroidPackageName:value('platformAndroidPackageName'), platformAndroidAppName:value('platformAndroidAppName'), platformAndroidVersionCode:value('platformAndroidVersionCode'), platformAndroidVersionName:value('platformAndroidVersionName'), platformAndroidPackageFormat:value('platformAndroidPackageFormat'), platformAndroidDeviceSerial:value('platformAndroidDeviceSerial'), platformAndroidAvdName:value('platformAndroidAvdName'), platformAndroidLogcatFilter:value('platformAndroidLogcatFilter'), platformAndroidInstallReplace:checked('platformAndroidInstallReplace'), platformAndroidUninstallBeforeInstall:checked('platformAndroidUninstallBeforeInstall'), platformAndroidOpenLogcatAfterRun:checked('platformAndroidOpenLogcatAfterRun'), platformAndroidGradleArguments:value('platformAndroidGradleArguments'), platformAndroidCMakeArguments:value('platformAndroidCMakeArguments'), platformAndroidKeystore:value('platformAndroidKeystore'), platformAndroidKeystoreAlias:value('platformAndroidKeystoreAlias'), platformAndroidStorePasswordEnvironment:value('platformAndroidStorePasswordEnvironment'), platformAndroidKeyPasswordEnvironment:value('platformAndroidKeyPasswordEnvironment'),
+    platformName:value('platformName'), platformType:value('platformType'), platformBuildLocation:value('platformBuildLocation'), platformKitId:value('platformKitId'), platformBuildProfileId:value('platformBuildProfileId'), platformRunProfileId:value('platformRunProfileId'), platformDeployProfileId:value('platformDeployProfileId'), platformDebugProfileId:value('platformDebugProfileId'), platformEnvironment:value('platformEnvironment'), platformSysroot:value('platformSysroot'), platformSshHost:value('platformSshHost'), platformSshUser:value('platformSshUser'), platformSshPort:value('platformSshPort'), platformSshExecutable:value('platformSshExecutable'), platformScpExecutable:value('platformScpExecutable'), platformRsyncExecutable:value('platformRsyncExecutable'), platformRemoteProjectDirectory:value('platformRemoteProjectDirectory'), platformRemoteDeployDirectory:value('platformRemoteDeployDirectory'), platformRemoteBuildCommand:value('platformRemoteBuildCommand'), platformRemoteRunCommand:value('platformRemoteRunCommand'), platformUseRsync:checked('platformUseRsync'), platformStartGdbServer:checked('platformStartGdbServer'), platformGdbServerPort:value('platformGdbServerPort'), platformDockerExecutable:value('platformDockerExecutable'), platformDockerImage:value('platformDockerImage'), platformDockerContainerName:value('platformDockerContainerName'), platformDockerWorkspace:value('platformDockerWorkspace'), platformDockerBuildCommand:value('platformDockerBuildCommand'), platformDockerRunCommand:value('platformDockerRunCommand'), platformDockerArguments:value('platformDockerArguments'), platformDockerKeepContainer:checked('platformDockerKeepContainer'), platformDockerForwardDisplay:checked('platformDockerForwardDisplay'), platformDockerHostNetwork:checked('platformDockerHostNetwork'), platformEmsdkRoot:value('platformEmsdkRoot'), platformEmsdkEnvironmentScript:value('platformEmsdkEnvironmentScript'), platformWasmServerExecutable:value('platformWasmServerExecutable'), platformWasmServerPort:value('platformWasmServerPort'), platformWasmHtmlEntry:value('platformWasmHtmlEntry'), platformWasmOpenBrowser:checked('platformWasmOpenBrowser'), platformWasmServerArguments:value('platformWasmServerArguments'), platformAndroidSdkRoot:value('platformAndroidSdkRoot'), platformAndroidNdkRoot:value('platformAndroidNdkRoot'), platformAndroidJdkRoot:value('platformAndroidJdkRoot'), platformAndroidDeployQtPath:value('platformAndroidDeployQtPath'), platformAndroidAdbPath:value('platformAndroidAdbPath'), platformAndroidEmulatorPath:value('platformAndroidEmulatorPath'), platformAndroidAvdManagerPath:value('platformAndroidAvdManagerPath'), platformAndroidSdkManagerPath:value('platformAndroidSdkManagerPath'), platformAndroidAbis:value('platformAndroidAbis'), platformAndroidBuildAllAbis:checked('platformAndroidBuildAllAbis'), platformAndroidCompileSdk:value('platformAndroidCompileSdk'), platformAndroidTargetSdk:value('platformAndroidTargetSdk'), platformAndroidMinSdk:value('platformAndroidMinSdk'), platformAndroidBuildToolsVersion:value('platformAndroidBuildToolsVersion'), platformAndroidPackageName:value('platformAndroidPackageName'), platformAndroidAppName:value('platformAndroidAppName'), platformAndroidVersionCode:value('platformAndroidVersionCode'), platformAndroidVersionName:value('platformAndroidVersionName'), platformAndroidPackageFormat:value('platformAndroidPackageFormat'), platformAndroidDeviceSerial:value('platformAndroidDeviceSerial'), platformAndroidAvdName:value('platformAndroidAvdName'), platformAndroidLogcatFilter:value('platformAndroidLogcatFilter'), platformAndroidInstallReplace:checked('platformAndroidInstallReplace'), platformAndroidUninstallBeforeInstall:checked('platformAndroidUninstallBeforeInstall'), platformAndroidOpenLogcatAfterRun:checked('platformAndroidOpenLogcatAfterRun'), platformAndroidGradleArguments:value('platformAndroidGradleArguments'), platformAndroidCMakeArguments:value('platformAndroidCMakeArguments'), platformAndroidKeystore:value('platformAndroidKeystore'), platformAndroidKeystoreAlias:value('platformAndroidKeystoreAlias'), platformAndroidStorePasswordEnvironment:value('platformAndroidStorePasswordEnvironment'), platformAndroidKeyPasswordEnvironment:value('platformAndroidKeyPasswordEnvironment'), platformAppleDeveloperDirectory:value('platformAppleDeveloperDirectory'), platformAppleXcodebuildPath:value('platformAppleXcodebuildPath'), platformAppleXcrunPath:value('platformAppleXcrunPath'), platformAppleMacDeployQtPath:value('platformAppleMacDeployQtPath'), platformAppleBundleIdentifier:value('platformAppleBundleIdentifier'), platformAppleDeploymentTarget:value('platformAppleDeploymentTarget'), platformAppleArchitectures:value('platformAppleArchitectures'), platformAppleDevelopmentTeam:value('platformAppleDevelopmentTeam'), platformAppleCodeSignIdentity:value('platformAppleCodeSignIdentity'), platformAppleProvisioningProfile:value('platformAppleProvisioningProfile'), platformAppleEntitlementsFile:value('platformAppleEntitlementsFile'), platformAppleAutomaticSigning:checked('platformAppleAutomaticSigning'), platformAppleAllowProvisioningUpdates:checked('platformAppleAllowProvisioningUpdates'), platformAppleScheme:value('platformAppleScheme'), platformAppleConfiguration:value('platformAppleConfiguration'), platformAppleSimulatorId:value('platformAppleSimulatorId'), platformAppleDeviceId:value('platformAppleDeviceId'), platformAppleCreateDmg:checked('platformAppleCreateDmg'), platformAppleDmgFileSystem:value('platformAppleDmgFileSystem'), platformAppleNotaryProfile:value('platformAppleNotaryProfile'), platformAppleStapleAfterNotarization:checked('platformAppleStapleAfterNotarization'), platformAppleAppStoreCompliant:checked('platformAppleAppStoreCompliant'), platformAppleHardenedRuntime:checked('platformAppleHardenedRuntime'), platformAppleTimestamp:checked('platformAppleTimestamp'), platformAppleAdditionalCMakeArguments:value('platformAppleAdditionalCMakeArguments'), platformAppleAdditionalXcodebuildArguments:value('platformAppleAdditionalXcodebuildArguments'), platformAppleAdditionalMacDeployQtArguments:value('platformAppleAdditionalMacDeployQtArguments'),
     debugName:value('debugName'), debugRequest:value('debugRequest'), debuggerType:value('debuggerType'), debugBuildProfileId:value('debugBuildProfileId'), debugRunProfileId:value('debugRunProfileId'), debugProgram:value('debugProgram'), debugArguments:value('debugArguments'), debugWorkingDirectory:value('debugWorkingDirectory'), debugEnvironment:value('debugEnvironment'), debugStopAtEntry:checked('debugStopAtEntry'), debugExternalConsole:checked('debugExternalConsole'), debugProcessId:value('debugProcessId'), debugCoreDumpPath:value('debugCoreDumpPath'), debugRemoteHost:value('debugRemoteHost'), debugRemotePort:value('debugRemotePort'), debugRemoteProgram:value('debugRemoteProgram'), debugRemoteWorkingDirectory:value('debugRemoteWorkingDirectory'), debugSshHost:value('debugSshHost'), debugSshUser:value('debugSshUser'), debugSshPort:value('debugSshPort'), debugSshExecutable:value('debugSshExecutable'), debugStartGdbServerViaSsh:checked('debugStartGdbServerViaSsh'), debugSourceFileMap:value('debugSourceFileMap'), debugSolibPaths:value('debugSolibPaths'), debugSymbolSearchPath:value('debugSymbolSearchPath'), debugSetupCommands:value('debugSetupCommands'), debugPrettyPrinters:checked('debugPrettyPrinters'), debugBreakOnQtWarnings:checked('debugBreakOnQtWarnings'), debugQmlEnabled:checked('debugQmlEnabled'), debugQmlHost:value('debugQmlHost'), debugQmlPort:value('debugQmlPort'), debugQmlBlock:checked('debugQmlBlock'), debugQmlServices:value('debugQmlServices'),
     testFramework:value('testFramework'), testBuildBeforeRun:checked('testBuildBeforeRun'), testTimeoutMs:value('testTimeoutMs'), testArguments:value('testArguments'), testEnvironment:value('testEnvironment'), testOffscreenPlatform:checked('testOffscreenPlatform'), testParallelJobs:value('testParallelJobs'), testStopOnFailure:checked('testStopOnFailure'), testRepeatMode:value('testRepeatMode'), testRepeatCount:value('testRepeatCount'), testHistoryLimit:value('testHistoryLimit'),
     testCtestExecutable:value('testCtestExecutable'), testCtestBuildDirectory:value('testCtestBuildDirectory'), testCtestPreset:value('testCtestPreset'), testCtestConfiguration:value('testCtestConfiguration'), testCtestLabelRegex:value('testCtestLabelRegex'), testCtestNameRegex:value('testCtestNameRegex'), testCtestExcludeRegex:value('testCtestExcludeRegex'), testCtestOutputOnFailure:checked('testCtestOutputOnFailure'),
@@ -1308,8 +1783,15 @@ on('save', 'click', () => {
     clangTidyChecks:value('clangTidyChecks'), clazyChecks:value('clazyChecks'), qualityHeaderFilter:value('qualityHeaderFilter'),
     profilingOutputDirectory:value('profilingOutputDirectory'), profilingBuildBeforeRun:checked('profilingBuildBeforeRun'), profilingTimeoutMs:value('profilingTimeoutMs'), profilingArguments:value('profilingArguments'), profilingEnvironment:value('profilingEnvironment'), profilingQmlEnabled:checked('profilingQmlEnabled'), profilingQmlHost:value('profilingQmlHost'), profilingQmlPort:value('profilingQmlPort'), profilingQmlServices:value('profilingQmlServices'), profilingQmlOutputFile:value('profilingQmlOutputFile'), profilingQmlProfilerPath:value('profilingQmlProfilerPath'), profilingCpuTool:value('profilingCpuTool'), profilingCpuFrequency:value('profilingCpuFrequency'), profilingCpuOutputFile:value('profilingCpuOutputFile'), profilingCallgrindCache:checked('profilingCallgrindCache'), profilingCallgrindBranch:checked('profilingCallgrindBranch'), profilingMemoryTool:value('profilingMemoryTool'), profilingLeakCheck:value('profilingLeakCheck'), profilingMemoryOutputFile:value('profilingMemoryOutputFile'), profilingTrackOrigins:checked('profilingTrackOrigins'), profilingShowReachable:checked('profilingShowReachable'), profilingCppcheckEnabled:checked('profilingCppcheckEnabled'), profilingCppcheckChecks:value('profilingCppcheckChecks'), profilingCppcheckInconclusive:checked('profilingCppcheckInconclusive'), profilingCppcheckSuppressionsFile:value('profilingCppcheckSuppressionsFile'), profilingCppcheckArguments:value('profilingCppcheckArguments'), profilingTraceTool:value('profilingTraceTool'), profilingTraceFollowForks:checked('profilingTraceFollowForks'), profilingTraceTimestamps:checked('profilingTraceTimestamps'), profilingTraceOutputFile:value('profilingTraceOutputFile'),
 
+    qmlLanguageServerEnabled:checked('qmlLanguageServerEnabled'), qmlLanguageServerAutoStart:checked('qmlLanguageServerAutoStart'), qmlLanguageServerExecutable:value('qmlLanguageServerExecutable'), qmlLanguageServerBuildDirectories:value('qmlLanguageServerBuildDirectories'), qmlLanguageServerImportPaths:value('qmlLanguageServerImportPaths'), qmlLanguageServerUseEnvironment:checked('qmlLanguageServerUseEnvironment'), qmlLanguageServerNoCmakeCalls:checked('qmlLanguageServerNoCmakeCalls'), qmlLanguageServerCmakeJobs:value('qmlLanguageServerCmakeJobs'), qmlLanguageServerMaxFiles:value('qmlLanguageServerMaxFiles'), qmlLanguageServerTrace:value('qmlLanguageServerTrace'), qmlLanguageServerVerbose:checked('qmlLanguageServerVerbose'), qmlLanguageServerConflictPolicy:value('qmlLanguageServerConflictPolicy'), qmlLanguageServerGenerateConfig:checked('qmlLanguageServerGenerateConfig'), qmlLanguageServerArguments:value('qmlLanguageServerArguments'), qmlModuleUri:value('qmlModuleUri'), qmlModuleVersion:value('qmlModuleVersion'), qmlModuleImportRoot:value('qmlModuleImportRoot'), qmlModuleResourcePrefix:value('qmlModuleResourcePrefix'),
+
     packagingEnabled:checked('packagingEnabled'), packagingProductName:value('packagingProductName'), packagingProductVersion:value('packagingProductVersion'), packagingCompanyName:value('packagingCompanyName'), packagingDescription:value('packagingDescription'), packagingCopyright:value('packagingCopyright'), packagingIdentifier:value('packagingIdentifier'), packagingIcon:value('packagingIcon'), packagingLicenseFile:value('packagingLicenseFile'), packagingReadmeFile:value('packagingReadmeFile'), packagingOutputDirectory:value('packagingOutputDirectory'), packagingNamePattern:value('packagingNamePattern'), packagingArchiveFormat:value('packagingArchiveFormat'), packagingExtraFiles:value('packagingExtraFiles'), packagingCleanOutput:checked('packagingCleanOutput'), packagingBuildBefore:checked('packagingBuildBefore'), packagingQtRuntime:checked('packagingQtRuntime'), packagingTranslations:checked('packagingTranslations'), packagingDebugSymbols:checked('packagingDebugSymbols'), packagingEmbedVersion:checked('packagingEmbedVersion'), packagingFileDescription:value('packagingFileDescription'), packagingInternalName:value('packagingInternalName'), packagingOriginalFilename:value('packagingOriginalFilename'), packagingExecutionLevel:value('packagingExecutionLevel'), packagingDpiAwareness:value('packagingDpiAwareness'), packagingWindowsManifestFile:value('packagingWindowsManifestFile'), packagingResourceCompilerPath:value('packagingResourceCompilerPath'), packagingLinuxDesktop:checked('packagingLinuxDesktop'), packagingLinuxAppId:value('packagingLinuxAppId'), packagingCategories:value('packagingCategories'), packagingLinuxComment:value('packagingLinuxComment'), packagingInstallPrefix:value('packagingInstallPrefix'),
-    preBuildActions:value('preBuildActions'), customBuildActions:value('customBuildActions'), postBuildActions:value('postBuildActions')
+    installerEnabled:checked('installerEnabled'), installerBackend:value('installerBackend'), installerBuildPortablePackage:checked('installerBuildPortablePackage'), installerOutputDirectory:value('installerOutputDirectory'), installerFileNamePattern:value('installerFileNamePattern'), installerInstallDirectoryName:value('installerInstallDirectoryName'), installerDesktopShortcut:checked('installerDesktopShortcut'), installerStartMenuShortcut:checked('installerStartMenuShortcut'), installerRunAfterInstall:checked('installerRunAfterInstall'), installerQtIfwMode:value('installerQtIfwMode'), installerQtIfwBinaryCreatorPath:value('installerQtIfwBinaryCreatorPath'), installerQtIfwRepogenPath:value('installerQtIfwRepogenPath'), installerQtIfwInstallerBasePath:value('installerQtIfwInstallerBasePath'), installerQtIfwComponentId:value('installerQtIfwComponentId'), installerQtIfwComponentDisplayName:value('installerQtIfwComponentDisplayName'), installerQtIfwComponentDescription:value('installerQtIfwComponentDescription'), installerQtIfwReleaseDate:value('installerQtIfwReleaseDate'), installerQtIfwRepositoryUrl:value('installerQtIfwRepositoryUrl'), installerQtIfwRepositoryOutputDirectory:value('installerQtIfwRepositoryOutputDirectory'), installerQtIfwMaintenanceToolName:value('installerQtIfwMaintenanceToolName'), installerQtIfwWizardStyle:value('installerQtIfwWizardStyle'), installerQtIfwControlScript:value('installerQtIfwControlScript'), installerQtIfwComponentScript:value('installerQtIfwComponentScript'), installerQtIfwArchiveFormat:value('installerQtIfwArchiveFormat'), installerQtIfwCompression:value('installerQtIfwCompression'), installerQtIfwArguments:value('installerQtIfwArguments'), installerInnoIsccPath:value('installerInnoIsccPath'), installerInnoScriptFile:value('installerInnoScriptFile'), installerInnoLanguages:value('installerInnoLanguages'), installerInnoPrivileges:value('installerInnoPrivileges'), installerInnoArchitecture:value('installerInnoArchitecture'), installerInnoCompression:value('installerInnoCompression'), installerInnoSolidCompression:checked('installerInnoSolidCompression'), installerInnoDirectives:value('installerInnoDirectives'), installerNsisMakensisPath:value('installerNsisMakensisPath'), installerNsisScriptFile:value('installerNsisScriptFile'), installerNsisExecutionLevel:value('installerNsisExecutionLevel'), installerNsisCompressor:value('installerNsisCompressor'), installerNsisDefines:value('installerNsisDefines'), installerSigningEnabled:checked('installerSigningEnabled'), installerSignToolPath:value('installerSignToolPath'), installerCertificateFile:value('installerCertificateFile'), installerCertificateThumbprint:value('installerCertificateThumbprint'), installerCertificateSubject:value('installerCertificateSubject'), installerCertificatePasswordEnvironment:value('installerCertificatePasswordEnvironment'), installerTimestampUrl:value('installerTimestampUrl'), installerFileDigest:value('installerFileDigest'), installerTimestampDigest:value('installerTimestampDigest'), installerSignTargetBinary:checked('installerSignTargetBinary'), installerSignInstaller:checked('installerSignInstaller'), installerVerifyAfterSigning:checked('installerVerifyAfterSigning'), installerSigningArguments:value('installerSigningArguments'),
+    publicationEnabled:checked('publicationEnabled'), publicationOutputDirectory:value('publicationOutputDirectory'), publicationChannel:value('publicationChannel'), publicationBaseUrl:value('publicationBaseUrl'), publicationReleaseNotesFile:value('publicationReleaseNotesFile'), publicationIncludePortablePackage:checked('publicationIncludePortablePackage'), publicationIncludeInstaller:checked('publicationIncludeInstaller'), publicationIncludeQtIfwRepository:checked('publicationIncludeQtIfwRepository'), publicationGenerateChecksums:checked('publicationGenerateChecksums'), publicationGenerateLatestManifest:checked('publicationGenerateLatestManifest'),
+    publicationMsixEnabled:checked('publicationMsixEnabled'), publicationMsixMakeAppxPath:value('publicationMsixMakeAppxPath'), publicationMsixIdentity:value('publicationMsixIdentity'), publicationMsixPublisher:value('publicationMsixPublisher'), publicationMsixPublisherDisplayName:value('publicationMsixPublisherDisplayName'), publicationMsixDisplayName:value('publicationMsixDisplayName'), publicationMsixDescription:value('publicationMsixDescription'), publicationMsixVersion:value('publicationMsixVersion'), publicationMsixArchitecture:value('publicationMsixArchitecture'), publicationMsixMinimumOsVersion:value('publicationMsixMinimumOsVersion'), publicationMsixTargetOsVersion:value('publicationMsixTargetOsVersion'), publicationMsixLogo44:value('publicationMsixLogo44'), publicationMsixLogo150:value('publicationMsixLogo150'), publicationMsixStoreLogo:value('publicationMsixStoreLogo'), publicationMsixSignPackage:checked('publicationMsixSignPackage'), publicationMsixGenerateAppInstaller:checked('publicationMsixGenerateAppInstaller'), publicationMsixPackageUri:value('publicationMsixPackageUri'), publicationMsixAppInstallerUri:value('publicationMsixAppInstallerUri'), publicationMsixUpdateOnLaunch:checked('publicationMsixUpdateOnLaunch'), publicationMsixHoursBetweenChecks:value('publicationMsixHoursBetweenChecks'), publicationMsixShowPrompt:checked('publicationMsixShowPrompt'), publicationMsixUpdateBlocksActivation:checked('publicationMsixUpdateBlocksActivation'), publicationMsixForceUpdateFromAnyVersion:checked('publicationMsixForceUpdateFromAnyVersion'), publicationMsixAutomaticBackgroundTask:checked('publicationMsixAutomaticBackgroundTask'),
+    publicationWingetEnabled:checked('publicationWingetEnabled'), publicationWingetPath:value('publicationWingetPath'), publicationWingetCreatePath:value('publicationWingetCreatePath'), publicationWingetIdentifier:value('publicationWingetIdentifier'), publicationWingetPublisher:value('publicationWingetPublisher'), publicationWingetPackageName:value('publicationWingetPackageName'), publicationWingetDescription:value('publicationWingetDescription'), publicationWingetLicense:value('publicationWingetLicense'), publicationWingetLicenseUrl:value('publicationWingetLicenseUrl'), publicationWingetPublisherUrl:value('publicationWingetPublisherUrl'), publicationWingetPackageUrl:value('publicationWingetPackageUrl'), publicationWingetInstallerUrl:value('publicationWingetInstallerUrl'), publicationWingetInstallerType:value('publicationWingetInstallerType'), publicationWingetScope:value('publicationWingetScope'), publicationWingetLocale:value('publicationWingetLocale'), publicationWingetTags:value('publicationWingetTags'), publicationWingetReleaseNotesUrl:value('publicationWingetReleaseNotesUrl'), publicationWingetMinimumOsVersion:value('publicationWingetMinimumOsVersion'),
+    publicationGithubEnabled:checked('publicationGithubEnabled'), publicationGithubGhPath:value('publicationGithubGhPath'), publicationGithubRepository:value('publicationGithubRepository'), publicationGithubTagPattern:value('publicationGithubTagPattern'), publicationGithubReleaseNamePattern:value('publicationGithubReleaseNamePattern'), publicationGithubDraft:checked('publicationGithubDraft'), publicationGithubPrerelease:checked('publicationGithubPrerelease'), publicationGithubGenerateNotes:checked('publicationGithubGenerateNotes'), publicationGithubClobberAssets:checked('publicationGithubClobberAssets'), publicationPublishTarget:value('publicationPublishTarget'), publicationLocalDirectory:value('publicationLocalDirectory'), publicationSshHost:value('publicationSshHost'), publicationSshUser:value('publicationSshUser'), publicationSshPort:value('publicationSshPort'), publicationSshDirectory:value('publicationSshDirectory'), publicationScpPath:value('publicationScpPath'), publicationRsyncPath:value('publicationRsyncPath'), publicationUseRsync:checked('publicationUseRsync'), publicationDeleteRemote:checked('publicationDeleteRemote'),
+        preBuildActions:value('preBuildActions'), customBuildActions:value('customBuildActions'), postBuildActions:value('postBuildActions')
   });
 });
 </script>
@@ -1386,8 +1868,8 @@ function normalizeCppStandard(value: unknown): string {
 }
 
 
-function normalizePlatformType(value: unknown): 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android' {
-  return value === 'linux-local' || value === 'remote-linux' || value === 'docker' || value === 'webassembly' || value === 'android' ? value : 'desktop';
+function normalizePlatformType(value: unknown): 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android' | 'macos' | 'ios-simulator' | 'ios-device' {
+  return value === 'linux-local' || value === 'remote-linux' || value === 'docker' || value === 'webassembly' || value === 'android' || value === 'macos' || value === 'ios-simulator' || value === 'ios-device' ? value : 'desktop';
 }
 
 function normalizePlatformBuildLocation(value: unknown, type: string): 'local' | 'remote' | 'container' {
@@ -1396,10 +1878,18 @@ function normalizePlatformBuildLocation(value: unknown, type: string): 'local' |
 }
 
 function platformTypeOptions(selected: string): string {
-  const options = [['desktop','Desktop'],['linux-local','Linux Local'],['remote-linux','Remote Linux'],['docker','Docker'],['webassembly','WebAssembly'],['android','Android device / emulator']];
+  const options = [['desktop','Desktop'],['linux-local','Linux Local'],['remote-linux','Remote Linux'],['docker','Docker'],['webassembly','WebAssembly'],['android','Android device / emulator'],['macos','macOS'],['ios-simulator','iOS Simulator'],['ios-device','iOS Device']];
   return options.map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
 }
 
+
+function appleConfigurationOptions(selected: string): string {
+  return [['Debug','Debug'],['Release','Release']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+}
+
+function appleDmgFileSystemOptions(selected: string): string {
+  return [['HFS+','HFS+'],['APFS','APFS']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+}
 
 function normalizeAndroidApi(value: unknown, fallback: number): number {
   const parsed = Number(value);
@@ -1499,6 +1989,26 @@ function cloneProjectSettings(value: QpmProjectBuildSettings): QpmProjectBuildSe
 function packagingArchiveOptions(selected: string): string { return [['folder','Folder only'],['zip','ZIP archive'],['tar-gz','tar.gz archive']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
 function packagingExecutionLevelOptions(selected: string): string { return [['asInvoker','As invoker'],['highestAvailable','Highest available'],['requireAdministrator','Require administrator']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
 function packagingDpiOptions(selected: string): string { return [['unaware','DPI unaware'],['system','System aware'],['per-monitor','Per-monitor'],['per-monitor-v2','Per-monitor v2']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function installerBackendOptions(selected: string): string { return [['qt-ifw','Qt Installer Framework'],['inno-setup','Inno Setup'],['nsis','NSIS']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function qtIfwModeOptions(selected: string): string { return [['offline','Offline'],['online','Online'],['hybrid','Hybrid']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function qtIfwWizardOptions(selected: string): string { return ['Modern','Aero','Classic','Mac'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join(''); }
+function qtIfwArchiveOptions(selected: string): string { return ['7z','zip','tar','tar.gz','tar.bz2','tar.xz'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join(''); }
+function innoPrivilegeOptions(selected: string): string { return [['lowest','Current user'],['admin','Administrator']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function innoArchitectureOptions(selected: string): string { return [['x86','x86'],['x64','x64'],['x86-x64','x86 + x64']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function nsisExecutionOptions(selected: string): string { return ['user','highest','admin'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join(''); }
+function nsisCompressorOptions(selected: string): string { return ['lzma','zlib','bzip2'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join(''); }
+function signingDigestOptions(selected: string): string { return ['sha256','sha384','sha512'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value.toUpperCase()}</option>`).join(''); }
+
+function publicationChannelOptions(selected: string): string { return [['stable','Stable'],['beta','Beta'],['nightly','Nightly']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function msixArchitectureOptions(selected: string): string { return [['auto','Automatic from Qt kit'],['x86','x86'],['x64','x64'],['arm64','ARM64']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function wingetInstallerTypeOptions(selected: string): string { return [['exe','Generic EXE'],['inno','Inno Setup'],['nullsoft','NSIS / Nullsoft'],['msix','MSIX'],['zip','ZIP portable']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function wingetScopeOptions(selected: string): string { return [['machine','Machine'],['user','Current user']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function publicationTargetOptions(selected: string): string { return [['none','No publication target'],['local','Local directory'],['ssh','SSH / rsync'],['github','GitHub Release']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function normalizePublicationChannel(value: unknown): 'stable' | 'beta' | 'nightly' { return value === 'beta' || value === 'nightly' ? value : 'stable'; }
+function normalizeMsixArchitecture(value: unknown): 'auto' | 'x86' | 'x64' | 'arm64' { return value === 'x86' || value === 'x64' || value === 'arm64' ? value : 'auto'; }
+function normalizeWingetInstallerType(value: unknown): 'exe' | 'msix' | 'inno' | 'nullsoft' | 'zip' { return value === 'msix' || value === 'inno' || value === 'nullsoft' || value === 'zip' ? value : 'exe'; }
+function normalizePublicationTarget(value: unknown): 'none' | 'local' | 'ssh' | 'github' { return value === 'local' || value === 'ssh' || value === 'github' ? value : 'none'; }
+function normalizeFourPartUiVersion(value: unknown, fallback: string): string { const source = String(value ?? fallback).trim(); const parts = source.split(/[.-]/).filter(Boolean).slice(0, 4).map((part) => /^\d+$/.test(part) ? String(Number(part)) : '0'); while (parts.length < 4) parts.push('0'); return parts.join('.'); }
 
 function normalizeCpuProfilerTool(value: unknown): 'auto' | 'perf' | 'callgrind' { return value === 'perf' || value === 'callgrind' ? value : 'auto'; }
 function normalizeMemoryProfilerTool(value: unknown): 'auto' | 'valgrind-memcheck' | 'heob' { return value === 'valgrind-memcheck' || value === 'heob' ? value : 'auto'; }
@@ -1507,7 +2017,19 @@ function cpuProfilerOptions(selected: string): string { return `<option value="a
 function memoryProfilerOptions(selected: string): string { return `<option value="auto" ${selected==='auto'?'selected':''}>Automatic</option><option value="valgrind-memcheck" ${selected==='valgrind-memcheck'?'selected':''}>Valgrind Memcheck</option><option value="heob" ${selected==='heob'?'selected':''}>Heob (Windows)</option>`; }
 function leakCheckOptions(selected: string): string { return `<option value="summary" ${selected==='summary'?'selected':''}>Summary</option><option value="full" ${selected==='full'?'selected':''}>Full</option>`; }
 function traceToolOptions(selected: string): string { return `<option value="auto" ${selected==='auto'?'selected':''}>Automatic</option><option value="strace" ${selected==='strace'?'selected':''}>strace</option><option value="none" ${selected==='none'?'selected':''}>Disabled</option>`; }
+function qmlLanguageTraceOptions(selected: string): string { return [['off','Off'],['messages','Messages'],['verbose','Verbose']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function qmlLanguageConflictOptions(selected: string): string { return [['avoid-duplicate','Avoid duplicate server'],['allow-parallel','Allow QPM and official extension']].map(([value,label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
+function normalizeQmlLanguageTrace(value: unknown): 'off' | 'messages' | 'verbose' { return value === 'messages' || value === 'verbose' ? value : 'off'; }
 
+function normalizeInstallerBackend(value: unknown): 'qt-ifw' | 'inno-setup' | 'nsis' { return value === 'inno-setup' || value === 'nsis' ? value : 'qt-ifw'; }
+function normalizeQtIfwMode(value: unknown): 'offline' | 'online' | 'hybrid' { return value === 'online' || value === 'hybrid' ? value : 'offline'; }
+function normalizeQtIfwWizardStyle(value: unknown): 'Modern' | 'Aero' | 'Classic' | 'Mac' { return value === 'Aero' || value === 'Classic' || value === 'Mac' ? value : 'Modern'; }
+function normalizeQtIfwArchiveFormat(value: unknown): '7z' | 'zip' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz' { return value === 'zip' || value === 'tar' || value === 'tar.gz' || value === 'tar.bz2' || value === 'tar.xz' ? value : '7z'; }
+function normalizeInnoPrivileges(value: unknown): 'lowest' | 'admin' { return value === 'admin' ? 'admin' : 'lowest'; }
+function normalizeInnoArchitecture(value: unknown): 'x86' | 'x64' | 'x86-x64' { return value === 'x86' || value === 'x86-x64' ? value : 'x64'; }
+function normalizeNsisExecutionLevel(value: unknown): 'user' | 'highest' | 'admin' { return value === 'user' || value === 'highest' ? value : 'admin'; }
+function normalizeNsisCompressor(value: unknown): 'lzma' | 'zlib' | 'bzip2' { return value === 'zlib' || value === 'bzip2' ? value : 'lzma'; }
+function normalizeSigningDigest(value: unknown): 'sha256' | 'sha384' | 'sha512' { return value === 'sha384' || value === 'sha512' ? value : 'sha256'; }
 function normalizePackagingArchive(value: unknown): 'folder' | 'zip' | 'tar-gz' { return value === 'folder' || value === 'tar-gz' ? value : 'zip'; }
 function normalizePackagingExecutionLevel(value: unknown): 'asInvoker' | 'highestAvailable' | 'requireAdministrator' { return value === 'highestAvailable' || value === 'requireAdministrator' ? value : 'asInvoker'; }
 function normalizePackagingDpi(value: unknown): 'unaware' | 'system' | 'per-monitor' | 'per-monitor-v2' { return value === 'unaware' || value === 'system' || value === 'per-monitor' ? value : 'per-monitor-v2'; }

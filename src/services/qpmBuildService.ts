@@ -12,7 +12,7 @@ import { normalizeRuntimePath } from '../utils/pathUtils';
 import { QpmSdlConfiguration, createSdlBuildPlan } from './qpmSdlService';
 import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
-import { createQtDirectBuildPlan, generationStepIsOutdated, qtCompileArguments, qtLinkArguments, qtObjectPathForSource, sourceNeedsCompilation, qtPrecompiledHeaderArguments, QtDirectBuildPlan } from './qpmQtDirectBuildService';
+import { createQtDirectBuildPlan, generationStepIsOutdated, qtCompileArguments, qtLinkArguments, qtObjectPathForSource, sourceNeedsCompilation, qtPrecompiledHeaderArguments, qtGenerationOutputDirectories, QtDirectBuildPlan } from './qpmQtDirectBuildService';
 import { QpmQtBuildBackendService } from './qpmQtBuildBackendService';
 import { createGnuResponseFileArguments, estimateGnuArgumentLength, shouldUseGnuResponseFile } from './qpmGnuResponseFile';
 
@@ -218,8 +218,12 @@ export class QpmBuildService {
         return true;
       }
       const plan = createQtDirectBuildPlan(ref.absolutePath, this.buildMode, installation);
-      if (!await this.ensureDirectory(plan.generatedDirectory, 'Qt generated directory')) {
-        return false;
+      const generationDirectories = qtGenerationOutputDirectories(plan);
+      for (const directory of generationDirectories) {
+        const label = pathsEqual(directory, plan.generatedDirectory)
+          ? 'Qt generated directory'
+          : 'Qt code-generation output directory';
+        if (!await this.ensureDirectory(directory, label)) return false;
       }
 
       let generated = 0;
@@ -629,13 +633,33 @@ export class QpmBuildService {
       return false;
     }
     const args: string[] = [];
+    let deploymentEnvironment: NodeJS.ProcessEnv | undefined;
     if (process.platform === 'win32') {
-      args.push(isReleaseBuildMode(this.buildMode) ? '--release' : '--debug');
+      const requestedVariant: QtWindowsRuntimeVariant = isReleaseBuildMode(this.buildMode) ? 'release' : 'debug';
+      const detectedVariant = detectQtRuntimeVariantFromBinary(targetPath, installation.majorVersion);
+      const deploymentVariant = detectedVariant ?? requestedVariant;
+      args.push(deploymentVariant === 'release' ? '--release' : '--debug');
+      if (detectedVariant && detectedVariant !== requestedVariant) {
+        this.output.appendLine(`[Qt/C++] Build mode ${this.buildMode} links the ${detectedVariant} Qt runtime. windeployqt will deploy matching ${detectedVariant} libraries and plugins.`);
+      } else {
+        this.output.appendLine(`[Qt/C++] Qt runtime deployment variant: ${deploymentVariant}.`);
+      }
+      if (installation.qtPathsPath && installation.majorVersion >= 6) args.push('--qtpaths', installation.qtPathsPath);
+      args.push('--dir', path.dirname(targetPath));
       if (manifest.files.qml.length > 0) args.push('--qmldir', path.dirname(path.resolve(path.dirname(ref.absolutePath), manifest.files.qml[0])));
       if (!vscode.workspace.getConfiguration('qpm').get<boolean>('qtDeployTranslations', false)) args.push('--no-translations');
+      deploymentEnvironment = createQtDeploymentEnvironment(installation);
+      const expectedPlatformPlugin = resolveQtWindowsPlatformPlugin(installation, deploymentVariant);
+      if (requiresQtPlatformPlugin(manifest) && expectedPlatformPlugin) {
+        this.output.appendLine(`[Qt/C++] Qt platform plugin: ${expectedPlatformPlugin}`);
+      } else if (requiresQtPlatformPlugin(manifest)) {
+        const pluginsRoot = installation.pluginsDir || path.join(installation.root, 'plugins');
+        this.output.appendLine(`[Qt/C++] WARNING: no ${deploymentVariant} Windows platform plugin was found below ${path.join(pluginsRoot, 'platforms')}.`);
+        this.output.appendLine('[Qt/C++] windeployqt will still run with the selected Qt kit environment; repair the Desktop Qt component if it reports that the platform plugin is unavailable.');
+      }
     }
     args.push(targetPath);
-    const deployed = await this.spawnTool(installation.deployToolPath, args, path.dirname(ref.absolutePath), `Deploy ${path.basename(targetPath)}`);
+    const deployed = await this.spawnTool(installation.deployToolPath, args, path.dirname(ref.absolutePath), `Deploy ${path.basename(targetPath)}`, deploymentEnvironment);
     if (deployed && announce) vscode.window.showInformationMessage(`Qt runtime deployed beside ${path.basename(targetPath)}.`);
     return deployed;
   }
@@ -1092,7 +1116,7 @@ export class QpmBuildService {
     return false;
   }
 
-  private async spawnTool(executable: string, args: string[], cwd: string, label: string): Promise<boolean> {
+  private async spawnTool(executable: string, args: string[], cwd: string, label: string, environment?: NodeJS.ProcessEnv): Promise<boolean> {
     const launch = resolveToolLaunch(executable);
     this.output.appendLine(`[Qt/C++] ${label}`);
     this.output.appendLine(`[Qt/C++] Tool: ${executable}`);
@@ -1105,7 +1129,7 @@ export class QpmBuildService {
     this.output.appendLine(`[Qt/C++] Arguments: ${args.map(renderArgument).join(' ')}`);
     this.output.appendLine('');
     return await new Promise<boolean>((resolve) => {
-      const child = spawn(launch.executable, args, { cwd, windowsHide: true, shell: false, env: launch.env });
+      const child = spawn(launch.executable, args, { cwd, windowsHide: true, shell: false, env: mergeToolEnvironments(environment, launch.env) });
       child.stdout.on('data', (data: Buffer) => this.output.append(data.toString()));
       child.stderr.on('data', (data: Buffer) => this.output.append(data.toString()));
       child.on('error', (error) => {
@@ -1131,36 +1155,55 @@ export class QpmBuildService {
     if (blockingPath) {
       const message = `Cannot create ${label}: a file already exists in the directory path: ${blockingPath}`;
       this.output.appendLine(`[Qt/C++] ERROR: ${message}`);
-      if (showUserMessage) {
-        vscode.window.showErrorMessage(message);
-      }
+      if (showUserMessage) vscode.window.showErrorMessage(message);
       return false;
     }
 
-    for (let attempt = 1; attempt <= 5; attempt++) {
+    if (isExistingDirectory(normalized)) return true;
+
+    let lastError: NodeJS.ErrnoException | undefined;
+    for (let attempt = 1; attempt <= 8; attempt++) {
       try {
-        fs.mkdirSync(normalized, { recursive: true });
-        return true;
+        createDirectoryParentFirst(normalized);
+        if (isExistingDirectory(normalized)) return true;
+        throw Object.assign(new Error(`mkdir completed without creating ${normalized}`), { code: 'ENOENT' });
       } catch (error) {
         const nodeError = error as NodeJS.ErrnoException;
+        lastError = nodeError;
         const code = nodeError.code || 'ERROR';
         const message = nodeError.message || String(error);
-        if (attempt < 5 && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) {
-          this.output.appendLine(`[Qt/C++] ${code} while creating ${label}; retry ${attempt}/5: ${normalized}`);
-          await delay(180 * attempt);
+
+        // Another QPM/IntelliSense operation may have created the directory
+        // between mkdir and the error callback. Treat that race as success.
+        if (isExistingDirectory(normalized)) return true;
+
+        if (attempt === 4 && process.platform === 'win32' && tryCreateDirectoryWithWindowsShell(normalized)) {
+          this.output.appendLine(`[Qt/C++] Recovered ${label} creation through the Windows command shell: ${normalized}`);
+          return true;
+        }
+
+        if (attempt < 8 && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY' || code === 'ENOENT')) {
+          this.output.appendLine(`[Qt/C++] ${code} while creating ${label}; retry ${attempt}/8: ${normalized}`);
+          await delay(Math.min(250 * attempt, 1000));
           continue;
         }
+
         this.output.appendLine(`[Qt/C++] ERROR: unable to create ${label}: ${normalized}`);
         this.output.appendLine(`[Qt/C++] ${code}: ${message}`);
+        appendDirectoryDiagnostics(this.output, normalized);
         if (/\\OneDrive\\|\/OneDrive\//i.test(normalized)) {
           this.output.appendLine('[Qt/C++] Hint: the build directory is inside OneDrive. If Windows locks the directory, move the project/build output to a local non-synchronized folder or pause OneDrive synchronization during the build.');
         }
-        if (showUserMessage) {
-          vscode.window.showErrorMessage(`Unable to create ${label}. Open the Qt Project Manager output channel for details.`);
-        }
+        if (showUserMessage) vscode.window.showErrorMessage(`Unable to create ${label}. Open the Qt Project Manager output channel for details.`);
         return false;
       }
     }
+
+    const code = lastError?.code || 'ERROR';
+    this.output.appendLine(`[Qt/C++] ERROR: unable to create ${label}: ${normalized}`);
+    this.output.appendLine(`[Qt/C++] ${code}: ${lastError?.message || 'unknown directory creation error'}`);
+    appendDirectoryDiagnostics(this.output, normalized);
+    if (showUserMessage) vscode.window.showErrorMessage(`Unable to create ${label}. Open the Qt Project Manager output channel for details.`);
     return false;
   }
 
@@ -1543,6 +1586,65 @@ export class QpmBuildService {
 }
 
 
+export type QtWindowsRuntimeVariant = 'debug' | 'release';
+
+export function detectQtRuntimeVariantFromBinary(targetPath: string, majorVersion = 6): QtWindowsRuntimeVariant | undefined {
+  if (!fs.existsSync(targetPath)) return undefined;
+  try {
+    const binary = fs.readFileSync(targetPath).toString('latin1').toLowerCase();
+    const major = Number.isFinite(majorVersion) && majorVersion > 0 ? Math.trunc(majorVersion) : 6;
+    if (binary.includes(`qt${major}cored.dll`)) return 'debug';
+    if (binary.includes(`qt${major}core.dll`)) return 'release';
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function createQtDeploymentEnvironment(installation: QpmQtInstallation, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  const pathDirectories = unique([
+    installation.binDir,
+    installation.toolchain.binDir || '',
+    ...(env[pathKey] ?? '').split(path.delimiter).filter(Boolean)
+  ]);
+  env[pathKey] = pathDirectories.join(path.delimiter);
+  env.QTDIR = installation.root;
+  if (installation.pluginsDir) {
+    env.QT_PLUGIN_PATH = installation.pluginsDir;
+    env.QT_QPA_PLATFORM_PLUGIN_PATH = path.join(installation.pluginsDir, 'platforms');
+  }
+  if (installation.qmlDir) {
+    env.QML_IMPORT_PATH = unique([installation.qmlDir, ...(env.QML_IMPORT_PATH ?? '').split(path.delimiter).filter(Boolean)]).join(path.delimiter);
+    env.QML2_IMPORT_PATH = unique([installation.qmlDir, ...(env.QML2_IMPORT_PATH ?? '').split(path.delimiter).filter(Boolean)]).join(path.delimiter);
+  }
+  return env;
+}
+
+export function resolveQtWindowsPlatformPlugin(installation: QpmQtInstallation, variant: QtWindowsRuntimeVariant): string | undefined {
+  const pluginDirectory = path.join(installation.pluginsDir || path.join(installation.root, 'plugins'), 'platforms');
+  const expected = path.join(pluginDirectory, variant === 'debug' ? 'qwindowsd.dll' : 'qwindows.dll');
+  return fs.existsSync(expected) ? expected : undefined;
+}
+
+function requiresQtPlatformPlugin(manifest: QtProjectManifest): boolean {
+  return manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
+}
+
+function mergeToolEnvironments(requested?: NodeJS.ProcessEnv, launch?: NodeJS.ProcessEnv): NodeJS.ProcessEnv | undefined {
+  if (!requested && !launch) return undefined;
+  const env: NodeJS.ProcessEnv = { ...process.env, ...(launch ?? {}), ...(requested ?? {}) };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  const values = [
+    requested && Object.entries(requested).find(([key]) => key.toLowerCase() === 'path')?.[1],
+    launch && Object.entries(launch).find(([key]) => key.toLowerCase() === 'path')?.[1],
+    process.env.PATH
+  ];
+  env[pathKey] = unique(values.flatMap((value) => (value ?? '').split(path.delimiter).filter(Boolean))).join(path.delimiter);
+  return env;
+}
+
 function normalizeRuntimeDependencyMode(value: string | undefined, legacyValue: string | undefined): QpmRuntimeDependencyMode {
   if (value === 'copy-dlls' || value === 'path-only' || value === 'static-link') {
     return value;
@@ -1695,6 +1797,60 @@ function isGccLikeTool(executable: string): boolean {
   return /^(?:gcc|g\+\+|c\+\+|cc|clang|clang\+\+)(?:\.exe)?$/.test(name);
 }
 
+
+
+
+function pathsEqual(left: string, right: string): boolean {
+  const normalizedLeft = path.resolve(left);
+  const normalizedRight = path.resolve(right);
+  return process.platform === 'win32'
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight;
+}
+
+function isExistingDirectory(candidate: string): boolean {
+  try { return fs.statSync(candidate).isDirectory(); } catch { return false; }
+}
+
+function createDirectoryParentFirst(directoryPath: string): void {
+  if (isExistingDirectory(directoryPath)) return;
+  const parent = path.dirname(directoryPath);
+  if (parent !== directoryPath && !isExistingDirectory(parent)) {
+    fs.mkdirSync(parent, { recursive: true });
+  }
+  try {
+    fs.mkdirSync(directoryPath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'EEXIST' && isExistingDirectory(directoryPath)) return;
+    throw error;
+  }
+}
+
+function tryCreateDirectoryWithWindowsShell(directoryPath: string): boolean {
+  try {
+    const commandProcessor = process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+    execFileSync(commandProcessor, ['/d', '/s', '/c', `mkdir "${directoryPath.replace(/"/g, '""')}"`], {
+      windowsHide: true,
+      stdio: 'ignore'
+    });
+    return isExistingDirectory(directoryPath);
+  } catch {
+    return false;
+  }
+}
+
+function appendDirectoryDiagnostics(output: vscode.OutputChannel, directoryPath: string): void {
+  const parent = path.dirname(directoryPath);
+  output.appendLine(`[Qt/C++] Directory diagnostics: parent=${parent}`);
+  output.appendLine(`[Qt/C++] Directory diagnostics: parentExists=${fs.existsSync(parent)}, targetExists=${fs.existsSync(directoryPath)}`);
+  try {
+    const stat = fs.statSync(parent);
+    output.appendLine(`[Qt/C++] Directory diagnostics: parentIsDirectory=${stat.isDirectory()}, parentMode=${(stat.mode & 0o777).toString(8)}`);
+  } catch (error) {
+    output.appendLine(`[Qt/C++] Directory diagnostics: cannot stat parent: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

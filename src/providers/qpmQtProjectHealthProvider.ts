@@ -10,6 +10,8 @@ import { QpmQtTestingService } from '../services/qpmQtTestingService';
 import { QpmQtQualityService } from '../services/qpmQtQualityService';
 import { QpmQtPlatformService } from '../services/qpmQtPlatformService';
 import { QpmQtProfilingService } from '../services/qpmQtProfilingService';
+import { QpmQtInstallerService } from '../services/qpmQtInstallerService';
+import { QpmQtPublicationService } from '../services/qpmQtPublicationService';
 import { readQtResourceDocument, validateQtResourceDocument } from '../views/qtResourceEditorPanel';
 
 export type QtHealthSeverity = 'ok' | 'info' | 'warning' | 'error';
@@ -36,7 +38,9 @@ export class QpmQtProjectHealthProvider implements vscode.TreeDataProvider<QtHea
     private readonly testing?: QpmQtTestingService,
     private readonly quality?: QpmQtQualityService,
     private readonly platforms?: QpmQtPlatformService,
-    private readonly profiling?: QpmQtProfilingService
+    private readonly profiling?: QpmQtProfilingService,
+    private readonly installers?: QpmQtInstallerService,
+    private readonly publication?: QpmQtPublicationService
   ) {
     this.disposables.push(this.workspaces.onDidChange(() => this.refresh()));
   }
@@ -274,15 +278,20 @@ Cppcheck: ${report.tools.cppcheckPath ?? 'missing'}`,
       if (files.qml.length > 0) {
         const qmlLintReady = Boolean(installation?.qmlLintPath);
         const qmlFormatReady = Boolean(installation?.qmlFormatPath);
+        const qmlLanguageReady = Boolean(manifest.qml.languageServer.executable || installation?.qmlLanguageServerPath);
         const qmlPreviewReady = Boolean(installation?.qmlRuntimePath || installation?.qmlScenePath);
-        const qmlSeverity: QtHealthSeverity = qmlLintReady && qmlFormatReady ? 'ok' : 'warning';
+        const qmlSeverity: QtHealthSeverity = qmlLintReady && qmlFormatReady && (!manifest.qml.languageServer.enabled || qmlLanguageReady) ? 'ok' : 'warning';
         items.push(health(
           'qml-tools',
-          'QML tools',
-          `${files.qml.length} file(s) · lint ${qmlLintReady ? 'ready' : 'missing'} · format ${qmlFormatReady ? 'ready' : 'missing'}`,
+          'QML tools and language server',
+          `${files.qml.length} file(s) · lint ${qmlLintReady ? 'ready' : 'missing'} · format ${qmlFormatReady ? 'ready' : 'missing'} · qmlls ${manifest.qml.languageServer.enabled ? qmlLanguageReady ? 'ready' : 'missing' : 'disabled'}`,
           qmlSeverity,
-          `qmllint: ${installation?.qmlLintPath ?? 'missing'}\nqmlformat: ${installation?.qmlFormatPath ?? 'missing'}\nPreview runtime: ${installation?.qmlRuntimePath ?? installation?.qmlScenePath ?? 'missing'}`,
-          'qpm.qmlLintProject'
+          `qmllint: ${installation?.qmlLintPath ?? 'missing'}
+qmlformat: ${installation?.qmlFormatPath ?? 'missing'}
+qmlls: ${manifest.qml.languageServer.executable || installation?.qmlLanguageServerPath || 'missing'}
+Auto-start: ${manifest.qml.languageServer.autoStart ? 'yes' : 'no'}
+Preview runtime: ${installation?.qmlRuntimePath ?? installation?.qmlScenePath ?? 'missing'}`,
+          manifest.qml.languageServer.enabled ? 'qpm.startQmlLanguageServer' : 'qpm.editBuildSettings'
         ));
         if (!qmlPreviewReady) items.push(health('qml-preview', 'QML preview', 'Runtime not resolved', 'info', 'Select a Qt kit that provides qml or qmlscene.', 'qpm.qmlPreviewFile'));
       }
@@ -314,6 +323,54 @@ Translations: ${packaging.includeTranslations ? 'included' : 'excluded'}${missin
 Missing: ${missingPackagingFiles.map(([label, absolutePath]) => `${label}: ${absolutePath}`).join('\n')}` : ''}`,
         'qpm.openPackagingReport'
       ));
+
+      if (this.installers) {
+        const installerReport = this.installers.getReport(ref);
+        if (installerReport) {
+          const errors = installerReport.issues.filter((entry) => entry.severity === 'error').length;
+          const warnings = installerReport.issues.filter((entry) => entry.severity === 'warning').length;
+          const selectedTool = installerReport.backend === 'qt-ifw'
+            ? installerReport.tools.binaryCreator
+            : installerReport.backend === 'inno-setup'
+              ? installerReport.tools.iscc
+              : installerReport.tools.makensis;
+          items.push(health(
+            'installers',
+            'Desktop installer and signing',
+            packaging.installer.enabled
+              ? `${installerReport.backend} · ${errors ? `${errors} error(s)` : warnings ? `${warnings} warning(s)` : 'ready'}`
+              : 'Installer generation disabled',
+            !packaging.installer.enabled ? 'info' : errors ? 'error' : warnings ? 'warning' : 'ok',
+            `Output: ${installerReport.installerPath}
+Compiler: ${selectedTool ?? 'missing'}
+Qt IFW repository: ${installerReport.repositoryPath}
+SignTool: ${installerReport.tools.signTool ?? 'missing'}
+Signing: ${packaging.installer.signing.enabled ? 'enabled' : 'disabled'}`,
+            'qpm.openInstallerReport'
+          ));
+        }
+      }
+
+
+      if (this.publication) {
+        const publicationReport = this.publication.getReport(ref);
+        if (publicationReport) {
+          const errors = publicationReport.issues.filter((entry) => entry.severity === 'error').length;
+          const warnings = publicationReport.issues.filter((entry) => entry.severity === 'warning').length;
+          const enabled = manifest.publication.enabled;
+          items.push(health(
+            'publication',
+            'Publication and updates',
+            enabled ? `${manifest.publication.channel} · ${errors ? `${errors} error(s)` : warnings ? `${warnings} warning(s)` : 'ready'}` : 'Publication disabled',
+            !enabled ? 'info' : errors ? 'error' : warnings ? 'warning' : 'ok',
+            `Output: ${publicationReport.outputRoot}
+MSIX: ${manifest.publication.msix.enabled ? 'enabled' : 'disabled'}
+WinGet: ${manifest.publication.winget.enabled ? 'enabled' : 'disabled'}
+Target: ${manifest.publication.publish.target}`,
+            'qpm.openPublicationReport'
+          ));
+        }
+      }
 
       items.push(health('run', 'Run profile', runProfile.workingDirectory || 'Target directory', 'info', `Arguments: ${runProfile.arguments || 'none'}\nEnvironment variables: ${Object.keys(runProfile.environment).length}`, 'qpm.chooseRunAction'));
       const debugKit = manifest.profiles.kits.find((entry) => entry.id === manifest.profiles.builds.find((entry) => entry.id === debugProfile.buildProfileId)?.kitId) ?? kitProfile;

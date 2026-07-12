@@ -62,6 +62,7 @@ export interface QpmQtInstallation {
   lreleasePath?: string;
   qmlLintPath?: string;
   qmlFormatPath?: string;
+  qmlLanguageServerPath?: string;
   qmlRuntimePath?: string;
   qmlScenePath?: string;
   assistantPath?: string;
@@ -358,6 +359,7 @@ export function describeQtRoot(root: string): QpmQtInstallation | undefined {
     lreleasePath: existingFile(binDir, ['lrelease']),
     qmlLintPath: existingFile(binDir, ['qmllint']),
     qmlFormatPath: existingFile(binDir, ['qmlformat']),
+    qmlLanguageServerPath: existingFile(binDir, ['qmlls']),
     qmlRuntimePath: existingFile(binDir, ['qml']),
     qmlScenePath: existingFile(binDir, ['qmlscene']),
     assistantPath: existingFile(binDir, ['assistant']),
@@ -826,5 +828,5 @@ function qtInstallationDetail(installation: QpmQtInstallation): string {
   const compiler = installation.toolchain.cppCompilerPath
     ? `${installation.toolchain.compatibility === 'incompatible' ? '✗' : '✓'} ${installation.toolchain.detectedArchitecture ?? 'unknown'} ${path.basename(installation.toolchain.cppCompilerPath)}`
     : '✗ not resolved';
-  return `moc ${installation.mocPath ? '✓' : '✗'} · uic ${installation.uicPath ? '✓' : '✗'} · rcc ${installation.rccPath ? '✓' : '✗'} · Designer ${installation.designerPath ? '✓' : '✗'} · Linguist ${installation.linguistPath && installation.lupdatePath && installation.lreleasePath ? '✓' : '✗'} · QML tools ${installation.qmlLintPath && installation.qmlFormatPath ? '✓' : '✗'} · CMake ${installation.cmakePath ? '✓' : '✗'} · Ninja ${installation.ninjaPath ? '✓' : '✗'} · compiler ${compiler}`;
+  return `moc ${installation.mocPath ? '✓' : '✗'} · uic ${installation.uicPath ? '✓' : '✗'} · rcc ${installation.rccPath ? '✓' : '✗'} · Designer ${installation.designerPath ? '✓' : '✗'} · Linguist ${installation.linguistPath && installation.lupdatePath && installation.lreleasePath ? '✓' : '✗'} · QML tools ${installation.qmlLintPath && installation.qmlFormatPath ? '✓' : '✗'} · qmlls ${installation.qmlLanguageServerPath ? '✓' : '✗'} · CMake ${installation.cmakePath ? '✓' : '✗'} · Ninja ${installation.ninjaPath ? '✓' : '✗'} · compiler ${compiler}`;
 }

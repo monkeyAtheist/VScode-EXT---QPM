@@ -3,7 +3,7 @@ import * as path from 'path';
 import { QpmBuildMode, QpmProject, QpmProjectFile, QpmWorkspace } from './types';
 
 export const QT_PROJECT_SUFFIX = '.qtproject.json';
-export const QT_PROJECT_SCHEMA_VERSION = 11;
+export const QT_PROJECT_SCHEMA_VERSION = 15;
 
 export type QtProjectKind = 'widgets-application' | 'console-application' | 'quick-application' | 'test-application' | 'quick-test-application' | 'shared-library' | 'static-library';
 export type QtTestFramework = 'auto' | 'qttest' | 'qtquicktest' | 'gtest' | 'catch2' | 'boost' | 'ctest';
@@ -12,7 +12,7 @@ export type QtBuildSystem = 'direct' | 'qmake' | 'cmake';
 export type QtProfileArchitecture = 'auto' | 'x86' | 'x64';
 export type QtBuildVariantName = 'debug' | 'release';
 export type QtDebuggerType = 'auto' | 'gdb' | 'lldb' | 'cdb' | 'cppvsdbg';
-export type QtDeviceType = 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android';
+export type QtDeviceType = 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android' | 'macos' | 'ios-simulator' | 'ios-device';
 export type QtPlatformType = QtDeviceType;
 export type QtPlatformBuildLocation = 'local' | 'remote' | 'container';
 export type QtDebugRequest = 'launch' | 'attach' | 'remote-gdb' | 'core-dump' | 'qml-attach';
@@ -206,6 +206,33 @@ export interface QtPlatformProfile {
   androidKeystoreAlias: string;
   androidStorePasswordEnvironment: string;
   androidKeyPasswordEnvironment: string;
+  appleDeveloperDirectory: string;
+  appleXcodebuildPath: string;
+  appleXcrunPath: string;
+  appleMacDeployQtPath: string;
+  appleBundleIdentifier: string;
+  appleDeploymentTarget: string;
+  appleArchitectures: string[];
+  appleDevelopmentTeam: string;
+  appleCodeSignIdentity: string;
+  appleProvisioningProfile: string;
+  appleEntitlementsFile: string;
+  appleAutomaticSigning: boolean;
+  appleAllowProvisioningUpdates: boolean;
+  appleScheme: string;
+  appleConfiguration: 'Debug' | 'Release';
+  appleSimulatorId: string;
+  appleDeviceId: string;
+  appleCreateDmg: boolean;
+  appleDmgFileSystem: 'HFS+' | 'APFS';
+  appleNotaryProfile: string;
+  appleStapleAfterNotarization: boolean;
+  appleAppStoreCompliant: boolean;
+  appleHardenedRuntime: boolean;
+  appleTimestamp: boolean;
+  appleAdditionalCMakeArguments: string[];
+  appleAdditionalXcodebuildArguments: string[];
+  appleAdditionalMacDeployQtArguments: string[];
 }
 
 
@@ -213,6 +240,15 @@ export interface QtPlatformProfile {
 export type QtPackageArchiveFormat = 'folder' | 'zip' | 'tar-gz';
 export type QtWindowsExecutionLevel = 'asInvoker' | 'highestAvailable' | 'requireAdministrator';
 export type QtWindowsDpiAwareness = 'unaware' | 'system' | 'per-monitor' | 'per-monitor-v2';
+export type QtInstallerBackend = 'qt-ifw' | 'inno-setup' | 'nsis';
+export type QtIfwInstallerMode = 'offline' | 'online' | 'hybrid';
+export type QtIfwWizardStyle = 'Modern' | 'Aero' | 'Classic' | 'Mac';
+export type QtIfwArchiveFormat = '7z' | 'zip' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz';
+export type QtInnoPrivileges = 'lowest' | 'admin';
+export type QtInnoArchitecture = 'x86' | 'x64' | 'x86-x64';
+export type QtNsisExecutionLevel = 'user' | 'highest' | 'admin';
+export type QtNsisCompressor = 'lzma' | 'zlib' | 'bzip2';
+export type QtSigningDigest = 'sha256' | 'sha384' | 'sha512';
 
 export interface QtPackagingConfiguration {
   enabled: boolean;
@@ -250,6 +286,156 @@ export interface QtPackagingConfiguration {
     categories: string[];
     comment: string;
     installPrefix: string;
+  };
+  installer: {
+    enabled: boolean;
+    backend: QtInstallerBackend;
+    buildPortablePackage: boolean;
+    outputDirectory: string;
+    fileNamePattern: string;
+    installDirectoryName: string;
+    createDesktopShortcut: boolean;
+    createStartMenuShortcut: boolean;
+    runAfterInstall: boolean;
+    qtIfw: {
+      mode: QtIfwInstallerMode;
+      binaryCreatorPath: string;
+      repogenPath: string;
+      installerBasePath: string;
+      componentId: string;
+      componentDisplayName: string;
+      componentDescription: string;
+      releaseDate: string;
+      repositoryUrl: string;
+      repositoryOutputDirectory: string;
+      maintenanceToolName: string;
+      wizardStyle: QtIfwWizardStyle;
+      controlScript: string;
+      componentScript: string;
+      archiveFormat: QtIfwArchiveFormat;
+      compression: number;
+      additionalArguments: string[];
+    };
+    inno: {
+      isccPath: string;
+      scriptFile: string;
+      languages: string[];
+      privilegesRequired: QtInnoPrivileges;
+      architecture: QtInnoArchitecture;
+      compression: string;
+      solidCompression: boolean;
+      additionalDirectives: string[];
+    };
+    nsis: {
+      makensisPath: string;
+      scriptFile: string;
+      requestExecutionLevel: QtNsisExecutionLevel;
+      compressor: QtNsisCompressor;
+      additionalDefines: string[];
+    };
+    signing: {
+      enabled: boolean;
+      signToolPath: string;
+      certificateFile: string;
+      certificateThumbprint: string;
+      certificateSubject: string;
+      certificatePasswordEnvironment: string;
+      timestampUrl: string;
+      fileDigest: QtSigningDigest;
+      timestampDigest: QtSigningDigest;
+      signTargetBinary: boolean;
+      signInstaller: boolean;
+      verifyAfterSigning: boolean;
+      additionalArguments: string[];
+    };
+  };
+}
+
+export type QtPublicationChannel = 'stable' | 'beta' | 'nightly';
+export type QtPublicationTarget = 'none' | 'local' | 'ssh' | 'github';
+export type QtMsixArchitecture = 'auto' | 'x86' | 'x64' | 'arm64';
+export type QtWingetInstallerType = 'exe' | 'msix' | 'inno' | 'nullsoft' | 'zip';
+export type QtWingetScope = 'user' | 'machine';
+
+export interface QtPublicationConfiguration {
+  enabled: boolean;
+  outputDirectory: string;
+  channel: QtPublicationChannel;
+  baseUrl: string;
+  releaseNotesFile: string;
+  includePortablePackage: boolean;
+  includeInstaller: boolean;
+  includeQtIfwRepository: boolean;
+  generateChecksums: boolean;
+  generateLatestManifest: boolean;
+  msix: {
+    enabled: boolean;
+    makeAppxPath: string;
+    packageIdentityName: string;
+    publisher: string;
+    publisherDisplayName: string;
+    displayName: string;
+    description: string;
+    version: string;
+    architecture: QtMsixArchitecture;
+    minimumOsVersion: string;
+    targetOsVersion: string;
+    logo44: string;
+    logo150: string;
+    storeLogo: string;
+    signPackage: boolean;
+    generateAppInstaller: boolean;
+    packageUri: string;
+    appInstallerUri: string;
+    updateOnLaunch: boolean;
+    hoursBetweenUpdateChecks: number;
+    showPrompt: boolean;
+    updateBlocksActivation: boolean;
+    forceUpdateFromAnyVersion: boolean;
+    automaticBackgroundTask: boolean;
+  };
+  winget: {
+    enabled: boolean;
+    wingetPath: string;
+    wingetCreatePath: string;
+    packageIdentifier: string;
+    publisher: string;
+    packageName: string;
+    shortDescription: string;
+    license: string;
+    licenseUrl: string;
+    publisherUrl: string;
+    packageUrl: string;
+    installerUrl: string;
+    installerType: QtWingetInstallerType;
+    scope: QtWingetScope;
+    locale: string;
+    tags: string[];
+    releaseNotesUrl: string;
+    minimumOsVersion: string;
+  };
+  github: {
+    enabled: boolean;
+    ghPath: string;
+    repository: string;
+    tagPattern: string;
+    releaseNamePattern: string;
+    draft: boolean;
+    prerelease: boolean;
+    generateNotes: boolean;
+    clobberAssets: boolean;
+  };
+  publish: {
+    target: QtPublicationTarget;
+    localDirectory: string;
+    sshHost: string;
+    sshUser: string;
+    sshPort: number;
+    sshDirectory: string;
+    scpPath: string;
+    rsyncPath: string;
+    useRsync: boolean;
+    deleteRemote: boolean;
   };
 }
 
@@ -293,6 +479,34 @@ export interface QtQualityConfiguration {
 export type QtCpuProfilerTool = 'auto' | 'perf' | 'callgrind';
 export type QtMemoryProfilerTool = 'auto' | 'valgrind-memcheck' | 'heob';
 export type QtTraceTool = 'auto' | 'strace' | 'none';
+
+export type QtQmlLanguageServerTrace = 'off' | 'messages' | 'verbose';
+export type QtQmlLanguageServerConflictPolicy = 'avoid-duplicate' | 'allow-parallel';
+
+export interface QtQmlConfiguration {
+  languageServer: {
+    enabled: boolean;
+    autoStart: boolean;
+    executable: string;
+    buildDirectories: string[];
+    importPaths: string[];
+    useQmlImportPathEnvironment: boolean;
+    noCmakeCalls: boolean;
+    cmakeJobs: number;
+    maxFilesToSearch: number;
+    trace: QtQmlLanguageServerTrace;
+    verboseOutput: boolean;
+    conflictPolicy: QtQmlLanguageServerConflictPolicy;
+    generateConfigurationFile: boolean;
+    additionalArguments: string[];
+  };
+  module: {
+    uri: string;
+    version: string;
+    importRoot: string;
+    resourcePrefix: string;
+  };
+}
 
 export interface QtProfilingConfiguration {
   outputDirectory: string;
@@ -382,7 +596,9 @@ export interface QtProjectManifest {
   testing: QtTestingConfiguration;
   quality: QtQualityConfiguration;
   profiling: QtProfilingConfiguration;
+  qml: QtQmlConfiguration;
   packaging: QtPackagingConfiguration;
+  publication: QtPublicationConfiguration;
   files: QtProjectFiles;
   includeDirectories: string[];
   libraryDirectories: string[];
@@ -434,7 +650,9 @@ export function createDefaultQtProjectManifest(name: string, kind: QtProjectKind
     testing: defaultTestingConfiguration(kind),
     quality: defaultQualityConfiguration(),
     profiling: defaultProfilingConfiguration(),
+    qml: defaultQmlConfiguration(name, kind),
     packaging: defaultPackagingConfiguration(name),
+    publication: defaultPublicationConfiguration(name),
     files: {
       sources: [], headers: [], forms: [], resources: [], qml: [], translations: [], other: []
     },
@@ -525,7 +743,9 @@ export function validateAndNormalizeManifest(raw: unknown, manifestPath = '<memo
     testing: normalizeTestingConfiguration(value.testing, kind),
     quality: normalizeQualityConfiguration(value.quality),
     profiling: normalizeProfilingConfiguration(value.profiling),
+    qml: normalizeQmlConfiguration(value.qml, name, kind),
     packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name),
+    publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name)),
     files,
     includeDirectories: normalizeStringArray(value.includeDirectories),
     libraryDirectories: normalizeStringArray(value.libraryDirectories),
@@ -876,7 +1096,34 @@ function createDefaultPlatformProfile(kitId: string, buildProfileId: string, run
     androidKeystore: '',
     androidKeystoreAlias: '',
     androidStorePasswordEnvironment: 'QPM_ANDROID_STORE_PASSWORD',
-    androidKeyPasswordEnvironment: 'QPM_ANDROID_KEY_PASSWORD'
+    androidKeyPasswordEnvironment: 'QPM_ANDROID_KEY_PASSWORD',
+    appleDeveloperDirectory: '',
+    appleXcodebuildPath: '',
+    appleXcrunPath: '',
+    appleMacDeployQtPath: '',
+    appleBundleIdentifier: '',
+    appleDeploymentTarget: '',
+    appleArchitectures: ['arm64'],
+    appleDevelopmentTeam: '',
+    appleCodeSignIdentity: '',
+    appleProvisioningProfile: '',
+    appleEntitlementsFile: '',
+    appleAutomaticSigning: true,
+    appleAllowProvisioningUpdates: true,
+    appleScheme: '',
+    appleConfiguration: 'Debug',
+    appleSimulatorId: '',
+    appleDeviceId: '',
+    appleCreateDmg: true,
+    appleDmgFileSystem: 'HFS+',
+    appleNotaryProfile: '',
+    appleStapleAfterNotarization: true,
+    appleAppStoreCompliant: false,
+    appleHardenedRuntime: true,
+    appleTimestamp: true,
+    appleAdditionalCMakeArguments: [],
+    appleAdditionalXcodebuildArguments: [],
+    appleAdditionalMacDeployQtArguments: []
   };
 }
 
@@ -884,7 +1131,7 @@ function normalizePlatformProfile(raw: unknown, fallbackId: string, kitId: strin
   const value = objectValue(raw);
   if (!Object.keys(value).length) return undefined;
   const fallback = createDefaultPlatformProfile(kitId, buildProfileId, runProfileId, deployProfileId, debugProfileId);
-  const typeValues: QtPlatformType[] = ['desktop', 'linux-local', 'remote-linux', 'docker', 'webassembly', 'android'];
+  const typeValues: QtPlatformType[] = ['desktop', 'linux-local', 'remote-linux', 'docker', 'webassembly', 'android', 'macos', 'ios-simulator', 'ios-device'];
   const buildLocationValues: QtPlatformBuildLocation[] = ['local', 'remote', 'container'];
   const environmentValue = objectValue(value.environment);
   const environment: Record<string, string> = {};
@@ -962,8 +1209,47 @@ function normalizePlatformProfile(raw: unknown, fallbackId: string, kitId: strin
     androidKeystore: optionalString(value.androidKeystore),
     androidKeystoreAlias: optionalString(value.androidKeystoreAlias),
     androidStorePasswordEnvironment: optionalString(value.androidStorePasswordEnvironment) || fallback.androidStorePasswordEnvironment,
-    androidKeyPasswordEnvironment: optionalString(value.androidKeyPasswordEnvironment) || fallback.androidKeyPasswordEnvironment
+    androidKeyPasswordEnvironment: optionalString(value.androidKeyPasswordEnvironment) || fallback.androidKeyPasswordEnvironment,
+    appleDeveloperDirectory: optionalString(value.appleDeveloperDirectory),
+    appleXcodebuildPath: optionalString(value.appleXcodebuildPath),
+    appleXcrunPath: optionalString(value.appleXcrunPath),
+    appleMacDeployQtPath: optionalString(value.appleMacDeployQtPath),
+    appleBundleIdentifier: normalizeAppleBundleIdentifier(optionalString(value.appleBundleIdentifier)),
+    appleDeploymentTarget: optionalString(value.appleDeploymentTarget),
+    appleArchitectures: normalizeAppleArchitectures(value.appleArchitectures, fallback.appleArchitectures),
+    appleDevelopmentTeam: optionalString(value.appleDevelopmentTeam),
+    appleCodeSignIdentity: optionalString(value.appleCodeSignIdentity),
+    appleProvisioningProfile: optionalString(value.appleProvisioningProfile),
+    appleEntitlementsFile: optionalString(value.appleEntitlementsFile),
+    appleAutomaticSigning: booleanValue(value.appleAutomaticSigning, fallback.appleAutomaticSigning),
+    appleAllowProvisioningUpdates: booleanValue(value.appleAllowProvisioningUpdates, fallback.appleAllowProvisioningUpdates),
+    appleScheme: optionalString(value.appleScheme),
+    appleConfiguration: value.appleConfiguration === 'Release' ? 'Release' : 'Debug',
+    appleSimulatorId: optionalString(value.appleSimulatorId),
+    appleDeviceId: optionalString(value.appleDeviceId),
+    appleCreateDmg: booleanValue(value.appleCreateDmg, fallback.appleCreateDmg),
+    appleDmgFileSystem: value.appleDmgFileSystem === 'APFS' ? 'APFS' : 'HFS+',
+    appleNotaryProfile: optionalString(value.appleNotaryProfile),
+    appleStapleAfterNotarization: booleanValue(value.appleStapleAfterNotarization, fallback.appleStapleAfterNotarization),
+    appleAppStoreCompliant: booleanValue(value.appleAppStoreCompliant, fallback.appleAppStoreCompliant),
+    appleHardenedRuntime: booleanValue(value.appleHardenedRuntime, fallback.appleHardenedRuntime),
+    appleTimestamp: booleanValue(value.appleTimestamp, fallback.appleTimestamp),
+    appleAdditionalCMakeArguments: normalizeStringArray(value.appleAdditionalCMakeArguments),
+    appleAdditionalXcodebuildArguments: normalizeStringArray(value.appleAdditionalXcodebuildArguments),
+    appleAdditionalMacDeployQtArguments: normalizeStringArray(value.appleAdditionalMacDeployQtArguments)
   };
+}
+
+const APPLE_ARCHITECTURES = ['arm64', 'x86_64'] as const;
+
+function normalizeAppleArchitectures(value: unknown, fallback: string[]): string[] {
+  const requested = normalizeStringArray(value);
+  const result = requested.filter((entry) => (APPLE_ARCHITECTURES as readonly string[]).includes(entry));
+  return result.length ? [...new Set(result)] : [...fallback];
+}
+
+function normalizeAppleBundleIdentifier(value: string): string {
+  return value.trim().replace(/[^A-Za-z0-9.-]+/g, '-').replace(/^\.+|\.+$/g, '');
 }
 
 const ANDROID_ABIS = ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'] as const;
@@ -1000,7 +1286,7 @@ function normalizeKitProfile(raw: unknown, fallbackId: string): QtKitProfile | u
   const architecture = value.architecture === 'x86' || value.architecture === 'x64' ? value.architecture : 'auto';
   const debuggerType: QtDebuggerType = value.debuggerType === 'gdb' || value.debuggerType === 'lldb' || value.debuggerType === 'cdb' || value.debuggerType === 'cppvsdbg' ? value.debuggerType : 'auto';
   const compilerFamily = value.compilerFamily === 'mingw' || value.compilerFamily === 'msvc' || value.compilerFamily === 'clang' || value.compilerFamily === 'gcc' || value.compilerFamily === 'emscripten' || value.compilerFamily === 'unknown' ? value.compilerFamily : undefined;
-  const deviceValues: QtDeviceType[] = ['desktop', 'linux-local', 'remote-linux', 'docker', 'webassembly', 'android'];
+  const deviceValues: QtDeviceType[] = ['desktop', 'linux-local', 'remote-linux', 'docker', 'webassembly', 'android', 'macos', 'ios-simulator', 'ios-device'];
   const deviceType = deviceValues.includes(value.deviceType as QtDeviceType) ? value.deviceType as QtDeviceType : 'desktop';
   return {
     id,
@@ -1392,6 +1678,86 @@ function defaultProfilingConfiguration(): QtProfilingConfiguration {
   };
 }
 
+
+function defaultQmlConfiguration(name: string, kind: QtProjectKind): QtQmlConfiguration {
+  const quickProject = kind === 'quick-application' || kind === 'quick-test-application';
+  return {
+    languageServer: {
+      enabled: quickProject,
+      autoStart: quickProject,
+      executable: '',
+      buildDirectories: [],
+      importPaths: [],
+      useQmlImportPathEnvironment: true,
+      noCmakeCalls: true,
+      cmakeJobs: 0,
+      maxFilesToSearch: 20000,
+      trace: 'off',
+      verboseOutput: false,
+      conflictPolicy: 'avoid-duplicate',
+      generateConfigurationFile: true,
+      additionalArguments: []
+    },
+    module: {
+      uri: normalizeQmlModuleUri(name),
+      version: '1.0',
+      importRoot: 'qml',
+      resourcePrefix: '/qt/qml'
+    }
+  };
+}
+
+function normalizeQmlConfiguration(raw: unknown, name: string, kind: QtProjectKind): QtQmlConfiguration {
+  const fallback = defaultQmlConfiguration(name, kind);
+  const value = objectValue(raw);
+  const languageServer = objectValue(value.languageServer);
+  const moduleValue = objectValue(value.module);
+  const trace: QtQmlLanguageServerTrace = languageServer.trace === 'messages' || languageServer.trace === 'verbose' ? languageServer.trace : 'off';
+  const conflictPolicy: QtQmlLanguageServerConflictPolicy = languageServer.conflictPolicy === 'allow-parallel' ? 'allow-parallel' : 'avoid-duplicate';
+  const jobs = typeof languageServer.cmakeJobs === 'number' && Number.isFinite(languageServer.cmakeJobs) ? Math.max(0, Math.floor(languageServer.cmakeJobs)) : fallback.languageServer.cmakeJobs;
+  const maxFiles = typeof languageServer.maxFilesToSearch === 'number' && Number.isFinite(languageServer.maxFilesToSearch) ? Math.max(0, Math.floor(languageServer.maxFilesToSearch)) : fallback.languageServer.maxFilesToSearch;
+  return {
+    languageServer: {
+      enabled: booleanValue(languageServer.enabled, fallback.languageServer.enabled),
+      autoStart: booleanValue(languageServer.autoStart, fallback.languageServer.autoStart),
+      executable: optionalString(languageServer.executable),
+      buildDirectories: normalizeStringArray(languageServer.buildDirectories),
+      importPaths: normalizeStringArray(languageServer.importPaths),
+      useQmlImportPathEnvironment: booleanValue(languageServer.useQmlImportPathEnvironment, fallback.languageServer.useQmlImportPathEnvironment),
+      noCmakeCalls: booleanValue(languageServer.noCmakeCalls, fallback.languageServer.noCmakeCalls),
+      cmakeJobs: jobs,
+      maxFilesToSearch: maxFiles,
+      trace,
+      verboseOutput: booleanValue(languageServer.verboseOutput, fallback.languageServer.verboseOutput),
+      conflictPolicy,
+      generateConfigurationFile: booleanValue(languageServer.generateConfigurationFile, fallback.languageServer.generateConfigurationFile),
+      additionalArguments: normalizeStringArray(languageServer.additionalArguments)
+    },
+    module: {
+      uri: normalizeQmlModuleUri(optionalString(moduleValue.uri) || fallback.module.uri),
+      version: normalizeQmlModuleVersion(optionalString(moduleValue.version) || fallback.module.version),
+      importRoot: normalizeRelativeDirectory(optionalString(moduleValue.importRoot) || fallback.module.importRoot),
+      resourcePrefix: normalizeQmlResourcePrefix(optionalString(moduleValue.resourcePrefix) || fallback.module.resourcePrefix)
+    }
+  };
+}
+
+function normalizeQmlModuleUri(value: string): string {
+  const parts = value.trim().split('.').map((entry) => entry.replace(/[^A-Za-z0-9_]/g, '')).filter(Boolean);
+  const normalized = parts.map((entry) => /^\d/.test(entry) ? `_${entry}` : entry).join('.');
+  return normalized || 'QpmApplication';
+}
+
+function normalizeQmlModuleVersion(value: string): string {
+  const match = value.trim().match(/^(\d+)(?:\.(\d+))?$/);
+  return match ? `${match[1]}.${match[2] ?? '0'}` : '1.0';
+}
+
+function normalizeQmlResourcePrefix(value: string): string {
+  const normalized = value.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
+  return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
+}
+
 function defaultPackagingConfiguration(name: string): QtPackagingConfiguration {
   return {
     enabled: true,
@@ -1429,6 +1795,68 @@ function defaultPackagingConfiguration(name: string): QtPackagingConfiguration {
       categories: ['Utility'],
       comment: `${name} Qt application`,
       installPrefix: '/usr/local'
+    },
+    installer: {
+      enabled: true,
+      backend: 'qt-ifw',
+      buildPortablePackage: true,
+      outputDirectory: 'dist/installers',
+      fileNamePattern: '${productName}-${version}-${arch}-setup',
+      installDirectoryName: name,
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true,
+      runAfterInstall: false,
+      qtIfw: {
+        mode: 'offline',
+        binaryCreatorPath: '',
+        repogenPath: '',
+        installerBasePath: '',
+        componentId: `com.example.${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        componentDisplayName: name,
+        componentDescription: `${name} application files`,
+        releaseDate: '',
+        repositoryUrl: '',
+        repositoryOutputDirectory: 'dist/repository',
+        maintenanceToolName: `${name}MaintenanceTool`,
+        wizardStyle: 'Modern',
+        controlScript: '',
+        componentScript: '',
+        archiveFormat: '7z',
+        compression: 5,
+        additionalArguments: []
+      },
+      inno: {
+        isccPath: '',
+        scriptFile: '',
+        languages: ['english'],
+        privilegesRequired: 'admin',
+        architecture: 'x64',
+        compression: 'lzma2/max',
+        solidCompression: true,
+        additionalDirectives: []
+      },
+      nsis: {
+        makensisPath: '',
+        scriptFile: '',
+        requestExecutionLevel: 'admin',
+        compressor: 'lzma',
+        additionalDefines: []
+      },
+      signing: {
+        enabled: false,
+        signToolPath: '',
+        certificateFile: '',
+        certificateThumbprint: '',
+        certificateSubject: '',
+        certificatePasswordEnvironment: 'QPM_SIGN_CERT_PASSWORD',
+        timestampUrl: 'http://timestamp.digicert.com',
+        fileDigest: 'sha256',
+        timestampDigest: 'sha256',
+        signTargetBinary: true,
+        signInstaller: true,
+        verifyAfterSigning: true,
+        additionalArguments: []
+      }
     }
   };
 }
@@ -1561,6 +1989,11 @@ function normalizePackagingConfiguration(raw: unknown, name: string, targetName:
   const value = objectValue(raw);
   const windows = objectValue(value.windows);
   const linux = objectValue(value.linux);
+  const installer = objectValue(value.installer);
+  const qtIfw = objectValue(installer.qtIfw);
+  const inno = objectValue(installer.inno);
+  const nsis = objectValue(installer.nsis);
+  const signing = objectValue(installer.signing);
   const archiveFormat: QtPackageArchiveFormat = value.archiveFormat === 'folder' || value.archiveFormat === 'tar-gz' ? value.archiveFormat : 'zip';
   const executionLevel: QtWindowsExecutionLevel = windows.executionLevel === 'highestAvailable' || windows.executionLevel === 'requireAdministrator' ? windows.executionLevel : 'asInvoker';
   const dpiAwareness: QtWindowsDpiAwareness = windows.dpiAwareness === 'unaware' || windows.dpiAwareness === 'system' || windows.dpiAwareness === 'per-monitor' ? windows.dpiAwareness : 'per-monitor-v2';
@@ -1602,8 +2035,297 @@ function normalizePackagingConfiguration(raw: unknown, name: string, targetName:
       categories: normalizeStringArray(linux.categories).length ? normalizeStringArray(linux.categories) : fallback.linux.categories,
       comment: optionalString(linux.comment) || optionalString(value.description) || `${productName} Qt application`,
       installPrefix: optionalString(linux.installPrefix) || fallback.linux.installPrefix
+    },
+    installer: {
+      enabled: booleanValue(installer.enabled, fallback.installer.enabled),
+      backend: normalizeInstallerBackend(installer.backend),
+      buildPortablePackage: booleanValue(installer.buildPortablePackage, fallback.installer.buildPortablePackage),
+      outputDirectory: normalizeRelativeDirectory(optionalString(installer.outputDirectory) || fallback.installer.outputDirectory),
+      fileNamePattern: optionalString(installer.fileNamePattern) || fallback.installer.fileNamePattern,
+      installDirectoryName: optionalString(installer.installDirectoryName) || productName,
+      createDesktopShortcut: booleanValue(installer.createDesktopShortcut, fallback.installer.createDesktopShortcut),
+      createStartMenuShortcut: booleanValue(installer.createStartMenuShortcut, fallback.installer.createStartMenuShortcut),
+      runAfterInstall: booleanValue(installer.runAfterInstall, fallback.installer.runAfterInstall),
+      qtIfw: {
+        mode: normalizeQtIfwMode(qtIfw.mode),
+        binaryCreatorPath: optionalString(qtIfw.binaryCreatorPath),
+        repogenPath: optionalString(qtIfw.repogenPath),
+        installerBasePath: optionalString(qtIfw.installerBasePath),
+        componentId: optionalString(qtIfw.componentId) || identifier,
+        componentDisplayName: optionalString(qtIfw.componentDisplayName) || productName,
+        componentDescription: optionalString(qtIfw.componentDescription) || `${productName} application files`,
+        releaseDate: normalizeOptionalIsoDate(optionalString(qtIfw.releaseDate)),
+        repositoryUrl: optionalString(qtIfw.repositoryUrl),
+        repositoryOutputDirectory: normalizeRelativeDirectory(optionalString(qtIfw.repositoryOutputDirectory) || fallback.installer.qtIfw.repositoryOutputDirectory),
+        maintenanceToolName: optionalString(qtIfw.maintenanceToolName) || `${targetName}MaintenanceTool`,
+        wizardStyle: normalizeQtIfwWizardStyle(qtIfw.wizardStyle),
+        controlScript: optionalString(qtIfw.controlScript),
+        componentScript: optionalString(qtIfw.componentScript),
+        archiveFormat: normalizeQtIfwArchiveFormat(qtIfw.archiveFormat),
+        compression: normalizeBoundedInteger(qtIfw.compression, fallback.installer.qtIfw.compression, 0, 9),
+        additionalArguments: normalizeStringArray(qtIfw.additionalArguments)
+      },
+      inno: {
+        isccPath: optionalString(inno.isccPath),
+        scriptFile: optionalString(inno.scriptFile),
+        languages: normalizeStringArray(inno.languages).length ? normalizeStringArray(inno.languages) : fallback.installer.inno.languages,
+        privilegesRequired: inno.privilegesRequired === 'lowest' ? 'lowest' : 'admin',
+        architecture: inno.architecture === 'x86' || inno.architecture === 'x86-x64' ? inno.architecture : 'x64',
+        compression: optionalString(inno.compression) || fallback.installer.inno.compression,
+        solidCompression: booleanValue(inno.solidCompression, fallback.installer.inno.solidCompression),
+        additionalDirectives: normalizeStringArray(inno.additionalDirectives)
+      },
+      nsis: {
+        makensisPath: optionalString(nsis.makensisPath),
+        scriptFile: optionalString(nsis.scriptFile),
+        requestExecutionLevel: nsis.requestExecutionLevel === 'user' || nsis.requestExecutionLevel === 'highest' ? nsis.requestExecutionLevel : 'admin',
+        compressor: nsis.compressor === 'zlib' || nsis.compressor === 'bzip2' ? nsis.compressor : 'lzma',
+        additionalDefines: normalizeStringArray(nsis.additionalDefines)
+      },
+      signing: {
+        enabled: booleanValue(signing.enabled, fallback.installer.signing.enabled),
+        signToolPath: optionalString(signing.signToolPath),
+        certificateFile: optionalString(signing.certificateFile),
+        certificateThumbprint: optionalString(signing.certificateThumbprint).replace(/\s+/g, ''),
+        certificateSubject: optionalString(signing.certificateSubject),
+        certificatePasswordEnvironment: optionalString(signing.certificatePasswordEnvironment) || fallback.installer.signing.certificatePasswordEnvironment,
+        timestampUrl: optionalString(signing.timestampUrl) || fallback.installer.signing.timestampUrl,
+        fileDigest: normalizeSigningDigest(signing.fileDigest),
+        timestampDigest: normalizeSigningDigest(signing.timestampDigest),
+        signTargetBinary: booleanValue(signing.signTargetBinary, fallback.installer.signing.signTargetBinary),
+        signInstaller: booleanValue(signing.signInstaller, fallback.installer.signing.signInstaller),
+        verifyAfterSigning: booleanValue(signing.verifyAfterSigning, fallback.installer.signing.verifyAfterSigning),
+        additionalArguments: normalizeStringArray(signing.additionalArguments)
+      }
     }
   };
+}
+
+
+function defaultPublicationConfiguration(name: string): QtPublicationConfiguration {
+  const identifier = `com.example.${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  return {
+    enabled: false,
+    outputDirectory: 'dist/publication',
+    channel: 'stable',
+    baseUrl: '',
+    releaseNotesFile: '',
+    includePortablePackage: true,
+    includeInstaller: true,
+    includeQtIfwRepository: false,
+    generateChecksums: true,
+    generateLatestManifest: true,
+    msix: {
+      enabled: false,
+      makeAppxPath: '',
+      packageIdentityName: identifier.replace(/[^A-Za-z0-9.-]/g, '.'),
+      publisher: 'CN=QPM Development',
+      publisherDisplayName: '',
+      displayName: name,
+      description: `${name} Qt application`,
+      version: '1.0.0.0',
+      architecture: 'auto',
+      minimumOsVersion: '10.0.19041.0',
+      targetOsVersion: '10.0.26100.0',
+      logo44: '',
+      logo150: '',
+      storeLogo: '',
+      signPackage: false,
+      generateAppInstaller: true,
+      packageUri: '',
+      appInstallerUri: '',
+      updateOnLaunch: true,
+      hoursBetweenUpdateChecks: 0,
+      showPrompt: true,
+      updateBlocksActivation: false,
+      forceUpdateFromAnyVersion: false,
+      automaticBackgroundTask: false
+    },
+    winget: {
+      enabled: false,
+      wingetPath: '',
+      wingetCreatePath: '',
+      packageIdentifier: identifier,
+      publisher: '',
+      packageName: name,
+      shortDescription: `${name} Qt application`,
+      license: 'Proprietary',
+      licenseUrl: '',
+      publisherUrl: '',
+      packageUrl: '',
+      installerUrl: '',
+      installerType: 'exe',
+      scope: 'machine',
+      locale: 'en-US',
+      tags: ['qt'],
+      releaseNotesUrl: '',
+      minimumOsVersion: '10.0.0.0'
+    },
+    github: {
+      enabled: false,
+      ghPath: '',
+      repository: '',
+      tagPattern: 'v${version}',
+      releaseNamePattern: '${productName} ${version}',
+      draft: true,
+      prerelease: false,
+      generateNotes: false,
+      clobberAssets: false
+    },
+    publish: {
+      target: 'none',
+      localDirectory: '',
+      sshHost: '',
+      sshUser: '',
+      sshPort: 22,
+      sshDirectory: '',
+      scpPath: '',
+      rsyncPath: '',
+      useRsync: true,
+      deleteRemote: false
+    }
+  };
+}
+
+function normalizePublicationConfiguration(raw: unknown, name: string, targetName: string, packaging: QtPackagingConfiguration): QtPublicationConfiguration {
+  const fallback = defaultPublicationConfiguration(name);
+  const value = objectValue(raw);
+  const msix = objectValue(value.msix);
+  const winget = objectValue(value.winget);
+  const github = objectValue(value.github);
+  const publish = objectValue(value.publish);
+  const channel: QtPublicationChannel = value.channel === 'beta' || value.channel === 'nightly' ? value.channel : 'stable';
+  const architecture: QtMsixArchitecture = msix.architecture === 'x86' || msix.architecture === 'x64' || msix.architecture === 'arm64' ? msix.architecture : 'auto';
+  const installerType: QtWingetInstallerType = ['msix', 'inno', 'nullsoft', 'zip'].includes(String(winget.installerType)) ? winget.installerType as QtWingetInstallerType : 'exe';
+  const scope: QtWingetScope = winget.scope === 'user' ? 'user' : 'machine';
+  const target: QtPublicationTarget = publish.target === 'local' || publish.target === 'ssh' || publish.target === 'github' ? publish.target : 'none';
+  const identity = optionalString(msix.packageIdentityName) || packaging.identifier || fallback.msix.packageIdentityName;
+  const productName = packaging.productName || name;
+  return {
+    enabled: booleanValue(value.enabled, fallback.enabled),
+    outputDirectory: normalizeRelativeDirectory(optionalString(value.outputDirectory) || fallback.outputDirectory),
+    channel,
+    baseUrl: optionalString(value.baseUrl),
+    releaseNotesFile: optionalString(value.releaseNotesFile),
+    includePortablePackage: booleanValue(value.includePortablePackage, fallback.includePortablePackage),
+    includeInstaller: booleanValue(value.includeInstaller, fallback.includeInstaller),
+    includeQtIfwRepository: booleanValue(value.includeQtIfwRepository, fallback.includeQtIfwRepository),
+    generateChecksums: booleanValue(value.generateChecksums, fallback.generateChecksums),
+    generateLatestManifest: booleanValue(value.generateLatestManifest, fallback.generateLatestManifest),
+    msix: {
+      enabled: booleanValue(msix.enabled, fallback.msix.enabled),
+      makeAppxPath: optionalString(msix.makeAppxPath),
+      packageIdentityName: normalizeMsixIdentityName(identity),
+      publisher: optionalString(msix.publisher) || fallback.msix.publisher,
+      publisherDisplayName: optionalString(msix.publisherDisplayName) || packaging.companyName || productName,
+      displayName: optionalString(msix.displayName) || productName,
+      description: optionalString(msix.description) || packaging.description || `${productName} Qt application`,
+      version: normalizeFourPartVersion(optionalString(msix.version) || packaging.productVersion),
+      architecture,
+      minimumOsVersion: normalizeFourPartVersion(optionalString(msix.minimumOsVersion) || fallback.msix.minimumOsVersion),
+      targetOsVersion: normalizeFourPartVersion(optionalString(msix.targetOsVersion) || fallback.msix.targetOsVersion),
+      logo44: optionalString(msix.logo44),
+      logo150: optionalString(msix.logo150),
+      storeLogo: optionalString(msix.storeLogo),
+      signPackage: booleanValue(msix.signPackage, fallback.msix.signPackage),
+      generateAppInstaller: booleanValue(msix.generateAppInstaller, fallback.msix.generateAppInstaller),
+      packageUri: optionalString(msix.packageUri),
+      appInstallerUri: optionalString(msix.appInstallerUri),
+      updateOnLaunch: booleanValue(msix.updateOnLaunch, fallback.msix.updateOnLaunch),
+      hoursBetweenUpdateChecks: normalizeBoundedInteger(msix.hoursBetweenUpdateChecks, fallback.msix.hoursBetweenUpdateChecks, 0, 255),
+      showPrompt: booleanValue(msix.showPrompt, fallback.msix.showPrompt),
+      updateBlocksActivation: booleanValue(msix.updateBlocksActivation, fallback.msix.updateBlocksActivation),
+      forceUpdateFromAnyVersion: booleanValue(msix.forceUpdateFromAnyVersion, fallback.msix.forceUpdateFromAnyVersion),
+      automaticBackgroundTask: booleanValue(msix.automaticBackgroundTask, fallback.msix.automaticBackgroundTask)
+    },
+    winget: {
+      enabled: booleanValue(winget.enabled, fallback.winget.enabled),
+      wingetPath: optionalString(winget.wingetPath),
+      wingetCreatePath: optionalString(winget.wingetCreatePath),
+      packageIdentifier: normalizeWingetIdentifier(optionalString(winget.packageIdentifier) || packaging.identifier || identity),
+      publisher: optionalString(winget.publisher) || packaging.companyName || productName,
+      packageName: optionalString(winget.packageName) || productName,
+      shortDescription: optionalString(winget.shortDescription) || packaging.description || `${productName} Qt application`,
+      license: optionalString(winget.license) || fallback.winget.license,
+      licenseUrl: optionalString(winget.licenseUrl),
+      publisherUrl: optionalString(winget.publisherUrl),
+      packageUrl: optionalString(winget.packageUrl),
+      installerUrl: optionalString(winget.installerUrl),
+      installerType,
+      scope,
+      locale: normalizeLocale(optionalString(winget.locale) || fallback.winget.locale),
+      tags: normalizeStringArray(winget.tags),
+      releaseNotesUrl: optionalString(winget.releaseNotesUrl),
+      minimumOsVersion: normalizeFourPartVersion(optionalString(winget.minimumOsVersion) || fallback.winget.minimumOsVersion)
+    },
+    github: {
+      enabled: booleanValue(github.enabled, fallback.github.enabled),
+      ghPath: optionalString(github.ghPath),
+      repository: optionalString(github.repository),
+      tagPattern: optionalString(github.tagPattern) || fallback.github.tagPattern,
+      releaseNamePattern: optionalString(github.releaseNamePattern) || fallback.github.releaseNamePattern,
+      draft: booleanValue(github.draft, fallback.github.draft),
+      prerelease: booleanValue(github.prerelease, fallback.github.prerelease),
+      generateNotes: booleanValue(github.generateNotes, fallback.github.generateNotes),
+      clobberAssets: booleanValue(github.clobberAssets, fallback.github.clobberAssets)
+    },
+    publish: {
+      target,
+      localDirectory: optionalString(publish.localDirectory),
+      sshHost: optionalString(publish.sshHost),
+      sshUser: optionalString(publish.sshUser),
+      sshPort: normalizePort(publish.sshPort, fallback.publish.sshPort),
+      sshDirectory: optionalString(publish.sshDirectory),
+      scpPath: optionalString(publish.scpPath),
+      rsyncPath: optionalString(publish.rsyncPath),
+      useRsync: booleanValue(publish.useRsync, fallback.publish.useRsync),
+      deleteRemote: booleanValue(publish.deleteRemote, fallback.publish.deleteRemote)
+    }
+  };
+}
+
+function normalizeMsixIdentityName(value: string): string {
+  return value.trim().replace(/[^A-Za-z0-9.-]/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 50) || 'Qpm.Application';
+}
+
+function normalizeWingetIdentifier(value: string): string {
+  const normalized = value.trim().replace(/[^A-Za-z0-9.-]/g, '.').replace(/^\.+|\.+$/g, '');
+  return normalized || 'Qpm.Application';
+}
+
+function normalizeLocale(value: string): string {
+  return /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})+$/.test(value.trim()) ? value.trim() : 'en-US';
+}
+
+function normalizeFourPartVersion(value: string): string {
+  const numeric = value.trim().split(/[.-]/).map((entry) => Number.parseInt(entry, 10)).filter((entry) => Number.isFinite(entry) && entry >= 0);
+  while (numeric.length < 4) numeric.push(0);
+  return numeric.slice(0, 4).map((entry) => Math.min(65535, entry)).join('.');
+}
+
+function normalizeInstallerBackend(value: unknown): QtInstallerBackend {
+  return value === 'inno-setup' || value === 'nsis' ? value : 'qt-ifw';
+}
+
+function normalizeQtIfwMode(value: unknown): QtIfwInstallerMode {
+  return value === 'online' || value === 'hybrid' ? value : 'offline';
+}
+
+function normalizeQtIfwWizardStyle(value: unknown): QtIfwWizardStyle {
+  return value === 'Aero' || value === 'Classic' || value === 'Mac' ? value : 'Modern';
+}
+
+function normalizeQtIfwArchiveFormat(value: unknown): QtIfwArchiveFormat {
+  return value === 'zip' || value === 'tar' || value === 'tar.gz' || value === 'tar.bz2' || value === 'tar.xz' ? value : '7z';
+}
+
+function normalizeSigningDigest(value: unknown): QtSigningDigest {
+  return value === 'sha384' || value === 'sha512' ? value : 'sha256';
+}
+
+function normalizeOptionalIsoDate(value: string): string {
+  if (!value) return '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
 }
 
 function normalizeProductVersion(value: string): string {

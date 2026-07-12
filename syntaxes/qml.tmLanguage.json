@@ -1,0 +1,91 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "QML",
+  "scopeName": "source.qml.qpm",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#imports" },
+    { "include": "#pragmas" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#properties" },
+    { "include": "#types" },
+    { "include": "#javascript" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.qml", "match": "//.*$" },
+        { "name": "comment.block.qml", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "imports": {
+      "patterns": [
+        {
+          "name": "meta.import.qml",
+          "match": "^\\s*(import)\\s+([A-Za-z_][A-Za-z0-9_.]*|\"[^\"]+\")(?:\\s+(\\d+(?:\\.\\d+)?))?(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_]*))?",
+          "captures": {
+            "1": { "name": "keyword.control.import.qml" },
+            "2": { "name": "entity.name.namespace.qml" },
+            "3": { "name": "constant.numeric.version.qml" },
+            "4": { "name": "keyword.control.qml" },
+            "5": { "name": "entity.name.namespace.alias.qml" }
+          }
+        }
+      ]
+    },
+    "pragmas": {
+      "patterns": [
+        {
+          "name": "meta.pragma.qml",
+          "match": "^\\s*(pragma)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.qml" },
+            "2": { "name": "entity.name.tag.qml" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.qml", "begin": "\"", "end": "\"", "patterns": [{ "name": "constant.character.escape.qml", "match": "\\\\." }] },
+        { "name": "string.quoted.single.qml", "begin": "'", "end": "'", "patterns": [{ "name": "constant.character.escape.qml", "match": "\\\\." }] }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.qml", "match": "\\b0[xX][0-9A-Fa-f]+\\b" },
+        { "name": "constant.numeric.qml", "match": "(?<![A-Za-z0-9_])[-+]?(?:\\d+\\.\\d*|\\.\\d+|\\d+)(?:[eE][-+]?\\d+)?\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.declaration.qml", "match": "\\b(?:property|readonly|required|default|signal|function|component|enum|alias)\\b" },
+        { "name": "keyword.control.qml", "match": "\\b(?:if|else|for|while|do|switch|case|default|break|continue|return|throw|try|catch|finally|with|yield|await|async|new|delete|typeof|void|instanceof|in|of)\\b" },
+        { "name": "constant.language.qml", "match": "\\b(?:true|false|null|undefined|NaN|Infinity)\\b" },
+        { "name": "storage.type.qml", "match": "\\b(?:var|let|const|int|real|double|bool|string|url|color|date|point|size|rect|vector2d|vector3d|vector4d|matrix4x4|quaternion|list)\\b" }
+      ]
+    },
+    "properties": {
+      "patterns": [
+        { "name": "variable.other.property.qml", "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*:)" },
+        { "name": "entity.name.function.signal.qml", "match": "\\bon[A-Z][A-Za-z0-9_]*(?=\\s*:)" },
+        { "name": "variable.language.qml", "match": "\\b(?:id|parent|children|anchors|state|states|transitions)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "entity.name.type.qml", "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s*\\{)" },
+        { "name": "support.class.qml", "match": "\\b(?:Item|Rectangle|Window|ApplicationWindow|QtObject|Component|Loader|Repeater|ListView|GridView|Text|Image|MouseArea|Timer|Connections|Behavior|Animation|Transition|State)\\b" }
+      ]
+    },
+    "javascript": {
+      "patterns": [
+        { "name": "entity.name.function.qml", "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*(?=\\s*\\()" },
+        { "name": "variable.other.readwrite.qml", "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b" },
+        { "name": "keyword.operator.qml", "match": "===|!==|==|!=|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\?\\?|\\?\\.|[+\\-*\\/%=<>!&|?:]" }
+      ]
+    }
+  }
+}

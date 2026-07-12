@@ -9,12 +9,12 @@ const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
 const model = require(path.join(root, 'out', 'model', 'qtProjectManifest.js'));
 const debug = require(path.join(root, 'out', 'services', 'qpmQtDebugService.js'));
-assert.strictEqual(pkg.version, '0.11.0');
+assert.strictEqual(pkg.version, '0.15.0');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-persistence-071-'));
 const manifestPath = path.join(temp, 'PersistentApp.qtproject.json');
 const manifest = model.createDefaultQtProjectManifest('PersistentApp', 'widgets-application');
-assert.strictEqual(manifest.schemaVersion, 11);
+assert.strictEqual(manifest.schemaVersion, 15);
 assert.strictEqual(manifest.profiles.active.buildMode, 'debug64');
 model.setPersistedQtBuildMode(manifest, 'release64');
 model.writeQtProjectManifest(manifestPath, manifest);
@@ -31,7 +31,7 @@ legacy.profiles.kits[0].compilerPath = 'C:\\Qt\\Tools\\mingw1310_64\\bin\\g++.ex
 fs.writeFileSync(manifestPath, JSON.stringify(legacy, null, 2));
 assert.strictEqual(model.migrateQtProjectManifestFile(manifestPath), true);
 const migrated = model.readQtProjectManifest(manifestPath);
-assert.strictEqual(migrated.schemaVersion, 11);
+assert.strictEqual(migrated.schemaVersion, 15);
 assert.strictEqual(migrated.profiles.active.buildMode, 'debug64');
 assert(fs.existsSync(`${manifestPath}.schema-v6.backup`));
 
@@ -58,7 +58,7 @@ assert.doesNotMatch(debugSource, /selectBuildModeForProfile[\s\S]{0,500}update\(
 const extensionSource = fs.readFileSync(path.join(root, 'src', 'extension.ts'), 'utf8');
 assert.match(extensionSource, /await builds\.restoreBuildModeFromActiveProject\(\)/);
 const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-assert.strictEqual(schema.properties.schemaVersion.const, 11);
+assert.strictEqual(schema.properties.schemaVersion.const, 15);
 assert(schema.properties.profiles.properties.active.required.includes('buildMode'));
 assert.deepStrictEqual(schema.properties.profiles.properties.active.properties.buildMode.enum, ['debug','release','debug64','release64']);
 

@@ -59,6 +59,19 @@ export interface QtDirectBuildPlan {
   warnings: string[];
 }
 
+
+/**
+ * Direct Qt code generation can write outside the generic generated folder.
+ * In particular, windres writes the product metadata object into the object
+ * directory. Every output parent must therefore exist before any tool starts.
+ */
+export function qtGenerationOutputDirectories(plan: Pick<QtDirectBuildPlan, 'generatedDirectory' | 'generationSteps'>): string[] {
+  return unique([
+    plan.generatedDirectory,
+    ...plan.generationSteps.map((step) => path.dirname(step.outputPath))
+  ]);
+}
+
 const META_OBJECT_PATTERN = /\b(Q_OBJECT|Q_GADGET|Q_GADGET_EXPORT|Q_NAMESPACE|Q_NAMESPACE_EXPORT)\b/;
 
 export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode, installation: QpmQtInstallation): QtDirectBuildPlan {

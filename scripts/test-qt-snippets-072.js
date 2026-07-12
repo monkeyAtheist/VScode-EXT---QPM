@@ -7,7 +7,7 @@ require('module').Module._initPaths();
 const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
 const templates = require(path.join(root, 'out', 'services', 'qpmTemplateService.js'));
-assert.strictEqual(pkg.version, '0.11.0');
+assert.strictEqual(pkg.version, '0.15.0');
 
 const viewToolbar = pkg.contributes.menus['view/title'];
 const toolbarModes = ['D32', 'R32', 'D64', 'R64'].map((suffix) => `qpm.toolbarBuildMode${suffix}`);

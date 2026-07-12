@@ -8,7 +8,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.11.0');
+assert.strictEqual(pkg.version, '0.15.0');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-stale-workspace-'));
 const workspaceFolders = [];

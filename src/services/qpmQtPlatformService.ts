@@ -19,6 +19,7 @@ import {
 import { QpmBuildService } from './qpmBuildService';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
 import { QpmQtAndroidService } from './qpmQtAndroidService';
+import { QpmQtAppleService, applePlatformLabel, isApplePlatform } from './qpmQtAppleService';
 
 export interface QtPlatformCapabilities {
   platform: QtPlatformType;
@@ -44,7 +45,8 @@ export class QpmQtPlatformService implements vscode.Disposable {
     private readonly workspaces: QpmWorkspaceService,
     private readonly builds: QpmBuildService,
     private readonly output: vscode.OutputChannel,
-    private readonly android?: QpmQtAndroidService
+    private readonly android?: QpmQtAndroidService,
+    private readonly apple?: QpmQtAppleService
   ) {
     this.disposables.push(workspaces.onDidChange(() => this.changed.fire()));
   }
@@ -70,7 +72,7 @@ export class QpmQtPlatformService implements vscode.Disposable {
       const active = getActiveQtPlatformProfile(context.manifest);
       const action = await vscode.window.showQuickPick([
         { id: 'select', label: '$(check) Select active platform', description: `${active.name} · ${platformLabel(active.type)}` },
-        { id: 'create', label: '$(add) Create platform profile', description: 'Desktop, Linux, Remote Linux, Docker or WebAssembly' },
+        { id: 'create', label: '$(add) Create platform profile', description: 'Desktop, Linux, Android, Apple, Docker or WebAssembly' },
         { id: 'edit', label: '$(edit) Edit active platform', description: active.name },
         { id: 'duplicate', label: '$(copy) Duplicate active platform', description: 'Create a reusable variant' },
         { id: 'delete', label: '$(trash) Delete active platform', description: context.manifest.profiles.platforms.length > 1 ? active.name : 'At least one profile is required' },
@@ -141,6 +143,16 @@ export class QpmQtPlatformService implements vscode.Disposable {
       if (!active.dockerImage) { ready = false; details.push('Docker image is not configured.'); }
       details.push(`Container workspace: ${active.dockerWorkspace}.`);
       details.push(active.dockerKeepContainer ? 'The container is kept after execution.' : 'Ephemeral containers are used.');
+    } else if (isApplePlatform(active.type)) {
+      const appleReport = this.apple?.detectEnvironment(active);
+      if (!appleReport) {
+        ready = false;
+        details.push('Apple platform support service is unavailable.');
+      } else {
+        ready = appleReport.ready;
+        Object.assign(tools, appleReport.tools);
+        details.push(...appleReport.details);
+      }
     } else if (active.type === 'android') {
       const androidReport = this.android?.detectEnvironment(active);
       if (!androidReport) {
@@ -175,6 +187,7 @@ export class QpmQtPlatformService implements vscode.Disposable {
     if (!context) return false;
     const profile = getActiveQtPlatformProfile(context.manifest);
     this.begin(`Build ${context.manifest.name} for ${profile.name}`);
+    if (isApplePlatform(profile.type)) return this.apple?.buildActive() ?? false;
     if (profile.type === 'android') {
       const result = await this.android?.buildPackage(profile.androidPackageFormat);
       return result?.success ?? false;
@@ -189,6 +202,15 @@ export class QpmQtPlatformService implements vscode.Disposable {
     if (!context) return false;
     const profile = getActiveQtPlatformProfile(context.manifest);
     this.begin(`Deploy ${context.manifest.name} to ${profile.name}`);
+    if (profile.type === 'macos') return this.apple?.deployMacApplication(false) ?? false;
+    if (profile.type === 'ios-simulator') {
+      this.output.appendLine('[Qt Platform] iOS Simulator deployment is performed together with application launch.');
+      return true;
+    }
+    if (profile.type === 'ios-device') {
+      this.output.appendLine('[Qt Platform] Physical iOS deployment is delegated to Xcode in QPM 0.14.0. The generated Xcode project and signed build remain available.');
+      return true;
+    }
     if (profile.type === 'android') return this.android?.installPackage() ?? false;
     if (profile.type === 'remote-linux') return this.remoteDeploy(context.manifestPath, context.manifest, profile);
     if (profile.type === 'docker') {
@@ -212,6 +234,11 @@ export class QpmQtPlatformService implements vscode.Disposable {
     if (!context) return false;
     const profile = getActiveQtPlatformProfile(context.manifest);
     this.begin(`Run ${context.manifest.name} on ${profile.name}`);
+    if (profile.type === 'ios-simulator') return this.apple?.installAndRunIosSimulator() ?? false;
+    if (profile.type === 'ios-device') {
+      vscode.window.showWarningMessage('QPM 0.14.0 builds and signs physical iOS targets, but device launch remains delegated to Xcode.');
+      return false;
+    }
     if (profile.type === 'android') return this.android?.runApplication() ?? false;
     if (profile.type === 'remote-linux') return this.remoteRun(context.manifestPath, context.manifest, profile);
     if (profile.type === 'docker') return this.dockerRun(context.manifestPath, context.manifest, profile);
@@ -222,6 +249,11 @@ export class QpmQtPlatformService implements vscode.Disposable {
 
   async buildDeployRun(): Promise<boolean> {
     if (this.activeProfile?.type === 'android') return this.android?.buildInstallRun() ?? false;
+    if (this.activeProfile?.type === 'ios-simulator') {
+      if (!await (this.apple?.buildActive() ?? Promise.resolve(false))) return false;
+      return this.apple?.installAndRunIosSimulator() ?? false;
+    }
+    if (this.activeProfile?.type === 'ios-device') return this.apple?.buildActive() ?? false;
     if (!await this.buildActive(false)) return false;
     if (!await this.deployActive()) return false;
     return this.runActive();
@@ -342,7 +374,10 @@ export class QpmQtPlatformService implements vscode.Disposable {
       { label: 'Remote Linux', value: 'remote-linux' as QtPlatformType, description: 'SSH deployment and GDB Server' },
       { label: 'Docker', value: 'docker' as QtPlatformType, description: 'Containerized qmake/CMake build and run' },
       { label: 'WebAssembly', value: 'webassembly' as QtPlatformType, description: 'Qt for WebAssembly served in a browser' },
-      { label: 'Android', value: 'android' as QtPlatformType, description: 'Qt for Android, Gradle packaging, ADB devices and emulators' }
+      { label: 'Android', value: 'android' as QtPlatformType, description: 'Qt for Android, Gradle packaging, ADB devices and emulators' },
+      { label: 'macOS', value: 'macos' as QtPlatformType, description: 'Qt for macOS, app bundles, signing, DMG and notarization' },
+      { label: 'iOS Simulator', value: 'ios-simulator' as QtPlatformType, description: 'Xcode build, simulator selection, install and launch' },
+      { label: 'iOS Device', value: 'ios-device' as QtPlatformType, description: 'Xcode archive/build with Apple signing configuration' }
     ], { title: 'Create Qt platform profile' });
     if (!selected) return;
     const name = await vscode.window.showInputBox({ title: 'Platform profile name', value: platformLabel(selected.value), validateInput: (value) => value.trim() ? undefined : 'A name is required.' });
@@ -542,6 +577,7 @@ export class QpmQtPlatformService implements vscode.Disposable {
     if (profile.type === 'docker') return `${profile.dockerImage || 'image not configured'} · ${profile.dockerWorkspace}`;
     if (profile.type === 'webassembly') return `HTTP ${profile.wasmServerPort} · ${profile.wasmHtmlEntry || 'auto HTML detection'}`;
     if (profile.type === 'android') return `${profile.androidPackageFormat.toUpperCase()} · ${profile.androidBuildAllAbis ? 'all ABIs' : profile.androidAbis.join(', ')} · ${profile.androidDeviceSerial || 'automatic device'}`;
+    if (isApplePlatform(profile.type)) return `${applePlatformLabel(profile.type)} · ${profile.appleArchitectures.join(', ') || 'automatic architecture'} · ${profile.appleBundleIdentifier || 'automatic bundle ID'}`;
     return profile.type === 'linux-local' ? 'Local Linux host' : 'Local desktop host';
   }
 
@@ -562,8 +598,10 @@ export class QpmQtPlatformService implements vscode.Disposable {
 }
 
 function platformLabel(type: QtPlatformType): string {
+  if (isApplePlatform(type)) return applePlatformLabel(type);
   return type === 'linux-local' ? 'Linux Local' : type === 'remote-linux' ? 'Remote Linux' : type === 'docker' ? 'Docker' : type === 'webassembly' ? 'WebAssembly' : type === 'android' ? 'Android' : 'Desktop';
 }
+
 
 function platformEditFields(profile: QtPlatformProfile): Array<{ id: string; label: string; description: string }> {
   const common = [
@@ -601,6 +639,13 @@ function platformEditFields(profile: QtPlatformProfile): Array<{ id: string; lab
     { id: 'wasm-html', label: 'HTML entry', description: profile.wasmHtmlEntry || 'automatic' },
     { id: 'wasm-browser', label: 'Open browser automatically', description: profile.wasmOpenBrowser ? 'yes' : 'no' }
   );
+  if (isApplePlatform(profile.type)) common.push(
+    { id: 'apple-environment', label: 'Apple environment', description: profile.appleDeveloperDirectory || 'automatic Xcode discovery' },
+    { id: 'apple-bundle', label: 'Bundle identifier', description: profile.appleBundleIdentifier || 'automatic' },
+    { id: 'apple-signing', label: 'Signing', description: profile.appleCodeSignIdentity || (profile.appleAutomaticSigning ? 'automatic' : 'not configured') },
+    { id: 'apple-architecture', label: 'Architectures', description: profile.appleArchitectures.join(', ') || 'automatic' },
+    { id: 'apple-target', label: profile.type === 'ios-simulator' ? 'Simulator' : profile.type === 'ios-device' ? 'Device' : 'Distribution', description: profile.type === 'ios-simulator' ? (profile.appleSimulatorId || 'automatic') : profile.type === 'ios-device' ? (profile.appleDeviceId || 'Xcode') : (profile.appleCreateDmg ? `DMG ${profile.appleDmgFileSystem}` : 'app bundle') }
+  );
   if (profile.type === 'android') common.push(
     { id: 'android-environment', label: 'Android environment', description: profile.androidSdkRoot || 'automatic SDK discovery' },
     { id: 'android-abis', label: 'Android ABIs', description: profile.androidBuildAllAbis ? 'all installed Qt ABIs' : profile.androidAbis.join(', ') },
@@ -613,7 +658,7 @@ function platformEditFields(profile: QtPlatformProfile): Array<{ id: string; lab
 
 async function editPlatformField(profile: QtPlatformProfile, id: string, manifest: QtProjectManifest): Promise<void> {
   if (id === 'name') { const value = await input('Platform name', profile.name); if (value) profile.name = value; return; }
-  if (id === 'type') { const choice = await vscode.window.showQuickPick(['desktop','linux-local','remote-linux','docker','webassembly','android'].map((value) => ({ label: platformLabel(value as QtPlatformType), value }))); if (choice) profile.type = choice.value as QtPlatformType; return; }
+  if (id === 'type') { const choice = await vscode.window.showQuickPick(['desktop','linux-local','remote-linux','docker','webassembly','android','macos','ios-simulator','ios-device'].map((value) => ({ label: platformLabel(value as QtPlatformType), value }))); if (choice) profile.type = choice.value as QtPlatformType; return; }
   if (id === 'build-location') { const choice = await vscode.window.showQuickPick(['local','remote','container'].map((value) => ({ label: value, value }))); if (choice) profile.buildLocation = choice.value as QtPlatformProfile['buildLocation']; return; }
   if (id === 'environment') { const value = await input('Environment (NAME=value;OTHER=value)', environmentText(profile.environment)); if (value !== undefined) profile.environment = parseEnvironment(value); return; }
   if (id === 'sysroot') { profile.sysroot = (await input('Sysroot', profile.sysroot)) ?? profile.sysroot; return; }
@@ -639,13 +684,14 @@ async function editPlatformField(profile: QtPlatformProfile, id: string, manifes
   else if (id === 'wasm-port') profile.wasmServerPort = await inputPort('WebAssembly HTTP port', profile.wasmServerPort);
   else if (id === 'wasm-html') profile.wasmHtmlEntry = (await input('WebAssembly HTML entry', profile.wasmHtmlEntry)) ?? profile.wasmHtmlEntry;
   else if (id === 'wasm-browser') { const choice = await vscode.window.showQuickPick([{label:'Open browser automatically',value:true},{label:'Do not open browser',value:false}]); if (choice) profile.wasmOpenBrowser=choice.value; }
+  else if (id === 'apple-environment' || id === 'apple-bundle' || id === 'apple-signing' || id === 'apple-architecture' || id === 'apple-target') await vscode.commands.executeCommand('qpm.configureAppleEnvironment');
   else if (id === 'android-environment') await vscode.commands.executeCommand('qpm.configureAndroidEnvironment');
   else if (id === 'android-abis') await vscode.commands.executeCommand('qpm.configureAndroidEnvironment');
   else if (id === 'android-package') { const choice = await vscode.window.showQuickPick([{label:'APK',value:'apk'},{label:'Android App Bundle (AAB)',value:'aab'},{label:'Android Archive (AAR)',value:'aar'}]); if (choice) profile.androidPackageFormat = choice.value as QtPlatformProfile['androidPackageFormat']; }
   else if (id === 'android-device') await vscode.commands.executeCommand('qpm.selectAndroidDevice');
   else if (id === 'android-avd') await vscode.commands.executeCommand('qpm.selectAndroidAvd');
   const build = manifest.profiles.builds.find((entry) => entry.id === profile.buildProfileId);
-  if (build && (profile.type === 'webassembly' || profile.type === 'android') && build.system === 'direct') build.system = 'cmake';
+  if (build && (profile.type === 'webassembly' || profile.type === 'android' || profile.type === 'ios-simulator' || profile.type === 'ios-device') && build.system === 'direct') build.system = 'cmake';
 }
 
 function findBuildProfile(manifest: QtProjectManifest, id: string): QtBuildProfile | undefined { return manifest.profiles.builds.find((entry) => entry.id === id); }

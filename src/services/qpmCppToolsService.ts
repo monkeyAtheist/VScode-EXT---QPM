@@ -849,7 +849,8 @@ export class QpmCppToolsService implements vscode.Disposable {
             base.push(path.resolve(path.dirname(activeRef.absolutePath), includeDirectory));
           }
           const generatedDirectory = qtGeneratedDirectory(activeRef.absolutePath, vscode.workspace.getConfiguration('qpm').get('buildMode', 'debug'), manifest);
-          fs.mkdirSync(generatedDirectory, { recursive: true });
+          // Include paths do not need to exist yet. The build service owns
+          // creation of generated/object directories to avoid Windows races.
           base.push(generatedDirectory);
         }
       } catch (error) {
@@ -991,7 +992,6 @@ export class QpmCppToolsService implements vscode.Disposable {
         const projectRoot = path.dirname(activeRef.absolutePath);
         const files = resolveQtProjectFiles(activeRef.absolutePath, manifest);
         const generatedDirectory = qtGeneratedDirectory(activeRef.absolutePath, mode, manifest);
-        fs.mkdirSync(generatedDirectory, { recursive: true });
         const includeDirectories = unique([
           projectRoot,
           ...manifest.includeDirectories.map((entry) => path.resolve(projectRoot, entry)),
@@ -1127,6 +1127,13 @@ export class QpmCppToolsService implements vscode.Disposable {
     const msvcCompatibilityIncludeDirectories = findMsvcCompatibilityIncludeDirectories();
     const projectDirectories = this.collectProjectDirectories(workspace);
     const additional = this.getAdditionalIncludePaths();
+    const nativeManifest = this.getActiveNativeQtManifest(workspace);
+    const activeRef = workspace.projects.find((project) => project.index === workspace.activeProjectIndex && project.exists);
+    const managedGeneratedDirectory = nativeManifest && activeRef?.exists
+      ? qtGeneratedDirectory(activeRef.absolutePath, vscode.workspace.getConfiguration('qpm').get('buildMode', 'debug'), nativeManifest)
+      : undefined;
+    const usableAdditionalPath = (value: string): string | undefined =>
+      managedGeneratedDirectory && samePath(value, managedGeneratedDirectory) ? value : existingPath(value);
     const compilerPath = this.resolveCompilerPath(installation, workspace);
     const explicitSystemIncludes = compilerPath ? [] : [
       ...compilerIncludeDirectories,
@@ -1139,7 +1146,7 @@ export class QpmCppToolsService implements vscode.Disposable {
       '${workspaceFolder}',
       ...projectDirectories,
       ...explicitSystemIncludes,
-      ...additional.map(existingPath)
+      ...additional.map(usableAdditionalPath)
     ].filter((value): value is string => !!value).map(toForwardSlashes));
 
     const browsePath = unique([
@@ -1148,10 +1155,9 @@ export class QpmCppToolsService implements vscode.Disposable {
       ...(compilerPath ? [] : compilerIncludeDirectories),
       ...(compilerPath ? [] : windowsKitIncludeDirectories),
       ...(compilerPath ? [] : msvcCompatibilityIncludeDirectories),
-      ...additional.map(existingPath)
+      ...additional.map(usableAdditionalPath)
     ].filter((value): value is string => !!value).map(toForwardSlashes));
 
-    const nativeManifest = this.getActiveNativeQtManifest(workspace);
     const configuration: CppToolsConfiguration = {
       name: MANAGED_CONFIGURATION_NAME,
       intelliSenseMode: detectIntelliSenseMode(compilerPath ?? installation.root),

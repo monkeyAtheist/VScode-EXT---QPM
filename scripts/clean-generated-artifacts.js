@@ -4,6 +4,8 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const out = path.join(root, 'out');
+const dist = path.join(root, 'dist');
+fs.rmSync(dist, { recursive: true, force: true });
 let removed = 0;
 
 function visit(directory) {

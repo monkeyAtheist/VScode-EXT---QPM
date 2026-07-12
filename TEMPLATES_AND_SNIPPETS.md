@@ -212,3 +212,14 @@ The editor context menu now imports the JC Lib 0.8.24 utility surface into QPM-s
 ## Android projects
 
 Android is configured as a platform profile rather than a separate source template. Existing Qt Widgets, Qt Quick, console, test and library projects can therefore target Desktop and Android with the same registered source files. QPM generates an isolated `.qpm/android/<build-profile>/CMakeLists.txt` and does not overwrite a user-owned CMake project.
+
+
+## QML module metadata
+
+QPM 0.13.0 can generate a `qmldir` file from the QML files registered in the native manifest. Capitalized file names become exported QML types, `pragma Singleton` produces singleton entries, and the project manifest persists the module URI, major/minor version, import root and resource prefix. The generated metadata complements QML starters and allows `qmlls` to resolve project-local types consistently.
+
+## Apple generated projects (0.14.0)
+
+Apple support does not add source-code snippets. For iOS, QPM generates an isolated CMake project containing the source/header/form/resource/QML files already registered in `.qtproject.json`, the selected Qt modules, bundle metadata, optional QML module metadata and Xcode signing attributes. The generated project is disposable and can be recreated from the manifest.
+
+macOS projects keep their existing direct, qmake or CMake source layout. Apple distribution commands operate on the produced `.app` bundle and do not modify user source files.

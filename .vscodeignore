@@ -49,3 +49,7 @@ data/vba_language_pack.json
 data/web_language_pack.json
 data/windows_api_device_pack.json
 docs/QPM_*_VALIDATION.md
+
+# The extension host loads the bundled entry point.
+out/**
+dist/**/*.map

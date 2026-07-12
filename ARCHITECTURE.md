@@ -1,13 +1,13 @@
 # QPM architecture
 
-## Schema v11 persistence
+## Schema v15 persistence
 
 Native project manifests persist `profiles.active.buildMode`. The manifest is authoritative for native Qt projects; the VS Code `qpm.buildMode` setting is a UI/cache mirror restored whenever the active workspace changes. Debug profiles derive their variant from the selected build profile and their architecture from the persisted project mode plus resolved kit evidence.
 
 
 ## Project formats
 
-`*.qtproject.json` is the native Qt project format. Schema version 11 is implemented in `src/model/qtProjectManifest.ts` and remains independent from CMake.
+`*.qtproject.json` is the native Qt project format. Schema version 15 is implemented in `src/model/qtProjectManifest.ts` and remains independent from CMake.
 
 A native manifest contains:
 
@@ -24,8 +24,10 @@ A native manifest contains:
 - product metadata and portable-packaging settings;
 - QML/CPU/memory profiling, Cppcheck and system-trace settings;
 - Android SDK/NDK/JDK, ABI, package, device, emulator and signing settings.
+- Apple platform, Xcode, simulator, signing and notarization settings.
+- MSIX, App Installer, WinGet, release metadata and publication-target settings.
 
-Schema-version-1 through schema-version-10 manifests are normalized and migrated automatically. A sibling backup is written before persistence. Legacy top-level `qt` and `build` values are maintained as compatibility mirrors.
+Schema-version-1 through schema-version-14 manifests are normalized and migrated automatically. A sibling backup is written before persistence. Legacy top-level `qt` and `build` values are maintained as compatibility mirrors.
 
 Legacy `.cws/.prj` documents remain supported through `QpmParser` as generic C/C++ compatibility projects.
 
@@ -46,12 +48,17 @@ Legacy `.cws/.prj` documents remain supported through `QpmParser` as generic C/C
 - `QpmQtToolsService`: resolves the active project/kit and runs Qt Linguist, `lupdate`, `lrelease`, `qmllint`, `qmlformat`, QML preview and documentation workflows.
 - `QtResourceEditorPanel`: parses, validates and rewrites `.qrc` documents through a graphical webview while preserving a first-write backup.
 - `QpmQtToolsProvider`: exposes translation, resource, QML and documentation actions in the dedicated Qt Tools tree.
+- `QpmQmlLanguageService`: owns the QPM-managed `qmlls` Language Server client, resolves project build/import paths, publishes build directories, generates `.qmlls.ini`/`qmldir` metadata and prevents duplicate language servers by default.
+- `QpmQmlLanguageProvider`: exposes qmlls state, readiness, lifecycle, module-generation and report/output actions in the QML Language & Modules tree.
 - `QpmQtTestingService`: publishes Test Explorer items, discovers Qt Test/Qt Quick Test/GoogleTest/Catch2/Boost.Test cases, imports CTest inventories from the CMake build tree, runs or debugs selections, parses JUnit/XML results, records test history and publishes line coverage.
 - `QpmQtQualityService`: resolves Clang-Tidy, Clazy and gcov; publishes diagnostics; and creates sanitizer/coverage build profiles.
 - `QpmQtQualityProvider`: groups test, static-analysis, runtime-check and coverage actions in the Qt Tests & Quality tree.
 - `QpmQtPackagingService`: generates product metadata, stages portable distributions, deploys optional Qt runtime content and creates folder/ZIP/`tar.gz` packages.
 - `QpmQtPackagingProvider`: exposes product identity, package readiness and packaging actions in the Qt Packaging tree.
 - `QpmQtPackagingModel`: renders Windows manifests/resources, Linux desktop entries and package identity metadata independently from VS Code APIs.
+- `QpmQtInstallerService`: generates Qt Installer Framework, Inno Setup and NSIS projects, compiles installers, builds Qt IFW repositories and signs distribution artifacts.
+- `QpmQtPublicationService`: generates MSIX/App Installer and WinGet metadata, assembles self-contained release bundles, writes checksums/update manifests and publishes through local, SSH or GitHub backends.
+- `QpmQtPublicationProvider`: exposes publication readiness, source/package generation, release assembly, upload, reporting and cleanup actions in the Qt Publication & Updates tree.
 - `QpmQtProfilingService`: resolves profiler tools, launches QML/CPU/memory/system-trace workflows, parses Cppcheck and Valgrind XML, publishes diagnostics and manages generated reports.
 - `QpmQtProfilingProvider`: exposes profiler readiness, run/stop/open/reveal/clean actions in the Qt Profiling & Diagnostics tree.
 - `QpmQtAndroidService`: resolves Android SDK/NDK/JDK and Qt Android tools, generates isolated CMake package projects, builds APK/AAB/AAR outputs and drives ADB device, emulator, install, run, debug-wait and logcat workflows.
@@ -127,7 +134,7 @@ The health provider is a read-only diagnostic layer over the same manifest and b
 - active debug profile readiness;
 - Qt Linguist and translation tool availability;
 - `.qrc` validation state;
-- QML lint, format and preview tool availability.
+- QML lint, format, preview and `qmlls` availability.
 
 Health findings link back to repair and settings commands rather than duplicating mutation logic.
 
@@ -137,6 +144,14 @@ Qt tools never rely on a global Qt installation. The service resolves the native
 
 The deployment profile distinguishes application translations from the optional Qt framework translation payload handled by the platform deployment tool. When application translations are enabled, QPM invokes `lrelease` for registered `.ts` files and copies resulting `.qm` catalogs beneath the target `translations` directory before platform deployment.
 
+
+## QML language lifecycle
+
+QML language support is independent from the selected build backend. QPM resolves the active native manifest, build profile and Qt kit, then starts the kit-local `qmlls` through `vscode-languageclient`. The client supplies Qt and project import paths, publishes active build directories through `$/addBuildDirs`, watches QML/module/build metadata and restarts when the active project changes.
+
+The top-level manifest `qml` object stores lifecycle, executable override, build/import roots, CMake policy, trace level, duplicate-server policy and module identity. Generated `.qmlls.ini` files carry a QPM marker so user-managed files are preserved. Generated `qmldir` files enumerate capitalized QML types and detect `pragma Singleton` declarations.
+
+QPM checks for the official `TheQtCompany.qt-qml` extension before starting its own client. The default policy avoids a second language server to prevent duplicate diagnostics and completion entries; a project can explicitly allow parallel operation.
 
 ## Tests and quality
 
@@ -221,3 +236,24 @@ Capability detection is intentionally non-mutating. It reports available executa
 Profiling is represented by the manifest `profiling` object and remains independent from the selected build backend. Every run resolves the active build, run, kit and platform chain before starting external tools. QML profiling launches the application with a QML debugging socket, then attaches `qmlprofiler`; CPU profiling selects `perf` or Callgrind; memory diagnostics selects Heob or Valgrind Memcheck; Cppcheck consumes the generated compilation database; system tracing uses `strace`.
 
 Outputs are normalized under the project-local profiling directory and recorded by manifest path so the tree view can reopen the latest result. Analyzer XML is converted to VS Code diagnostics without changing source files. Platform-specific tools are reported as unavailable rather than silently falling back to an incompatible command.
+## Workspace persistence precedence (0.13.2)
+
+At activation, `QpmWorkspaceService` restores workspace state in this order:
+
+1. the last workspace explicitly loaded in the current VS Code window (`workspaceState`);
+2. an association marker in an opened project folder;
+3. the globally last loaded QPM workspace (`globalState`) for empty/untitled windows;
+4. exact-folder automatic discovery.
+
+Loading any `.cws`, `.qtproject.json` or compatibility `.prj` updates both persistence levels with a normalized absolute path. This ordering prevents stale project-folder markers from replacing a workspace selected later by the user while retaining project-specific association behavior for new VS Code windows.
+
+
+## Apple platform backend (0.14.0)
+
+`QpmQtAppleService` isolates Apple-specific workflows from the generic platform router. `QpmQtPlatformService` delegates macOS and iOS profiles to this service while preserving the existing desktop, Android, remote, Docker and WebAssembly implementations.
+
+For iOS, QPM writes an isolated generated `CMakeLists.txt` under `.qpm/apple/generated/<platform-id>`, configures it with the selected Qt kit's `qt-cmake` and the Xcode generator, then invokes `xcodebuild` for the selected scheme, configuration and destination. Simulator discovery and execution use `xcrun simctl`.
+
+For macOS, the normal QPM build produces the application bundle, after which `macdeployqt` deploys Qt frameworks/plugins and may create a DMG. Signing, verification, notarization and stapling are separate explicit stages using system Apple tools. Credentials are not stored in the project manifest; notarization references a Keychain profile managed by `notarytool`.
+
+The Apple provider is read-only apart from command dispatch. Durable configuration remains in the schema-v14 platform profile, and tool readiness is also surfaced through the generic project-health/platform capability path.

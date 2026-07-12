@@ -1,8 +1,8 @@
 {
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
-  "description": "Create, organize, build, test, debug, profile, diagnose, package and deploy Qt/C++ projects in VS Code across desktop, Linux, Remote Linux, Docker, WebAssembly and Android platforms.",
-  "version": "0.11.0",
+  "description": "Native Qt project manager and build system for VS Code with direct/qmake/CMake backends, QML tooling, testing, profiling, installers, MSIX, WinGet and release publication.",
+  "version": "0.15.0",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -53,7 +53,24 @@
     "Cppcheck",
     "Heob",
     "strace",
-    "Profiling"
+    "Profiling",
+    "Qt Installer Framework",
+    "Inno Setup",
+    "NSIS",
+    "Authenticode",
+    "SignTool",
+    "installer",
+    "update repository",
+    "qmlls",
+    "QML Language Server",
+    "qmldir",
+    "QML modules",
+    "MSIX",
+    "App Installer",
+    "WinGet",
+    "GitHub Releases",
+    "release publication",
+    "application updates"
   ],
   "activationEvents": [
     "workspaceContains:**/*.qtproject.json",
@@ -204,12 +221,61 @@
     "onCommand:qpm.cleanProfilingOutput",
     "onCommand:qpm.rerunFailedTests",
     "onCommand:qpm.openTestHistory",
-    "onCommand:qpm.clearTestHistory"
+    "onCommand:qpm.clearTestHistory",
+    "onCommand:qpm.createDesktopInstaller",
+    "onCommand:qpm.generateInstallerProject",
+    "onCommand:qpm.createQtIfwRepository",
+    "onCommand:qpm.signDistributionArtifacts",
+    "onCommand:qpm.verifyDistributionSignatures",
+    "onCommand:qpm.detectInstallerTools",
+    "onCommand:qpm.openInstallerReport",
+    "onCommand:qpm.revealInstallerOutput",
+    "onCommand:qpm.cleanInstallerOutput",
+    "onView:qpm.installers",
+    "onCommand:qpm.startQmlLanguageServer",
+    "onCommand:qpm.restartQmlLanguageServer",
+    "onCommand:qpm.stopQmlLanguageServer",
+    "onCommand:qpm.refreshQmlLanguageServer",
+    "onCommand:qpm.generateQmllsConfiguration",
+    "onCommand:qpm.openQmllsConfiguration",
+    "onCommand:qpm.generateQmldir",
+    "onCommand:qpm.openQmlLanguageReport",
+    "onCommand:qpm.showQmlLanguageOutput",
+    "onCommand:qpm.showQmlLanguageTrace",
+    "onView:qpm.qmlLanguage",
+    "onCommand:qpm.configureAppleEnvironment",
+    "onCommand:qpm.refreshAppleDevices",
+    "onCommand:qpm.selectAppleSimulator",
+    "onCommand:qpm.bootAppleSimulator",
+    "onCommand:qpm.buildAppleTarget",
+    "onCommand:qpm.deployMacApplication",
+    "onCommand:qpm.createMacDmg",
+    "onCommand:qpm.signAppleArtifacts",
+    "onCommand:qpm.verifyAppleSignatures",
+    "onCommand:qpm.notarizeAppleArtifact",
+    "onCommand:qpm.stapleAppleArtifact",
+    "onCommand:qpm.installRunIosSimulator",
+    "onCommand:qpm.openAppleReport",
+    "onCommand:qpm.revealAppleOutput",
+    "onCommand:qpm.cleanAppleOutput",
+    "onView:qpm.apple",
+    "onCommand:qpm.detectPublicationTools",
+    "onCommand:qpm.generatePublicationSources",
+    "onCommand:qpm.createMsixPackage",
+    "onCommand:qpm.generateAppInstaller",
+    "onCommand:qpm.generateWingetManifests",
+    "onCommand:qpm.validateWingetManifests",
+    "onCommand:qpm.createReleaseBundle",
+    "onCommand:qpm.publishRelease",
+    "onCommand:qpm.openPublicationReport",
+    "onCommand:qpm.revealPublicationOutput",
+    "onCommand:qpm.cleanPublicationOutput",
+    "onView:qpm.publication"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "npm run clean:legacy-cvi && npm run clean:generated && tsc -p ./",
+    "compile": "npm run clean:legacy-cvi && npm run clean:generated && tsc -p ./ && npm run bundle",
     "watch": "npm run clean:legacy-cvi && npm run clean:generated && tsc -watch -p ./",
     "package": "vsce package",
     "clean:legacy-cvi": "node ./scripts/clean-legacy-cvi-sources.js",
@@ -217,7 +283,7 @@
     "test:qt-direct": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js",
     "test:qt-ux": "npm run compile && node scripts/test-qt-ux-021.js",
     "test:qt-workspace": "npm run compile && node scripts/test-qt-workspace-021.js",
-    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js",
+    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js",
     "test:qt-toolchain": "npm run compile && node scripts/test-qt-toolchain-022.js",
     "test:qt-intellisense": "npm run compile && node scripts/test-qt-intellisense-022.js",
     "test:qt-designer": "npm run compile && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js",
@@ -237,7 +303,13 @@
     "test:ui-audit": "npm run compile && node scripts/test-qt-ui-audit-073.js",
     "test:packaging": "npm run compile && node scripts/test-qt-packaging-080.js",
     "test:profiling": "npm run compile && node scripts/test-qt-profiling-090.js",
-    "test:extended-testing": "npm run compile && node scripts/test-qt-extended-testing-0100.js"
+    "test:extended-testing": "npm run compile && node scripts/test-qt-extended-testing-0100.js",
+    "test:qt-installers": "npm run compile && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js",
+    "test:qt-deployment": "npm run compile && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js",
+    "test:qml-language": "npm run compile && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js",
+    "bundle": "node ./scripts/bundle-extension.js",
+    "test:qt-apple": "npm run compile && node scripts/test-qt-apple-0140.js",
+    "test:qt-publication": "npm run compile && node scripts/test-qt-publication-0150.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -280,6 +352,12 @@
           "id": "qpm.android",
           "name": "Qt Android & Devices",
           "contextualTitle": "Qt Android & Devices",
+          "showCollapseAll": false
+        },
+        {
+          "id": "qpm.apple",
+          "name": "Qt Apple Platforms",
+          "contextualTitle": "Qt Apple Platforms",
           "showCollapseAll": false
         },
         {
@@ -329,6 +407,24 @@
           "name": "Qt Packaging",
           "contextualTitle": "Qt Packaging",
           "showCollapseAll": false
+        },
+        {
+          "id": "qpm.installers",
+          "name": "Qt Installers & Signing",
+          "contextualTitle": "Qt Installers & Signing",
+          "showCollapseAll": false
+        },
+        {
+          "id": "qpm.publication",
+          "name": "Qt Publication & Updates",
+          "contextualTitle": "Qt Publication & Updates",
+          "showCollapseAll": false
+        },
+        {
+          "id": "qpm.qmlLanguage",
+          "name": "QML Language & Modules",
+          "contextualTitle": "QML Language & Modules",
+          "showCollapseAll": false
         }
       ]
     },
@@ -344,6 +440,16 @@
       {
         "view": "qpm.packaging",
         "contents": "Configure product metadata and create portable Qt packages.\n[Open Qt Project Settings](command:qpm.editBuildSettings)\n[Create portable package](command:qpm.createPortablePackage)",
+        "when": "!qpm.nativeQtProjectActive"
+      },
+      {
+        "view": "qpm.installers",
+        "contents": "Generate desktop installers, update repositories and signed Qt distributions.\n[Open Qt Project Settings](command:qpm.editBuildSettings)\n[Create desktop installer](command:qpm.createDesktopInstaller)",
+        "when": "!qpm.nativeQtProjectActive"
+      },
+      {
+        "view": "qpm.qmlLanguage",
+        "contents": "Configure QML code intelligence, qmlls build/import paths and QML module metadata.\n[Open Qt Project Settings](command:qpm.editBuildSettings)\n[Start QML Language Server](command:qpm.startQmlLanguageServer)",
         "when": "!qpm.nativeQtProjectActive"
       }
     ],
@@ -847,7 +953,7 @@
       },
       {
         "command": "qpm.editBuildSettingsSafeMode",
-        "title": "Qt Project Settings (Safe Mode)\u2026",
+        "title": "Qt Project Settings (Safe Mode)…",
         "icon": "$(shield)",
         "category": "Qt Project Manager"
       },
@@ -1277,37 +1383,37 @@
       },
       {
         "command": "qpm.insertSnippetC",
-        "title": "Choose C snippet\u2026",
+        "title": "Choose C snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetCpp",
-        "title": "Choose C++ snippet\u2026",
+        "title": "Choose C++ snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetQt",
-        "title": "Choose Qt snippet\u2026",
+        "title": "Choose Qt snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetWindows",
-        "title": "Choose Windows / communication snippet\u2026",
+        "title": "Choose Windows / communication snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetDocumentation",
-        "title": "Choose documentation snippet\u2026",
+        "title": "Choose documentation snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetUser",
-        "title": "Choose saved user snippet\u2026",
+        "title": "Choose saved user snippet…",
         "category": "QPM",
         "icon": "$(bookmark)"
       },
@@ -1490,6 +1596,276 @@
         "command": "qpm.revealAndroidPackage",
         "title": "Qt Project Manager: Reveal Latest Android Package",
         "category": "QPM"
+      },
+      {
+        "command": "qpm.createDesktopInstaller",
+        "title": "Qt Project Manager: Create Desktop Installer",
+        "category": "QPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "qpm.generateInstallerProject",
+        "title": "Qt Project Manager: Generate Installer Sources",
+        "category": "QPM",
+        "icon": "$(files)"
+      },
+      {
+        "command": "qpm.createQtIfwRepository",
+        "title": "Qt Project Manager: Create Qt IFW Update Repository",
+        "category": "QPM",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "qpm.signDistributionArtifacts",
+        "title": "Qt Project Manager: Sign Distribution Artifacts",
+        "category": "QPM",
+        "icon": "$(verified)"
+      },
+      {
+        "command": "qpm.verifyDistributionSignatures",
+        "title": "Qt Project Manager: Verify Distribution Signatures",
+        "category": "QPM",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "qpm.detectInstallerTools",
+        "title": "Qt Project Manager: Detect Installer and Signing Tools",
+        "category": "QPM",
+        "icon": "$(search)"
+      },
+      {
+        "command": "qpm.openInstallerReport",
+        "title": "Qt Project Manager: Open Installer and Signing Report",
+        "category": "QPM",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.revealInstallerOutput",
+        "title": "Qt Project Manager: Reveal Installer Output",
+        "category": "QPM",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.cleanInstallerOutput",
+        "title": "Qt Project Manager: Clean Installer Output",
+        "category": "QPM",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.startQmlLanguageServer",
+        "title": "Qt Project Manager: Start QML Language Server",
+        "category": "QPM",
+        "icon": "$(play)"
+      },
+      {
+        "command": "qpm.restartQmlLanguageServer",
+        "title": "Qt Project Manager: Restart QML Language Server",
+        "category": "QPM",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "qpm.stopQmlLanguageServer",
+        "title": "Qt Project Manager: Stop QML Language Server",
+        "category": "QPM",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "qpm.refreshQmlLanguageServer",
+        "title": "Qt Project Manager: Refresh QML Build Directories",
+        "category": "QPM",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "qpm.generateQmllsConfiguration",
+        "title": "Qt Project Manager: Generate .qmlls.ini",
+        "category": "QPM",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "qpm.openQmllsConfiguration",
+        "title": "Qt Project Manager: Open .qmlls.ini",
+        "category": "QPM",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "qpm.generateQmldir",
+        "title": "Qt Project Manager: Generate qmldir",
+        "category": "QPM",
+        "icon": "$(symbol-module)"
+      },
+      {
+        "command": "qpm.openQmlLanguageReport",
+        "title": "Qt Project Manager: Open QML Language Report",
+        "category": "QPM",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.showQmlLanguageOutput",
+        "title": "Qt Project Manager: Show QML Language Server Output",
+        "category": "QPM",
+        "icon": "$(output)"
+      },
+      {
+        "command": "qpm.showQmlLanguageTrace",
+        "title": "Qt Project Manager: Show QML Language Server Trace",
+        "category": "QPM",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "qpm.configureAppleEnvironment",
+        "title": "Qt Project Manager: Configure Apple Environment",
+        "category": "QPM",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "qpm.refreshAppleDevices",
+        "title": "Qt Project Manager: Refresh Apple Devices",
+        "category": "QPM",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "qpm.selectAppleSimulator",
+        "title": "Qt Project Manager: Select iOS Simulator",
+        "category": "QPM",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "qpm.bootAppleSimulator",
+        "title": "Qt Project Manager: Boot iOS Simulator",
+        "category": "QPM",
+        "icon": "$(vm-running)"
+      },
+      {
+        "command": "qpm.buildAppleTarget",
+        "title": "Qt Project Manager: Build Apple Target",
+        "category": "QPM",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "qpm.deployMacApplication",
+        "title": "Qt Project Manager: Deploy macOS Application",
+        "category": "QPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "qpm.createMacDmg",
+        "title": "Qt Project Manager: Create macOS DMG",
+        "category": "QPM",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "qpm.signAppleArtifacts",
+        "title": "Qt Project Manager: Sign Apple Artifacts",
+        "category": "QPM",
+        "icon": "$(verified-filled)"
+      },
+      {
+        "command": "qpm.verifyAppleSignatures",
+        "title": "Qt Project Manager: Verify Apple Signatures",
+        "category": "QPM",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "qpm.notarizeAppleArtifact",
+        "title": "Qt Project Manager: Notarize Apple Artifact",
+        "category": "QPM",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "qpm.stapleAppleArtifact",
+        "title": "Qt Project Manager: Staple Apple Notarization Ticket",
+        "category": "QPM",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "qpm.installRunIosSimulator",
+        "title": "Qt Project Manager: Build, Install and Run iOS Simulator",
+        "category": "QPM",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "qpm.openAppleReport",
+        "title": "Qt Project Manager: Open Apple Platform Report",
+        "category": "QPM",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.revealAppleOutput",
+        "title": "Qt Project Manager: Reveal Apple Output",
+        "category": "QPM",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.cleanAppleOutput",
+        "title": "Qt Project Manager: Clean Apple Output",
+        "category": "QPM",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.detectPublicationTools",
+        "title": "Qt Project Manager: Detect Publication Tools",
+        "category": "QPM",
+        "icon": "$(search)"
+      },
+      {
+        "command": "qpm.generatePublicationSources",
+        "title": "Qt Project Manager: Generate Publication Sources",
+        "category": "QPM",
+        "icon": "$(files)"
+      },
+      {
+        "command": "qpm.createMsixPackage",
+        "title": "Qt Project Manager: Create MSIX Package",
+        "category": "QPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "qpm.generateAppInstaller",
+        "title": "Qt Project Manager: Generate App Installer File",
+        "category": "QPM",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "qpm.generateWingetManifests",
+        "title": "Qt Project Manager: Generate WinGet Manifests",
+        "category": "QPM",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "qpm.validateWingetManifests",
+        "title": "Qt Project Manager: Validate WinGet Manifests",
+        "category": "QPM",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "qpm.createReleaseBundle",
+        "title": "Qt Project Manager: Create Release Bundle",
+        "category": "QPM",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "qpm.publishRelease",
+        "title": "Qt Project Manager: Publish Release",
+        "category": "QPM",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "qpm.openPublicationReport",
+        "title": "Qt Project Manager: Open Publication Report",
+        "category": "QPM",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.revealPublicationOutput",
+        "title": "Qt Project Manager: Reveal Publication Output",
+        "category": "QPM",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.cleanPublicationOutput",
+        "title": "Qt Project Manager: Clean Publication Output",
+        "category": "QPM",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -1677,6 +2053,61 @@
         {
           "command": "qpm.cleanPackagingOutput",
           "when": "view == qpm.packaging",
+          "group": "navigation@3"
+        },
+        {
+          "command": "qpm.createDesktopInstaller",
+          "when": "view == qpm.installers",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.openInstallerReport",
+          "when": "view == qpm.installers",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.cleanInstallerOutput",
+          "when": "view == qpm.installers",
+          "group": "navigation@3"
+        },
+        {
+          "command": "qpm.restartQmlLanguageServer",
+          "when": "view == qpm.qmlLanguage && qpm.qmlLanguageServerState == running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.startQmlLanguageServer",
+          "when": "view == qpm.qmlLanguage && qpm.qmlLanguageServerState != running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.openQmlLanguageReport",
+          "when": "view == qpm.qmlLanguage",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.refreshAppleDevices",
+          "when": "view == qpm.apple",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.openAppleReport",
+          "when": "view == qpm.apple",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.createReleaseBundle",
+          "when": "view == qpm.publication",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.publishRelease",
+          "when": "view == qpm.publication",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.openPublicationReport",
+          "when": "view == qpm.publication",
           "group": "navigation@3"
         }
       ],
@@ -2363,6 +2794,21 @@
         {
           "submenu": "qpm.editorAndroid",
           "group": "6_android"
+        },
+        {
+          "submenu": "qpm.editorInstallers",
+          "group": "6_installers",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.editorApple",
+          "group": "6_apple",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.editorPublication",
+          "group": "6_publication",
+          "when": "qpm.nativeQtProjectActive"
         }
       ],
       "qpm.editorDocumentation": [
@@ -2628,6 +3074,34 @@
         {
           "command": "qpm.openQtDocumentation",
           "group": "documentation@1"
+        },
+        {
+          "command": "qpm.startQmlLanguageServer",
+          "group": "language@1"
+        },
+        {
+          "command": "qpm.restartQmlLanguageServer",
+          "group": "language@2"
+        },
+        {
+          "command": "qpm.stopQmlLanguageServer",
+          "group": "language@3"
+        },
+        {
+          "command": "qpm.generateQmllsConfiguration",
+          "group": "configuration@1"
+        },
+        {
+          "command": "qpm.openQmllsConfiguration",
+          "group": "configuration@2"
+        },
+        {
+          "command": "qpm.generateQmldir",
+          "group": "modules@1"
+        },
+        {
+          "command": "qpm.openQmlLanguageReport",
+          "group": "reports@1"
         }
       ],
       "qpm.translationTools": [
@@ -2860,6 +3334,21 @@
         {
           "submenu": "qpm.explorerAndroid",
           "group": "6_android"
+        },
+        {
+          "submenu": "qpm.editorInstallers",
+          "group": "6_installers",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.explorerApple",
+          "group": "6_apple",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.explorerPublication",
+          "group": "6_publication",
+          "when": "qpm.nativeQtProjectActive"
         }
       ],
       "qpm.editorPackaging": [
@@ -3078,6 +3567,306 @@
         {
           "command": "qpm.revealAndroidPackage",
           "group": "3_android@12",
+          "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.editorInstallers": [
+        {
+          "command": "qpm.createDesktopInstaller",
+          "group": "1_build@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generateInstallerProject",
+          "group": "1_build@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createQtIfwRepository",
+          "group": "1_build@3",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.signDistributionArtifacts",
+          "group": "2_sign@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.verifyDistributionSignatures",
+          "group": "2_sign@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.detectInstallerTools",
+          "group": "3_tools@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.openInstallerReport",
+          "group": "4_report@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.revealInstallerOutput",
+          "group": "4_report@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.cleanInstallerOutput",
+          "group": "5_clean@1",
+          "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.editorApple": [
+        {
+          "command": "qpm.configureAppleEnvironment",
+          "group": "1_apple@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.refreshAppleDevices",
+          "group": "1_apple@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.selectAppleSimulator",
+          "group": "1_apple@3",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.bootAppleSimulator",
+          "group": "1_apple@4",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.buildAppleTarget",
+          "group": "1_apple@5",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.deployMacApplication",
+          "group": "2_apple@6",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createMacDmg",
+          "group": "2_apple@7",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.signAppleArtifacts",
+          "group": "2_apple@8",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.verifyAppleSignatures",
+          "group": "2_apple@9",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.notarizeAppleArtifact",
+          "group": "2_apple@10",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.stapleAppleArtifact",
+          "group": "3_apple@11",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.installRunIosSimulator",
+          "group": "3_apple@12",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.openAppleReport",
+          "group": "3_apple@13",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.revealAppleOutput",
+          "group": "3_apple@14",
+          "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.explorerApple": [
+        {
+          "command": "qpm.configureAppleEnvironment",
+          "group": "1_apple@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.refreshAppleDevices",
+          "group": "1_apple@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.selectAppleSimulator",
+          "group": "1_apple@3",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.bootAppleSimulator",
+          "group": "1_apple@4",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.buildAppleTarget",
+          "group": "1_apple@5",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.deployMacApplication",
+          "group": "2_apple@6",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createMacDmg",
+          "group": "2_apple@7",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.signAppleArtifacts",
+          "group": "2_apple@8",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.notarizeAppleArtifact",
+          "group": "2_apple@9",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.installRunIosSimulator",
+          "group": "2_apple@10",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.openAppleReport",
+          "group": "3_apple@11",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.revealAppleOutput",
+          "group": "3_apple@12",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.cleanAppleOutput",
+          "group": "3_apple@13",
+          "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.editorPublication": [
+        {
+          "command": "qpm.detectPublicationTools",
+          "group": "1_prepare@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generatePublicationSources",
+          "group": "1_prepare@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createMsixPackage",
+          "group": "2_package@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generateAppInstaller",
+          "group": "2_package@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generateWingetManifests",
+          "group": "2_package@3",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.validateWingetManifests",
+          "group": "2_package@4",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createReleaseBundle",
+          "group": "3_release@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.publishRelease",
+          "group": "3_release@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.openPublicationReport",
+          "group": "4_report@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.revealPublicationOutput",
+          "group": "4_report@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.cleanPublicationOutput",
+          "group": "5_clean@1",
+          "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.explorerPublication": [
+        {
+          "command": "qpm.detectPublicationTools",
+          "group": "1_prepare@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generatePublicationSources",
+          "group": "1_prepare@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createMsixPackage",
+          "group": "2_package@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generateAppInstaller",
+          "group": "2_package@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.generateWingetManifests",
+          "group": "2_package@3",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.validateWingetManifests",
+          "group": "2_package@4",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.createReleaseBundle",
+          "group": "3_release@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.publishRelease",
+          "group": "3_release@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.openPublicationReport",
+          "group": "4_report@1",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.revealPublicationOutput",
+          "group": "4_report@2",
+          "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.cleanPublicationOutput",
+          "group": "5_clean@1",
           "when": "qpm.nativeQtProjectActive"
         }
       ]
@@ -3735,11 +4524,11 @@
       },
       {
         "id": "qpm.snippetsC",
-        "label": "C \u2014 classic"
+        "label": "C — classic"
       },
       {
         "id": "qpm.snippetsCpp",
-        "label": "C++ \u2014 classic"
+        "label": "C++ — classic"
       },
       {
         "id": "qpm.snippetsWindows",
@@ -3784,6 +4573,26 @@
       {
         "id": "qpm.explorerAndroid",
         "label": "Android / devices"
+      },
+      {
+        "id": "qpm.editorInstallers",
+        "label": "Installers / signing"
+      },
+      {
+        "id": "qpm.editorApple",
+        "label": "Apple platforms"
+      },
+      {
+        "id": "qpm.explorerApple",
+        "label": "Apple platforms"
+      },
+      {
+        "id": "qpm.editorPublication",
+        "label": "Publication / updates"
+      },
+      {
+        "id": "qpm.explorerPublication",
+        "label": "Publication / updates"
       }
     ],
     "breakpoints": [
@@ -3799,13 +4608,37 @@
         "fileMatch": "*.qtproject.json",
         "url": "./schemas/qtproject.schema.json"
       }
+    ],
+    "languages": [
+      {
+        "id": "qml",
+        "aliases": [
+          "QML",
+          "qml"
+        ],
+        "extensions": [
+          ".qml"
+        ],
+        "configuration": "./syntaxes/qml-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "qml",
+        "scopeName": "source.qml.qpm",
+        "path": "./syntaxes/qml.tmLanguage.json"
+      }
     ]
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.25.12",
     "typescript": "^5.7.2"
   },
-  "icon": "media/qpm-marketplace.png"
+  "icon": "media/qpm-marketplace.png",
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
 }

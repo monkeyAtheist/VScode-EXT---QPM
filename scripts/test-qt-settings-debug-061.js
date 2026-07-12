@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
-assert.strictEqual(pkg.version, '0.11.0');
+assert.strictEqual(pkg.version, '0.15.0');
 assert.strictEqual(pkg.contributes.configuration.properties['qpm.buildMode'].default, 'debug64');
 const panel = fs.readFileSync(path.join(root, 'src/views/qtProjectSettingsPanel.ts'), 'utf8');
 for (const token of ['buildArchitecture', 'debugRequest', 'debuggerType', 'debugRemoteHost', 'debugQmlEnabled', 'Project control center']) assert(panel.includes(token), token);

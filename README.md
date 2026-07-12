@@ -2,6 +2,116 @@
 
 Qt Project Manager and Build (QPM) provides a project-oriented Qt/C++ workflow in Visual Studio Code. Projects can use QPM's direct `moc`/`uic`/`rcc` build engine, qmake or CMake, while kits keep the Qt installation, compiler, debugger, environment and build tools consistent per project.
 
+## Version 0.15.0 — Publication and application updates
+
+Version 0.15.0 adds a complete desktop release-publication layer on top of QPM packaging and installer workflows. Projects can generate Windows MSIX packages, `.appinstaller` update descriptors, WinGet manifest sets, release metadata and SHA-256 checksum files, then publish the assembled bundle to a local directory, an SSH/rsync destination or a GitHub Release.
+
+A dedicated **Qt Publication & Updates** view reports product identity, release channel, tool readiness, output paths and blocking configuration issues. The same actions are available from Qt Project Settings and the consolidated editor/Explorer context menus.
+
+### Manifest schema v15
+
+Schema v15 adds a top-level `publication` section. It contains release-channel and artifact-selection settings, MSIX/App Installer identity and update behavior, WinGet metadata, GitHub Release options and local/SSH publication targets. Existing schema-v1 through schema-v14 projects migrate automatically with a sibling backup.
+
+The publication workflow supports:
+
+- Windows SDK `MakeAppx` discovery and MSIX creation from the portable Qt staging directory;
+- optional MSIX signing through the existing SignTool/certificate configuration;
+- `.appinstaller` generation with launch-time and background update policies;
+- WinGet version, installer and default-locale manifests plus CLI validation when available;
+- release bundles containing portable packages, desktop installers, MSIX, Qt IFW repositories and WinGet metadata;
+- `release.json`, `latest.json`, Markdown release notes and `SHA256SUMS.txt` generation;
+- local-directory publication, SSH upload through `scp` or `rsync`, and GitHub Release creation through `gh`;
+- secret-free manifests: authentication remains delegated to certificate environment variables, SSH keys and authenticated CLI sessions.
+
+## Version 0.14.0 — Apple platforms
+
+Version 0.14.0 adds project-local **macOS**, **iOS Simulator** and **iOS Device** platform profiles. QPM detects Xcode and its command-line tools, generates isolated CMake/Xcode projects for iOS, builds with `xcodebuild`, manages iOS simulators through `simctl`, deploys macOS application bundles with `macdeployqt`, and exposes signing, verification, notarization and ticket-stapling workflows.
+
+A dedicated **Qt Apple Platforms** view reports host/tool readiness and provides configuration, build, deployment, DMG, signature, notarization, simulator and output-management commands. Apple actions remain visible on non-macOS hosts but are reported as unavailable instead of attempting unsupported commands.
+
+### Manifest schema v14
+
+Schema v14 extends platform profiles with Xcode paths, bundle identity, deployment target, architectures, development team, signing identity, provisioning, entitlements, simulator/device selection, DMG options, hardened runtime, timestamping, `notarytool` keychain profile and additional CMake/Xcode/macdeployqt arguments. Existing schema-v1 through schema-v13 projects migrate automatically with a sibling backup.
+
+The Apple workflow supports:
+
+- macOS app-bundle deployment and optional DMG creation through `macdeployqt`;
+- iOS Xcode-project generation with `qt-cmake`;
+- iOS Simulator selection, boot, install and launch through `xcrun simctl`;
+- automatic or manual Xcode signing configuration;
+- `codesign` verification and Gatekeeper assessment;
+- Developer ID notarization through `xcrun notarytool`;
+- notarization ticket attachment through `xcrun stapler`;
+- per-project tool overrides and Apple build arguments.
+
+## Version 0.13.2 — Last active workspace restoration
+
+Version 0.13.2 corrects QPM startup persistence. The workspace explicitly loaded most recently in the current VS Code window is now restored before QPM evaluates project-folder association markers. An older project folder that remains in the VS Code window can therefore no longer replace the active Qt Quick workspace after an application restart.
+
+QPM persists the selected `.cws`, `.qtproject.json` or compatibility `.prj` path in both window-local state and a global fallback. The local value preserves the workspace selected for a specific VS Code window; the global value covers empty and untitled windows whose local identity may change between launches. Folder associations and exact-folder discovery remain fallback mechanisms when no valid explicit selection exists.
+
+## Version 0.13.1 — qmlls client compatibility
+
+Version 0.13.1 hardens the QML Language Server client introduced in 0.13.0. QPM now accepts the dotted `workspace.didChangeWatchedFiles` dynamic-registration method emitted by affected `qmlls` builds while its project watchers continue forwarding standard file-change notifications. C/C++ sources, headers and CMake fragments are included so external edits to QML type registrations are visible to the server.
+
+QML Language Server startup is serialized, the **Start QPM qmlls anyway** action continues the current startup operation, and generated `.qmlls.ini` files are updated only when their content changes. This removes duplicate generation messages and avoids competing automatic/manual server starts.
+
+## Version 0.13.0 — QML Language Server and modules
+
+Version 0.13.0 adds project-scoped QML code intelligence through Qt's `qmlls` executable. QPM resolves `qmlls` from the active Qt kit, starts and stops it through a VS Code Language Server client, publishes the active build directories and supplies the project, module and Qt import roots.
+
+A dedicated **QML Language & Modules** view exposes server state, readiness, duplicate-server protection, `.qmlls.ini` generation, `qmldir` generation, reports, server output and protocol traces. Qt Quick and Qt Quick Test projects enable automatic startup by default, while other project kinds remain opt-in.
+
+### Manifest schema v13
+
+Schema v13 adds a top-level `qml` configuration containing language-server lifecycle, executable override, build/import paths, CMake behavior, trace level, official-extension conflict policy and module URI/version/import-root/resource-prefix metadata. Existing schema-v1 through schema-v12 projects migrate automatically with a sibling backup.
+
+The QML workflow supports:
+
+- kit-local `qmlls` discovery and per-project executable overrides;
+- active build-directory publication through the QML Language Server protocol;
+- explicit and environment-based QML import roots;
+- generated or user-managed `.qmlls.ini` files;
+- generated `qmldir` files with `pragma Singleton` detection;
+- QML syntax/language configuration before the server starts;
+- automatic restart when the active native project changes;
+- duplicate-diagnostic protection when the official Qt QML extension is installed.
+
+## Version 0.12.3 — Unified opaque settings header
+
+Version 0.12.3 refines the Qt Project Settings scrolling experience after the dynamic-height correction introduced in 0.12.2. The action toolbar and filter/navigation row now live inside one opaque sticky container. This removes the transparent interstice that previously allowed settings cards to remain visible between the two fixed rows while scrolling.
+
+The complete sticky container is measured with `ResizeObserver`, so section jumps and `scroll-margin-top` continue to adapt to wrapped buttons, window resizing and editor zoom. The desktop installer workflow validated in 0.12.2 is unchanged.
+
+## Version 0.12.2 — Qt deployment and settings navigation
+
+Version 0.12.2 selects the `windeployqt` runtime mode from the Qt DLLs actually linked by the target, prepares the selected kit environment and keeps the settings filter visible when the action toolbar wraps.
+
+## Version 0.12.1 — Desktop installers, updates and signing
+
+Version 0.12.1 retains the desktop distribution workflow introduced in 0.12.0 and corrects Windows build-directory preparation, `windres` output creation and Inno Setup command-line compiler selection. QPM can generate and compile installers with **Qt Installer Framework**, **Inno Setup** or **NSIS**, create Qt IFW update repositories and sign Windows executables with **SignTool**.
+
+A dedicated **Qt Installers & Signing** view reports backend readiness and provides installer generation, source generation, repository creation, signing, verification, report and cleanup actions. The same commands are grouped under **QPM → Installers / signing** in editor and Explorer context menus.
+
+### Manifest schema v12
+
+Schema v12 adds `packaging.installer` with shared installer identity/output settings and backend-specific sections for Qt IFW, Inno Setup, NSIS and Authenticode. Existing schema-v1 through schema-v11 projects migrate automatically with a sibling backup.
+
+The installer workflow supports:
+
+- rebuilding or reusing the portable package staging directory;
+- offline, online and hybrid Qt IFW installers;
+- generated Qt IFW `config.xml`, package metadata and shortcut scripts;
+- Qt IFW update repositories through `repogen`;
+- generated or custom Inno Setup `.iss` scripts;
+- generated or custom NSIS `.nsi` scripts;
+- automatic tool discovery with per-project executable overrides;
+- signing the staged target and/or final installer;
+- certificate selection by PFX, thumbprint, subject or automatic store selection;
+- RFC 3161 timestamping and post-signature verification.
+
+Certificate passwords are referenced by environment-variable name only. QPM does not write the secret into the project manifest, reports or command previews.
+
 ## Version 0.11.0 — Android and devices
 
 Version 0.11.0 adds project-local **Qt for Android** profiles, environment detection and device workflows. QPM detects Android SDK/NDK/JDK installations, Qt Android kits, CMake/Ninja, `androiddeployqt`, ADB, command-line SDK tools and emulators. A dedicated **Qt Android & Devices** view provides configuration, package build, installation, launch, uninstall, wait-for-debugger and logcat actions.
@@ -62,7 +172,7 @@ Version 0.7.3 consolidates every editor and Explorer right-click action behind a
 
 The **Qt Project Settings** webview is now a searchable control center with section navigation, contextual fields, file/folder browsers, preset suggestions, unsaved-change feedback and keyboard-accessible help icons. Platform-, backend- and debugger-specific controls are shown only when relevant, while specialist profile and kit editors remain directly accessible from the same page.
 
-The accompanying functional audit identifies the remaining high-value gaps compared with Qt Creator: packaging and signing, CTest/Boost.Test, QML language-server integration and profiling, CPU/memory analyzers, Android/device workflows and stronger real-toolchain CI coverage.
+The accompanying functional audit originally identified packaging, extended testing, profiling, Android and QML language-server integration as the main gaps. These workflows are now covered; the remaining emphasis is physical Apple/Android toolchain validation, store publication and deeper platform-specific debugging.
 
 ## Version 0.7.2 — Build-mode toolbar and categorized snippets
 
@@ -430,13 +540,20 @@ Qt Project Manager: Synchronize Qt/C++ IntelliSense Configuration
 Qt Project Manager: Open File in Qt Widgets Designer
 Qt Project Manager: Deploy Qt Runtime
 Qt Project Manager: Open Qt Project Health Report
+Qt Project Manager: Start QML Language Server
+Qt Project Manager: Generate .qmlls.ini
+Qt Project Manager: Generate qmldir
+Qt Project Manager: Configure Apple Environment
+Qt Project Manager: Build Apple Target
+Qt Project Manager: Create macOS DMG
+Qt Project Manager: Notarize Apple Artifact
 ```
 
 Build, rebuild, clean, run and debug are also available from the QPM activity bar and project context menus.
 
 ## Current validated scope
 
-The primary validated workflow is Qt 6 dynamic desktop development on Windows with MinGW 64-bit. The direct backend supports Widgets, Console, Quick, shared-library and static-library project models. qmake, CMake, MSVC, static Qt kits, mobile targets and advanced QML debugging are planned but are not yet implemented as complete QPM backends.
+The primary physically validated workflow is Qt 6 dynamic desktop development on Windows with MinGW 64-bit. The direct backend supports Widgets, Console, Quick, shared-library and static-library project models. qmake, CMake, MSVC, Android, macOS/iOS, remote Linux, WebAssembly, QML debugging/language tooling, portable packaging and desktop installers are implemented, with platform-specific workflows requiring the corresponding external SDKs and tools.
 
 ## Development
 

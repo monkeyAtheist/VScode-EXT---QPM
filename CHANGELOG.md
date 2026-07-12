@@ -1,3 +1,172 @@
+# 0.15.0
+
+### Added
+
+- Added manifest schema version 15 with project-local publication, MSIX, App Installer, WinGet, GitHub Release and SSH/local deployment settings.
+- Added a **Qt Publication & Updates** tree view with tool readiness, output paths, validation state and release actions.
+- Added Windows SDK `MakeAppx` discovery and MSIX packaging from the existing portable Qt staging directory.
+- Added generated MSIX application manifests, correctly sized fallback PNG assets and optional SignTool signing.
+- Added `.appinstaller` generation with configurable on-launch, prompt, activation-blocking, force-update and background-task policies.
+- Added WinGet version, installer and default-locale manifest generation and validation.
+- Added release-bundle assembly with portable packages, installers, MSIX/App Installer artifacts, Qt IFW repositories, WinGet manifests, release notes, JSON update metadata and SHA-256 checksums.
+- Added local directory, SSH/`scp`, SSH/`rsync` and GitHub Release publication backends.
+- Added publication settings, help text, file/folder browsers and direct actions to Qt Project Settings.
+- Added consolidated **Publication / updates** editor and Explorer context menus.
+
+### Changed
+
+- Qt Project Health now reports publication readiness and blocking configuration errors.
+- Release metadata and checksum files are stored inside the versioned release bundle so every publication backend uploads a self-contained directory.
+- GitHub publication can replace assets on an existing release when the clobber option is enabled.
+- Local publication rejects drive roots and the project root as destructive destinations.
+
+### Validation
+
+- Added schema/default/migration coverage from schema 14 to schema 15.
+- Added MSIX, App Installer and WinGet generator checks.
+- Added a simulated end-to-end MakeAppx invocation and validation of generated MSIX assets.
+- Full regression from QPM 0.2.0 through QPM 0.15.0 passes.
+
+# 0.14.0
+
+### Added
+
+- Added manifest schema version 14 with macOS, iOS Simulator and iOS Device platform profiles and migration from schemas 1 through 13.
+- Added a **Qt Apple Platforms** view for Xcode readiness, platform identity, signing, simulators, reports and generated artifacts.
+- Added Xcode developer-directory, `xcodebuild`, `xcrun`, `codesign`, `security`, `hdiutil`, `spctl`, `macdeployqt`, `qt-cmake` and CMake detection.
+- Added isolated iOS CMake/Xcode project generation without modifying the user CMake project.
+- Added iOS Simulator discovery, selection, boot, application installation and launch through `simctl`.
+- Added macOS runtime deployment and DMG creation through `macdeployqt`.
+- Added Apple code signing, signature verification, Gatekeeper assessment, Developer ID notarization and ticket stapling.
+- Added Apple platform settings to Qt Project Settings and the consolidated QPM context menus.
+
+### Changed
+
+- Generic platform build/deploy/run commands now route Apple profiles through the Apple backend.
+- Qt Platform capability reports now include Apple SDK, Xcode, simulator, signing and notarization readiness.
+- Direct builds are automatically switched to CMake for iOS profiles because the generated Xcode workflow requires CMake.
+
+### Validation
+
+- Added schema/default/migration tests, simulator JSON parsing, generated CMake/Xcode checks, command/view/menu coverage and source-level checks for `macdeployqt`, `xcodebuild`, `simctl`, `codesign`, `notarytool` and `stapler`.
+- Full regression from QPM 0.2.0 through QPM 0.14.0 passes.
+- Apple execution is structurally validated on the packaging host; physical validation still requires macOS, Xcode and matching Qt macOS/iOS kits.
+
+# 0.13.2
+
+### Fixed
+
+- Restored the QPM workspace explicitly loaded most recently in the current VS Code window before evaluating project-folder association markers.
+- Prevented an older associated workspace, such as a previously opened Widgets project, from replacing the current Qt Quick workspace after restarting VS Code.
+- Added a global last-workspace fallback for empty or untitled VS Code windows whose `workspaceState` identity may not survive a full application restart.
+- Normalized persisted workspace paths and synchronized window-local and global persistence whenever a workspace or standalone project is loaded.
+- Avoided retrying the same folder association during startup fallback discovery.
+
+### Validation
+
+- Added a regression that simulates `QtQuickApp` being active while an older `Test` project-folder association remains open, then verifies the same workspace is restored after a VS Code relaunch.
+- Added coverage for the global fallback used by empty VS Code windows.
+- All QML Language Server and installer workflows from 0.13.1 remain unchanged.
+
+# 0.13.1
+
+### Fixed
+
+- Added a compatibility registration for the dotted `workspace.didChangeWatchedFiles` capability emitted by some `qmlls` builds, preventing the language client warning and preserving external file-change tracking.
+- Expanded QPM-managed QML Language Server watchers to C/C++ headers, sources and CMake fragments so changes to registered QML types are forwarded to `qmlls`.
+- Serialized QML Language Server startup to prevent concurrent automatic/manual starts and duplicate `.qmlls.ini` generation.
+- Avoided rewriting or logging `.qmlls.ini` when the generated content is already current.
+- Continued the same startup operation when the user chooses **Start QPM qmlls anyway**, rather than recursively starting a second operation.
+
+### Validation
+
+- Added a regression test for qmlls file-watcher compatibility, startup serialization, expanded source watching and idempotent configuration generation.
+- The official Qt QML extension conflict policy remains unchanged: QPM still avoids a duplicate server by default and starts only after explicit confirmation.
+
+# 0.13.0
+
+### Added
+
+- Added manifest schema version 13 with project-local QML Language Server and QML module metadata, including migration from schemas 1 through 12.
+- Added a **QML Language & Modules** view for qmlls readiness, lifecycle, build-directory synchronization, configuration files, module metadata, reports and protocol output.
+- Added a QPM-managed Language Server Protocol client using the `qmlls` executable from the active Qt kit or a project override.
+- Added project-aware build-directory publication through `$/addBuildDirs`, explicit QML import roots and Qt/QML environment preparation.
+- Added automatic `.qmlls.ini` generation with preservation of user-managed configuration files.
+- Added `qmldir` generation from registered QML files, including singleton detection and persistent module URI/version/import-root settings.
+- Added QML language and TextMate grammar contributions so `.qml` files receive QML editing behavior before the language server starts.
+- Added duplicate-server protection for the official Qt QML extension, with an explicit opt-in parallel mode.
+
+### Changed
+
+- Qt installation discovery and readiness reports now include `qmlls`.
+- Qt Project Settings now contains a complete QML language/module section with executable, build/import directories, tracing, conflict policy and module identity controls.
+- Qt Quick and Qt Quick Test projects enable and auto-start QML Language Server by default; non-QML project types keep it disabled.
+- The extension host entry point is bundled with `vscode-languageclient`; the VSIX continues to exclude `node_modules`, TypeScript sources, tests and source maps.
+
+### Validation
+
+- Added schema/default/migration tests, QML contribution tests, language-client wiring checks, settings coverage and runtime-dependency packaging checks.
+- Automated validation remains structural and simulated; a physical `qmlls` session should be verified with the locally installed Qt kit.
+
+# 0.12.3
+
+### Fixed
+
+- Replaced the two independent sticky layers in Qt Project Settings with one opaque sticky header containing both the action toolbar and the filter/navigation row.
+- Removed the transparent toolbar margin and independent navigation offset that allowed scrolled settings content to appear between the two rows.
+- Kept section navigation accurate by measuring the complete sticky header with `ResizeObserver` and applying its height to section `scroll-margin-top`.
+
+### Validation
+
+- Added a regression test verifying the unified wrapper, opaque background, static child rows and removal of the obsolete toolbar-gap calculation.
+
+# 0.12.2
+
+### Fixed
+
+- Selected the `windeployqt` Debug or Release mode from the Qt runtime DLLs actually imported by the executable.
+- Added the selected Qt kit, compiler runtime, plugin and QML directories to the deployment environment.
+- Passed explicit `qtpaths` and deployment-directory arguments to `windeployqt`.
+- Replaced the fixed settings-navigation offset with dynamic height measurement for wrapped action buttons.
+
+# 0.12.1
+
+### Fixed
+
+- Fixed native-project preparation so every code-generation output directory is created before launching `uic`, `rcc`, `moc` or `windres`; this specifically creates `build/<mode>/obj` before writing `qpm_product_metadata.o`.
+- Removed build-directory creation from background IntelliSense synchronization to prevent concurrent Windows `mkdir` operations against `build/<mode>/generated`.
+- Added parent-first directory creation, longer transient-lock retries, post-race verification, Windows command-shell fallback and detailed directory diagnostics for `EPERM`, `EACCES`, `EBUSY` and `ENOENT`.
+- Corrected Inno Setup executable selection: choosing `Compil32.exe` now automatically uses the sibling command-line compiler `ISCC.exe`.
+
+### Validation
+
+- Added a regression test covering windres output-directory preparation, IntelliSense/build ownership separation and `Compil32.exe` to `ISCC.exe` normalization.
+
+# 0.12.0
+
+### Added
+
+- Added manifest schema version 12 with project-local desktop installer and Authenticode settings, including migration from schemas 1 through 11.
+- Added the **Qt Installers & Signing** view and a consolidated **Installers / signing** submenu for editor and Explorer contexts.
+- Added Qt Installer Framework project generation with `config.xml`, component metadata, optional controller/component scripts, offline/online/hybrid modes and portable staging import.
+- Added Qt IFW update-repository generation through `repogen`.
+- Added generated Inno Setup and NSIS installer scripts, plus support for custom `.iss` and `.nsi` scripts.
+- Added automatic discovery and explicit overrides for `binarycreator`, `repogen`, `installerbase`, `ISCC`, `makensis` and Windows SDK `signtool`.
+- Added Authenticode signing and signature verification for target binaries and generated installers, with RFC 3161 timestamping and configurable SHA-2 digests.
+- Added installer readiness to Qt Project Health and a Markdown installer/signing report.
+
+### Changed
+
+- Qt Project Settings now contains a complete installer section with backend-specific controls, path selectors, suggestions and contextual help.
+- Portable packaging remains the staging source for installer workflows, avoiding modifications to user CMake or qmake projects.
+- Certificate passwords are read only from a configured environment variable and are never persisted in `.qtproject.json` or command previews.
+
+### Known limitations
+
+- Inno Setup, NSIS and Authenticode signing require Windows and separately installed tools or a Windows SDK.
+- Automated validation uses simulated Qt IFW tools. A physical Release build should still be tested with the locally installed Qt Installer Framework, certificate and timestamp service.
+- macOS code signing/notarization, Microsoft Store publication and package-manager publication are not automated in this version.
+
 # 0.11.0
 
 ### Added

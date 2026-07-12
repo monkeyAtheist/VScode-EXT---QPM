@@ -11,6 +11,7 @@ import { QpmQtProjectService } from './qpmQtProjectService';
 import { inspectQpmWorkspaceAssociation, removeQpmWorkspaceAssociation, writeQpmWorkspaceAssociation } from '../utils/qpmWorkspaceAssociation';
 
 const LAST_WORKSPACE_KEY = 'qpm.lastWorkspace';
+const GLOBAL_LAST_WORKSPACE_KEY = 'qpm.lastWorkspace.global';
 
 export class QpmWorkspaceService implements vscode.Disposable {
   private workspace: QpmWorkspace | undefined;
@@ -74,25 +75,54 @@ export class QpmWorkspaceService implements vscode.Disposable {
   }
 
   async restoreOrAutoLoad(): Promise<void> {
+    const attempted = new Set<string>();
+    let restoreFailure: string | undefined;
+
+    // The workspace explicitly loaded in this VS Code window must win over a
+    // project-folder association. Otherwise an older folder that remains open
+    // can silently replace the user's most recently selected QPM workspace on
+    // the next VS Code launch.
+    const windowWorkspace = this.context.workspaceState.get<string>(LAST_WORKSPACE_KEY);
+    if (windowWorkspace) {
+      attempted.add(this.workspacePersistenceIdentity(windowWorkspace));
+      if (await this.tryRestoreWorkspace(windowWorkspace, 'last used workspace for this VS Code window')) {
+        return;
+      }
+      await this.context.workspaceState.update(LAST_WORKSPACE_KEY, undefined);
+      restoreFailure = `The last Qt workspace for this VS Code window no longer exists or has no existing project: ${windowWorkspace}`;
+    }
+
     const associatedWorkspace = this.findAssociatedWorkspaceFromOpenFolders();
-    if (associatedWorkspace) {
+    if (associatedWorkspace && !attempted.has(this.workspacePersistenceIdentity(associatedWorkspace))) {
+      attempted.add(this.workspacePersistenceIdentity(associatedWorkspace));
       if (await this.tryRestoreWorkspace(associatedWorkspace, 'folder association')) {
         return;
       }
-      await this.clearPersistedWorkspace(`The associated Qt workspace is no longer usable: ${associatedWorkspace}`);
-      return;
+      restoreFailure ??= `The associated Qt workspace is no longer usable: ${associatedWorkspace}`;
     }
 
-    const lastWorkspace = this.context.workspaceState.get<string>(LAST_WORKSPACE_KEY);
-    if (lastWorkspace) {
-      if (await this.tryRestoreWorkspace(lastWorkspace, 'last used workspace')) {
+    // Empty/untitled VS Code windows do not always keep a stable workspaceState
+    // identity. Keep a global fallback so the last explicitly loaded QPM
+    // workspace can still be restored after a complete application restart.
+    const globalWorkspace = this.context.globalState?.get<string>(GLOBAL_LAST_WORKSPACE_KEY);
+    if (globalWorkspace && !attempted.has(this.workspacePersistenceIdentity(globalWorkspace))) {
+      attempted.add(this.workspacePersistenceIdentity(globalWorkspace));
+      if (await this.tryRestoreWorkspace(globalWorkspace, 'last globally used workspace')) {
+        await this.context.workspaceState.update(LAST_WORKSPACE_KEY, path.resolve(globalWorkspace));
         return;
       }
-      await this.clearPersistedWorkspace(`The last Qt workspace no longer exists or has no existing project: ${lastWorkspace}`);
-      return;
+      await this.context.globalState?.update(GLOBAL_LAST_WORKSPACE_KEY, undefined);
+      restoreFailure ??= `The last globally used Qt workspace no longer exists or has no existing project: ${globalWorkspace}`;
+    } else if (globalWorkspace && attempted.has(this.workspacePersistenceIdentity(globalWorkspace)) && restoreFailure) {
+      await this.context.globalState?.update(GLOBAL_LAST_WORKSPACE_KEY, undefined);
     }
 
-    await this.autoLoad();
+    await this.autoLoad(true);
+    if (!this.workspace && restoreFailure) {
+      this.output.appendLine(`[QPM] ${restoreFailure}`);
+      this.output.appendLine('[QPM] Starting with the blank Qt Project Manager page.');
+      this.changeEmitter.fire();
+    }
   }
 
   private async tryRestoreWorkspace(filePath: string, source: string): Promise<boolean> {
@@ -128,21 +158,36 @@ export class QpmWorkspaceService implements vscode.Disposable {
     return workspace.projects.length === 0 || workspace.projects.some((project) => project.exists);
   }
 
+  private workspacePersistenceIdentity(filePath: string): string {
+    const resolved = path.resolve(filePath);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  }
+
+  private async persistLastWorkspace(filePath: string): Promise<string> {
+    const resolved = path.resolve(filePath);
+    await this.context.workspaceState.update(LAST_WORKSPACE_KEY, resolved);
+    await this.context.globalState?.update(GLOBAL_LAST_WORKSPACE_KEY, resolved);
+    return resolved;
+  }
+
   private async clearPersistedWorkspace(reason: string): Promise<void> {
     this.workspace = undefined;
     await this.context.workspaceState.update(LAST_WORKSPACE_KEY, undefined);
+    // Keep the global fallback here: this method is also used when a single
+    // folder association becomes stale, which must not erase another valid
+    // workspace that was last used in a different VS Code window.
     this.output.appendLine(`[QPM] ${reason}`);
     this.output.appendLine('[QPM] Starting with the blank Qt Project Manager page.');
     this.changeEmitter.fire();
   }
 
-  async autoLoad(): Promise<void> {
+  async autoLoad(skipFolderAssociation = false): Promise<void> {
     const enabled = vscode.workspace.getConfiguration('qpm').get<boolean>('autoLoadWorkspace', true);
     if (!enabled || this.workspace) {
       return;
     }
 
-    const associatedWorkspace = this.findAssociatedWorkspaceFromOpenFolders();
+    const associatedWorkspace = skipFolderAssociation ? undefined : this.findAssociatedWorkspaceFromOpenFolders();
     if (associatedWorkspace) {
       if (!(await this.tryRestoreWorkspace(associatedWorkspace, 'folder association'))) {
         await this.clearPersistedWorkspace(`The associated Qt workspace is no longer usable: ${associatedWorkspace}`);
@@ -181,6 +226,7 @@ export class QpmWorkspaceService implements vscode.Disposable {
   }
 
   async load(filePath: string): Promise<void> {
+    filePath = path.resolve(filePath);
     const extension = path.extname(filePath).toLowerCase();
     const nativeManifest = isQtProjectManifestPath(filePath);
     if (extension !== '.cws' && extension !== '.prj' && !nativeManifest) {
@@ -196,7 +242,7 @@ export class QpmWorkspaceService implements vscode.Disposable {
       }
     }
     this.writeWorkspaceAssociationMarkers();
-    await this.context.workspaceState.update(LAST_WORKSPACE_KEY, filePath);
+    filePath = await this.persistLastWorkspace(filePath);
     this.output.appendLine(`[QPM] Loaded ${extension === '.cws' ? 'workspace' : nativeManifest ? 'native Qt project' : 'compatibility project'}: ${filePath}`);
     this.changeEmitter.fire();
     if (extension === '.cws') {
