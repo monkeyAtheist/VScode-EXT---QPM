@@ -1,0 +1,22 @@
+#include "Communication/SPI/SPI.h"
+#include <iostream>
+
+jc_spi::SpiConfig cfg;
+cfg.device = "${1:/dev/spidev0.0}";
+cfg.speedHz = ${2:1000000};
+cfg.mode = ${3:0};
+cfg.bitsPerWord = ${4:8};
+
+jc_spi::SpiDevice spi;
+if (!spi.open(cfg))
+{
+    ${5:throw std::runtime_error("Unable to open SPI device");}
+}
+
+spi.writeRegister8(${6:0x10}, ${7:0x55});
+
+uint8_t value = 0;
+if (spi.readRegister8(${6:0x10}, value))
+{
+    std::cout << "Value: " << static_cast<int>(value) << "\\n";
+}

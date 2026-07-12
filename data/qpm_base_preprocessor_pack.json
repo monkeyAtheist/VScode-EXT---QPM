@@ -1,0 +1,485 @@
+{
+  "id": "qpm.base.preprocessor",
+  "name": "QPM Integrated Pack — C/C++ Preprocessor",
+  "language": "C / C++",
+  "version": "0.8.27-preprocessor-1",
+  "readOnly": true,
+  "environments": [
+    {
+      "name": "C / C++ Preprocessor",
+      "libraries": [
+        {
+          "name": "C/C++ Preprocessor",
+          "categories": [
+            {
+              "name": "Directives, macros and conditional compilation",
+              "functions": [],
+              "groups": [
+                {
+                  "name": "Preprocessor, feature detection & attributes",
+                  "functions": [
+                    {
+                      "name": "#include header",
+                      "returnType": "preprocessor",
+                      "signature": "#include <header>",
+                      "insertText": "#include {{header}}",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Include a header file.",
+                      "longDescription": "Include a header file.\n\nExample workflow — #include:\n```c\n#include <stdio.h>\n#include \"my_module.h\"\n```",
+                      "parameters": [
+                        {
+                          "name": "header",
+                          "type": "header token",
+                          "description": "Header including <...> or \"...\".",
+                          "defaultValue": "<stdio.h>",
+                          "editorType": "enum",
+                          "options": [
+                            {
+                              "value": "<stdio.h>",
+                              "label": "<stdio.h>",
+                              "description": "Standard input/output declarations such as FILE, fopen, printf and snprintf."
+                            },
+                            {
+                              "value": "<stdlib.h>",
+                              "label": "<stdlib.h>",
+                              "description": "General utilities such as allocation, conversion, process termination and sorting."
+                            },
+                            {
+                              "value": "<string.h>",
+                              "label": "<string.h>",
+                              "description": "Byte-string and memory manipulation declarations such as strlen, memcpy and memmove."
+                            },
+                            {
+                              "value": "<stdint.h>",
+                              "label": "<stdint.h>",
+                              "description": "Fixed-width integer types such as uint8_t, int32_t and uint64_t."
+                            },
+                            {
+                              "value": "<stdbool.h>",
+                              "label": "<stdbool.h>",
+                              "description": "Boolean type support through bool, true and false."
+                            },
+                            {
+                              "value": "<stddef.h>",
+                              "label": "<stddef.h>",
+                              "description": "Core definitions such as size_t, ptrdiff_t, NULL and offsetof."
+                            },
+                            {
+                              "value": "<errno.h>",
+                              "label": "<errno.h>",
+                              "description": "Thread-local error indicator errno and symbolic error constants."
+                            },
+                            {
+                              "value": "\"my_header.h\"",
+                              "label": "\"my_header.h\"",
+                              "description": "Project-local header resolved relative to the current source file or include path."
+                            }
+                          ],
+                          "pickerConfig": {
+                            "title": "Select value for #include header.header",
+                            "selectionLabel": "Selected value",
+                            "subtitle": "Header including <...> or \"...\".",
+                            "multiSelect": false,
+                            "valueSeparator": " | ",
+                            "emptyValue": "",
+                            "applyDefaultIfEmpty": false,
+                            "sections": [
+                              {
+                                "label": "Documented choices",
+                                "description": "Each choice includes a contextual description for the selected API parameter.",
+                                "groups": []
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "declaration": "#include <header>",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "#define object-like macro",
+                      "returnType": "preprocessor",
+                      "signature": "#define NAME value",
+                      "insertText": "#define {{name}} {{value}}",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Define an object-like macro.",
+                      "longDescription": "Define an object-like macro.\n\nExample workflow — #define object-like macro:\n```c\n#define BUFFER_SIZE 256U\n```",
+                      "parameters": [
+                        {
+                          "name": "name",
+                          "type": "macro identifier",
+                          "description": "Macro name.",
+                          "defaultValue": "BUFFER_SIZE"
+                        },
+                        {
+                          "name": "value",
+                          "type": "replacement list",
+                          "description": "Replacement value.",
+                          "defaultValue": "256u"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "declaration": "#define NAME value",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "#define function-like macro",
+                      "returnType": "preprocessor",
+                      "signature": "#define NAME(args) body",
+                      "insertText": "#define {{name}}({{arguments}}) {{body}}",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Define a function-like macro.",
+                      "longDescription": "Define a function-like macro.\n\nExample workflow — #define function-like macro:\n```c\n#define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))\n```",
+                      "parameters": [
+                        {
+                          "name": "name",
+                          "type": "macro identifier",
+                          "description": "Macro name.",
+                          "defaultValue": "MIN"
+                        },
+                        {
+                          "name": "arguments",
+                          "type": "macro parameters",
+                          "description": "Macro parameters.",
+                          "defaultValue": "a, b"
+                        },
+                        {
+                          "name": "body",
+                          "type": "replacement list",
+                          "description": "Macro body.",
+                          "defaultValue": "((a) < (b) ? (a) : (b))"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "declaration": "#define NAME(args) body",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "#if defined guard",
+                      "returnType": "preprocessor",
+                      "signature": "#if defined(NAME) ... #endif",
+                      "insertText": "#if defined({{symbol}})\n{{body}}\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Conditionally compile when a symbol is defined.",
+                      "longDescription": "Conditionally compile when a symbol is defined.",
+                      "parameters": [
+                        {
+                          "name": "symbol",
+                          "type": "macro identifier",
+                          "description": "Symbol to test.",
+                          "defaultValue": "_WIN32"
+                        },
+                        {
+                          "name": "body",
+                          "type": "preprocessor/body",
+                          "description": "Compiled block.",
+                          "defaultValue": "/* Windows-specific code */"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "declaration": "#if defined(NAME) ... #endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "include guard",
+                      "returnType": "preprocessor",
+                      "signature": "#ifndef HEADER_H ... #endif",
+                      "insertText": "#ifndef {{guard}}\n#define {{guard}}\n\n{{body}}\n\n#endif /* {{guard}} */",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Classic include guard for C headers.",
+                      "longDescription": "Classic include guard for C headers.\n\nExample workflow — Header guard:\n```c\n#ifndef MY_HEADER_H\n#define MY_HEADER_H\n\n\n#endif /* MY_HEADER_H */\n```",
+                      "parameters": [
+                        {
+                          "name": "guard",
+                          "type": "macro identifier",
+                          "description": "Guard macro.",
+                          "defaultValue": "MY_HEADER_H"
+                        },
+                        {
+                          "name": "body",
+                          "type": "header contents",
+                          "description": "Declarations.",
+                          "defaultValue": "/* declarations */"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "declaration": "#ifndef HEADER_H ... #endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "__has_include feature probe",
+                      "returnType": "snippet",
+                      "signature": "#if defined(__has_include)\n#  if __has_include(<threads.h>)\n#    include <threads.h>\n#    define HAVE_C11_THREADS 1\n#  endif\n#endif",
+                      "insertText": "#if defined(__has_include)\n#  if __has_include(<threads.h>)\n#    include <threads.h>\n#    define HAVE_C11_THREADS 1\n#  endif\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Probe for an optional header when the compiler supports __has_include.",
+                      "longDescription": "Probe for an optional header when the compiler supports __has_include.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#if defined(__has_include)\n#  if __has_include(<threads.h>)\n#    include <threads.h>\n#    define HAVE_C11_THREADS 1\n#  endif\n#endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "C standard version detection",
+                      "returnType": "snippet",
+                      "signature": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n    /* C23 */\n#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L\n    /* C11 */\n#else\n    /* older C */\n#endif",
+                      "insertText": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n    /* C23 */\n#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L\n    /* C11 */\n#else\n    /* older C */\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Select code paths according to __STDC_VERSION__.",
+                      "longDescription": "Select code paths according to __STDC_VERSION__.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n    /* C23 */\n#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L\n    /* C11 */\n#else\n    /* older C */\n#endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "C23 attribute probe",
+                      "returnType": "snippet",
+                      "signature": "#if defined(__has_c_attribute)\n#  if __has_c_attribute(nodiscard)\n#    define NODISCARD [[nodiscard]]\n#  endif\n#endif\n#ifndef NODISCARD\n#  define NODISCARD\n#endif",
+                      "insertText": "#if defined(__has_c_attribute)\n#  if __has_c_attribute(nodiscard)\n#    define NODISCARD [[nodiscard]]\n#  endif\n#endif\n#ifndef NODISCARD\n#  define NODISCARD\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Probe a standard C attribute before using it.",
+                      "longDescription": "Probe a standard C attribute before using it.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#if defined(__has_c_attribute)\n#  if __has_c_attribute(nodiscard)\n#    define NODISCARD [[nodiscard]]\n#  endif\n#endif\n#ifndef NODISCARD\n#  define NODISCARD\n#endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "portable static assert",
+                      "returnType": "snippet",
+                      "signature": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n#  define STATIC_ASSERT(condition, message) static_assert(condition, message)\n#else\n#  define STATIC_ASSERT(condition, message) _Static_assert(condition, message)\n#endif",
+                      "insertText": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n#  define STATIC_ASSERT(condition, message) static_assert(condition, message)\n#else\n#  define STATIC_ASSERT(condition, message) _Static_assert(condition, message)\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Use static_assert in C23 and _Static_assert in C11.",
+                      "longDescription": "Use static_assert in C23 and _Static_assert in C11.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L\n#  define STATIC_ASSERT(condition, message) static_assert(condition, message)\n#else\n#  define STATIC_ASSERT(condition, message) _Static_assert(condition, message)\n#endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "conditional compilation",
+                      "returnType": "snippet",
+                      "signature": "#if defined(_WIN32)\n    /* Windows */\n#elif defined(__linux__)\n    /* Linux */\n#else\n    /* Other platform */\n#endif",
+                      "insertText": "#if defined(_WIN32)\n    /* Windows */\n#elif defined(__linux__)\n    /* Linux */\n#else\n    /* Other platform */\n#endif",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Compile code conditionally for features or platforms.",
+                      "longDescription": "Compile code conditionally for features or platforms.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#if defined(_WIN32)\n    /* Windows */\n#elif defined(__linux__)\n    /* Linux */\n#else\n    /* Other platform */\n#endif",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    },
+                    {
+                      "name": "stringize and token paste",
+                      "returnType": "snippet",
+                      "signature": "#define STRINGIZE_IMPL(x) #x\n#define STRINGIZE(x) STRINGIZE_IMPL(x)\n#define CONCAT_IMPL(a, b) a##b\n#define CONCAT(a, b) CONCAT_IMPL(a, b)",
+                      "insertText": "#define STRINGIZE_IMPL(x) #x\n#define STRINGIZE(x) STRINGIZE_IMPL(x)\n#define CONCAT_IMPL(a, b) a##b\n#define CONCAT(a, b) CONCAT_IMPL(a, b)",
+                      "library": "C/C++ Preprocessor",
+                      "category": "Directives, macros and conditional compilation",
+                      "description": "Use # to stringify a macro argument and ## to concatenate tokens.",
+                      "longDescription": "Use # to stringify a macro argument and ## to concatenate tokens.",
+                      "parameters": [],
+                      "symbolKind": "snippet",
+                      "declaration": "#define STRINGIZE_IMPL(x) #x\n#define STRINGIZE(x) STRINGIZE_IMPL(x)\n#define CONCAT_IMPL(a, b) a##b\n#define CONCAT(a, b) CONCAT_IMPL(a, b)",
+                      "header": "",
+                      "environment": "C / C++ Preprocessor"
+                    }
+                  ]
+                },
+                {
+                  "name": "Preprocessor & feature detection",
+                  "functions": [
+                    {
+                      "name": "#pragma once",
+                      "returnType": "preprocessor directive",
+                      "signature": "#pragma once",
+                      "declaration": "#pragma once",
+                      "insertText": "#pragma once",
+                      "description": "Prevent repeated inclusion of a header in supporting compilers.",
+                      "longDescription": "Prevent repeated inclusion of a header in supporting compilers.",
+                      "parameters": [],
+                      "symbolKind": "keyword",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "#include header",
+                      "returnType": "preprocessor directive",
+                      "signature": "#include header",
+                      "declaration": "#include header",
+                      "insertText": "#include {{header}}",
+                      "description": "Include a standard or project header.",
+                      "longDescription": "Include a standard or project header.",
+                      "parameters": [
+                        {
+                          "name": "header",
+                          "type": "header path",
+                          "description": "Header path including delimiters.",
+                          "defaultValue": "<optional>",
+                          "editorType": "pathFile"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "#define object-like macro",
+                      "returnType": "preprocessor directive",
+                      "signature": "#define NAME replacement",
+                      "declaration": "#define NAME replacement",
+                      "insertText": "#define {{name}} {{replacement}}",
+                      "description": "Define an object-like macro.",
+                      "longDescription": "Define an object-like macro.",
+                      "parameters": [
+                        {
+                          "name": "name",
+                          "type": "identifier",
+                          "description": "Macro name.",
+                          "defaultValue": "MAX_SAMPLES"
+                        },
+                        {
+                          "name": "replacement",
+                          "type": "tokens",
+                          "description": "Replacement tokens.",
+                          "defaultValue": "256"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "#define function-like macro",
+                      "returnType": "preprocessor directive",
+                      "signature": "#define NAME(parameters) replacement",
+                      "declaration": "#define NAME(parameters) replacement",
+                      "insertText": "#define {{name}}({{parameters}}) {{replacement}}",
+                      "description": "Define a function-like macro.",
+                      "longDescription": "Define a function-like macro.",
+                      "parameters": [
+                        {
+                          "name": "name",
+                          "type": "identifier",
+                          "description": "Macro name.",
+                          "defaultValue": "SQUARE"
+                        },
+                        {
+                          "name": "parameters",
+                          "type": "tokens",
+                          "description": "Comma-separated macro parameters.",
+                          "defaultValue": "x"
+                        },
+                        {
+                          "name": "replacement",
+                          "type": "tokens",
+                          "description": "Replacement expression.",
+                          "defaultValue": "((x) * (x))"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "#if defined feature guard",
+                      "returnType": "preprocessor directive",
+                      "signature": "#if defined(NAME)",
+                      "declaration": "#if defined(NAME)",
+                      "insertText": "#if defined({{name}})\n    // Feature-specific code.\n#endif",
+                      "description": "Compile one block only when a macro exists.",
+                      "longDescription": "Compile one block only when a macro exists.",
+                      "parameters": [
+                        {
+                          "name": "name",
+                          "type": "identifier",
+                          "description": "Feature macro.",
+                          "defaultValue": "FEATURE_ENABLED"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "__has_include",
+                      "returnType": "preprocessor operator",
+                      "signature": "#if __has_include(header)",
+                      "declaration": "#if __has_include(header)",
+                      "insertText": "#if __has_include({{header}})\n#include {{header}}\n#endif",
+                      "description": "Check whether a header is available before including it.",
+                      "longDescription": "Check whether a header is available before including it.",
+                      "parameters": [
+                        {
+                          "name": "header",
+                          "type": "header path",
+                          "description": "Header path including delimiters.",
+                          "defaultValue": "<optional>",
+                          "editorType": "pathFile"
+                        }
+                      ],
+                      "symbolKind": "macro",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    },
+                    {
+                      "name": "feature-test macro reference",
+                      "returnType": "reference",
+                      "signature": "__cpp_feature",
+                      "declaration": "__cpp_feature",
+                      "insertText": "/*\n Check implementation feature-test macros before relying on a language or library facility.\n Example: __cpp_lib_format, __cpp_lib_expected, __cpp_modules.\n*/",
+                      "description": "Reference standardized feature-test macros for conditional compilation.",
+                      "longDescription": "Reference standardized feature-test macros for conditional compilation.",
+                      "parameters": [],
+                      "symbolKind": "reference",
+                      "environment": "C / C++ Preprocessor",
+                      "library": "C/C++ Preprocessor",
+                      "header": "language preprocessor",
+                      "category": "Directives, macros and conditional compilation"
+                    }
+                  ],
+                  "groups": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

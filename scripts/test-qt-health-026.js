@@ -1,0 +1,14 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'providers', 'qpmQtProjectHealthProvider.ts'), 'utf8');
+assert(packageJson.contributes.views.qpm.some(view => view.id === 'qpm.projectHealth'));
+assert(packageJson.contributes.commands.some(command => command.command === 'qpm.openProjectHealthReport'));
+assert(packageJson.contributes.commands.some(command => command.command === 'qpm.manageQtProfiles'));
+assert(source.includes('Direct build plan'));
+assert(source.includes('Qt/C++ IntelliSense'));
+assert(source.includes('Project profiles'));
+assert(source.includes('Deploy profile'));
+console.log('QPM 0.2.6 Qt Project Health registration tests: PASS');

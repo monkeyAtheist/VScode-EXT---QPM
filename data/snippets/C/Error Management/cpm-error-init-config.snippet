@@ -1,0 +1,6 @@
+#include "cpm_error.h"
+
+CpmError_InitDefaults();
+CpmError_SetEnabled(${1:1});
+CpmError_SetLogFile("${2:logs/cpm_error.log}");
+CpmError_LoadConfig("${3:cpm_error.ini}");

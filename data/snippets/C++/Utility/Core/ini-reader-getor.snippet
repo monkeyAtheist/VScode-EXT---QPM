@@ -1,0 +1,10 @@
+#include "myUtil.h"
+
+jc_utility::iniReader ini;
+if (!ini.load("${1:utility.ini}"))
+{
+    ${2:throw std::runtime_error("Unable to load configuration file");}
+}
+
+const std::string ${3:name} = ini.getOr<std::string>("${4:section}", "${5:key}", "${6:default}");
+const int ${7:value} = ini.getOr<int>("${4:section}", "${8:numericKey}", ${9:0});

@@ -1,0 +1,20 @@
+#include "Communication/I2C/I2C.h"
+#include <iostream>
+
+jc_i2c::I2cConfig cfg;
+cfg.device = "${1:/dev/i2c-1}";
+cfg.slaveAddress = ${2:0x40};
+
+jc_i2c::I2cDevice i2c;
+if (!i2c.open(cfg))
+{
+    ${3:throw std::runtime_error("Unable to open I2C device");}
+}
+
+i2c.writeRegister8(${4:0x01}, ${5:0x7F});
+
+uint8_t value = 0;
+if (i2c.readRegister8(${4:0x01}, value))
+{
+    std::cout << "Value: " << static_cast<int>(value) << "\\n";
+}

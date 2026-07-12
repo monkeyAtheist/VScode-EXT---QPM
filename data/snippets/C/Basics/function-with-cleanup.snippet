@@ -1,0 +1,18 @@
+int ${1:MyFunction}(void)
+{
+    int status = 0;
+    void *resource = NULL;
+
+    resource = malloc(${2:128});
+    if (resource == NULL)
+    {
+        status = -1;
+        goto Cleanup;
+    }
+
+    ${0:/* work */}
+
+Cleanup:
+    free(resource);
+    return status;
+}

@@ -1,0 +1,20 @@
+#include "Communication/comms_listen/CommsListenService.h"
+#include <iostream>
+
+jc_comms_listen::CommsListenService listener;
+listener.setEventCallback([](const jc_comms_listen::ListenEvent& ev)
+{
+    std::cout << ev.dir << " " << ev.transport << " " << ev.data << "\\n";
+});
+
+jc_comms_listen::ListenRequest req;
+req.transport = ${1:jc_comms_listen::Transport::Uart};
+req.deviceSpec = "${2:/dev/ttyUSB0@115200}";
+req.rxMode = "${3:line}";
+req.autoReply = ${4:false};
+
+std::string error;
+if (!listener.start(req, &error))
+{
+    ${0:/* Handle startup error. */}
+}

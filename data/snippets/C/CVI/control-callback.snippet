@@ -1,0 +1,17 @@
+int CVICALLBACK ${1:OnControlEvent}(
+    int panel,
+    int control,
+    int event,
+    void *callbackData,
+    int eventData1,
+    int eventData2)
+{
+    switch (event)
+    {
+        case EVENT_COMMIT:
+            ${0:/* handle EVENT_COMMIT */}
+            break;
+    }
+
+    return 0;
+}

@@ -1,0 +1,21 @@
+#include "webui/webui_rt.h"
+
+jc_webui_rt::WebUiRtConfig cfg;
+cfg.bindAddress = "${1:0.0.0.0}";
+cfg.port = ${2:8080};
+cfg.telemetryPeriodMs = ${3:100};
+
+jc_webui_rt::WebUiRtServer server;
+server.setTelemetryProvider([]()
+{
+    return std::string("{\\\"state\\\":\\\"ok\\\"}");
+});
+server.setCommandHandler([](const jc_webui_rt::WebCommandEvent& ev)
+{
+    ${4:/* Handle ev.type, ev.action or ev.rawJson. */}
+});
+
+if (!server.start(cfg))
+{
+    ${0:throw std::runtime_error("Unable to start real-time web UI server");}
+}

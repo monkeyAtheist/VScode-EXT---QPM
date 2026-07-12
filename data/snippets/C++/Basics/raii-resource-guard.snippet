@@ -1,0 +1,16 @@
+class ${1:ResourceGuard}
+{
+public:
+    explicit ${1:ResourceGuard}(${2:Handle} handle) : handle_(handle) {}
+    ~${1:ResourceGuard}()
+    {
+        if (handle_ != ${3:INVALID_HANDLE_VALUE})
+            ${4:CloseHandle}(handle_);
+    }
+
+    ${1:ResourceGuard}(const ${1:ResourceGuard}&) = delete;
+    ${1:ResourceGuard}& operator=(const ${1:ResourceGuard}&) = delete;
+
+private:
+    ${2:Handle} handle_;
+};

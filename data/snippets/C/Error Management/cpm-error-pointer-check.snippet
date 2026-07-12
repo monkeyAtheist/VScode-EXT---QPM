@@ -1,0 +1,12 @@
+#include "cpm_error.h"
+
+int ${1:UseBuffer}(${2:void *buffer})
+{
+    CPM_ERR_PTR(${3:buffer});
+
+    ${0:/* Use the checked pointer here. */}
+    return 0;
+
+error:
+    return g_cpmErrorCode;
+}

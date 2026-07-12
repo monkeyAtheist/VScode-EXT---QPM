@@ -1,0 +1,12 @@
+int panelHandle = -1;
+
+panelHandle = LoadPanel(0, "${1:interface.uir}", ${2:PANEL});
+if (panelHandle < 0)
+    goto Cleanup;
+
+DisplayPanel(panelHandle);
+RunUserInterface();
+
+Cleanup:
+if (panelHandle >= 0)
+    DiscardPanel(panelHandle);

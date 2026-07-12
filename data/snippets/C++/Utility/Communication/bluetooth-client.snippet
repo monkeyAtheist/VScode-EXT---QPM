@@ -1,0 +1,21 @@
+#include "Communication/bluetooth/bluetooth.h"
+#include <iostream>
+
+jc_bluetooth::BluetoothConfig cfg;
+cfg.mode = jc_bluetooth::BluetoothMode::Client;
+cfg.remoteAddress = "${1:DC:A6:32:11:22:33}";
+cfg.channel = ${2:1};
+
+jc_bluetooth::BluetoothLink bt;
+if (!bt.open(cfg))
+{
+    ${3:throw std::runtime_error("Unable to open Bluetooth RFCOMM link");}
+}
+
+bt.writeString("${4:PING}\\n");
+
+std::string line;
+if (bt.readLine(line, '\\n', ${5:1000}))
+{
+    std::cout << "RX: " << line << "\\n";
+}

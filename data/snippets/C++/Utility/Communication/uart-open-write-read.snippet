@@ -1,0 +1,24 @@
+#include "Communication/uart/uart.h"
+#include <iostream>
+
+jc_uart::UartConfig cfg;
+cfg.port = "${1:COM3}";
+cfg.baudrate = ${2:115200};
+cfg.readTimeoutMs = ${3:200};
+cfg.writeTimeoutMs = ${4:200};
+
+jc_uart::Uart uart;
+if (!uart.open(cfg))
+{
+    ${5:throw std::runtime_error("Unable to open UART port");}
+}
+
+uart.writeString("${6:PING}\\n");
+
+std::string line;
+if (uart.readLine(line, '\\n', ${7:500}))
+{
+    std::cout << "RX: " << line << "\\n";
+}
+
+uart.close();

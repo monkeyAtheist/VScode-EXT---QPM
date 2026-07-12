@@ -1,0 +1,19 @@
+#include <windows.h>
+#include <cvirte.h>
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved)
+{
+    switch (reason)
+    {
+        case DLL_PROCESS_ATTACH:
+            if (InitCVIRTE(hModule, 0, 0) == 0)
+                return FALSE;
+            break;
+
+        case DLL_PROCESS_DETACH:
+            CloseCVIRTE();
+            break;
+    }
+
+    return TRUE;
+}

@@ -1,0 +1,9 @@
+$ErrorActionPreference = "Stop"
+
+try {
+    # command
+}
+catch {
+    Write-Error $_
+    exit 1
+}

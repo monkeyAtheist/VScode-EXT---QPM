@@ -1,0 +1,22 @@
+#include "external/pythonExec/pythonExec.h"
+
+jc_python::PythonConfig cfg;
+cfg.pythonExe = "${1:python}";
+cfg.scriptPath = "${2:worker.py}";
+cfg.workingDirectory = "${3:.}";
+
+jc_python::PythonSession session;
+if (!session.start(cfg))
+{
+    ${4:throw std::runtime_error("Unable to start Python worker");}
+}
+
+session.sendJson("${5:{\\\"command\\\":\\\"ping\\\"}}");
+
+std::string reply;
+if (session.receiveJson(reply, ${6:1000}))
+{
+    ${0:/* Process reply JSON. */}
+}
+
+session.close();

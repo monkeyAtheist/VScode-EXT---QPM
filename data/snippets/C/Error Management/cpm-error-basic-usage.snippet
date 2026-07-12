@@ -1,0 +1,17 @@
+#include "cpm_error.h"
+
+int ${1:MyFunction}(void)
+{
+    int status = 0;
+
+    CpmError_InitDefaults();
+    CpmError_LoadConfig("${2:cpm_error.ini}");
+
+    status = ${3:DoWork}();
+    CPM_ERR_CHCK_INFZ(status);
+
+    return 0;
+
+error:
+    return g_cpmErrorCode;
+}

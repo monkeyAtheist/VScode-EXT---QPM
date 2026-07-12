@@ -1,0 +1,20 @@
+#include "Communication/IPC/IPC.h"
+
+jc_ipc::IpcConfig cfg;
+cfg.type = ${1:jc_ipc::PipeType::NamedPipe};
+cfg.role = ${2:jc_ipc::PipeRole::Client};
+cfg.name = "${3:jc_lib_pipe}";
+
+jc_ipc::IpcPipe pipe;
+if (!pipe.open(cfg))
+{
+    ${4:throw std::runtime_error("Unable to open IPC pipe");}
+}
+
+pipe.writeString("${5:PING}\\n");
+
+std::string line;
+if (pipe.readLine(line, '\\n', ${6:500}))
+{
+    ${0:/* Process line. */}
+}

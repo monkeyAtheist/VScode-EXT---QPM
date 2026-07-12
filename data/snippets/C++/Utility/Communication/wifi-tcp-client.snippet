@@ -1,0 +1,16 @@
+#include "Communication/wifi/wifi.h"
+
+jc_wifi::WifiConfig cfg;
+cfg.protocol = ${1:jc_wifi::WifiProtocol::TCP};
+cfg.mode = ${2:jc_wifi::WifiMode::Client};
+cfg.host = "${3:192.168.1.10}";
+cfg.port = ${4:5000};
+
+jc_wifi::WifiLink wifi;
+if (!wifi.open(cfg))
+{
+    ${5:throw std::runtime_error("Unable to open Wi-Fi link");}
+}
+
+wifi.writeString("${6:PING}\\n");
+${0:wifi.close();}

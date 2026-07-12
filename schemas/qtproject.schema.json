@@ -1,0 +1,1799 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qt Project Manager native project (schema v11)",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "name",
+    "kind",
+    "targetName",
+    "qt",
+    "build",
+    "profiles",
+    "files",
+    "testing",
+    "quality",
+    "profiling",
+    "packaging"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 11
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "widgets-application",
+        "console-application",
+        "quick-application",
+        "quick-test-application",
+        "test-application",
+        "shared-library",
+        "static-library"
+      ]
+    },
+    "targetName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^<>:\"/\\\\|?*]+$",
+      "description": "Output base file name; path separators are not permitted."
+    },
+    "qt": {
+      "type": "object",
+      "required": [
+        "majorVersion",
+        "modules",
+        "autoMoc",
+        "autoUic",
+        "autoRcc",
+        "autoDeploy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "installation": {
+          "type": "string"
+        },
+        "majorVersion": {
+          "enum": [
+            "auto",
+            5,
+            6
+          ]
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "autoMoc": {
+          "type": "boolean"
+        },
+        "autoUic": {
+          "type": "boolean"
+        },
+        "autoRcc": {
+          "type": "boolean"
+        },
+        "autoDeploy": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": [
+        "system",
+        "cppStandard",
+        "outputDirectory",
+        "generatedDirectory",
+        "debug",
+        "release"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "system": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "qmake",
+            "cmake"
+          ]
+        },
+        "cppStandard": {
+          "type": "string",
+          "default": "c++17"
+        },
+        "outputDirectory": {
+          "type": "string",
+          "default": "build",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "generatedDirectory": {
+          "type": "string",
+          "default": "generated",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "debug": {
+          "$ref": "#/$defs/buildVariant"
+        },
+        "release": {
+          "$ref": "#/$defs/buildVariant"
+        }
+      }
+    },
+    "files": {
+      "type": "object",
+      "required": [
+        "sources",
+        "headers",
+        "forms",
+        "resources",
+        "qml",
+        "translations",
+        "other"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "headers": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "forms": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "resources": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "qml": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "translations": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "other": {
+          "$ref": "#/$defs/pathArray"
+        }
+      }
+    },
+    "includeDirectories": {
+      "$ref": "#/$defs/pathArray"
+    },
+    "libraryDirectories": {
+      "$ref": "#/$defs/pathArray"
+    },
+    "libraries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "defines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kits",
+        "builds",
+        "runs",
+        "deploys",
+        "debugs",
+        "active",
+        "platforms"
+      ],
+      "properties": {
+        "kits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/kitProfile"
+          }
+        },
+        "builds": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/buildProfile"
+          }
+        },
+        "runs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/runProfile"
+          }
+        },
+        "deploys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/deployProfile"
+          }
+        },
+        "active": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kitProfileId",
+            "debugBuildProfileId",
+            "releaseBuildProfileId",
+            "runProfileId",
+            "deployProfileId",
+            "debugProfileId",
+            "platformProfileId",
+            "buildMode"
+          ],
+          "properties": {
+            "kitProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "debugBuildProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "releaseBuildProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "deployProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "debugProfileId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "platformProfileId": {
+              "$ref": "#/$defs/profileId"
+            },
+            "buildMode": {
+              "type": "string",
+              "enum": [
+                "debug",
+                "release",
+                "debug64",
+                "release64"
+              ]
+            }
+          }
+        },
+        "debugs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/debugProfile"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/platformProfile"
+          }
+        }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framework",
+        "buildBeforeRun",
+        "timeoutMs",
+        "arguments",
+        "environment",
+        "useOffscreenPlatform",
+        "parallelJobs",
+        "stopOnFailure",
+        "repeatMode",
+        "repeatCount",
+        "historyLimit",
+        "ctest",
+        "boost"
+      ],
+      "properties": {
+        "framework": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "qttest",
+            "qtquicktest",
+            "gtest",
+            "catch2",
+            "boost",
+            "ctest"
+          ],
+          "default": "auto"
+        },
+        "buildBeforeRun": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000,
+          "default": 120000
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "useOffscreenPlatform": {
+          "type": "boolean",
+          "default": false
+        },
+        "parallelJobs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256,
+          "default": 0
+        },
+        "stopOnFailure": {
+          "type": "boolean",
+          "default": false
+        },
+        "repeatMode": {
+          "type": "string",
+          "enum": [
+            "never",
+            "until-fail",
+            "after-timeout"
+          ],
+          "default": "never"
+        },
+        "repeatCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 1
+        },
+        "historyLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "default": 100
+        },
+        "ctest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "executable",
+            "buildDirectory",
+            "preset",
+            "configuration",
+            "labelRegex",
+            "nameRegex",
+            "excludeRegex",
+            "outputOnFailure"
+          ],
+          "properties": {
+            "executable": {
+              "type": "string",
+              "default": ""
+            },
+            "buildDirectory": {
+              "type": "string",
+              "default": ""
+            },
+            "preset": {
+              "type": "string",
+              "default": ""
+            },
+            "configuration": {
+              "type": "string",
+              "default": ""
+            },
+            "labelRegex": {
+              "type": "string",
+              "default": ""
+            },
+            "nameRegex": {
+              "type": "string",
+              "default": ""
+            },
+            "excludeRegex": {
+              "type": "string",
+              "default": ""
+            },
+            "outputOnFailure": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "boost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "logLevel",
+            "reportLevel",
+            "randomSeed",
+            "catchSystemErrors"
+          ],
+          "properties": {
+            "logLevel": {
+              "type": "string",
+              "default": "test_suite"
+            },
+            "reportLevel": {
+              "type": "string",
+              "default": "short"
+            },
+            "randomSeed": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "catchSystemErrors": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clangTidyChecks",
+        "clazyChecks",
+        "headerFilter"
+      ],
+      "properties": {
+        "clangTidyChecks": {
+          "type": "string",
+          "default": "bugprone-*,performance-*,portability-*,readability-*,-readability-magic-numbers"
+        },
+        "clazyChecks": {
+          "type": "string",
+          "default": "level0,level1"
+        },
+        "headerFilter": {
+          "type": "string",
+          "default": ".*"
+        },
+        "coverageBuildProfileId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "packaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "productName",
+        "productVersion",
+        "companyName",
+        "description",
+        "copyright",
+        "identifier",
+        "icon",
+        "licenseFile",
+        "readmeFile",
+        "outputDirectory",
+        "packageNamePattern",
+        "archiveFormat",
+        "cleanOutput",
+        "buildBeforePackaging",
+        "includeQtRuntime",
+        "includeTranslations",
+        "includeDebugSymbols",
+        "extraFiles",
+        "windows",
+        "linux"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "productName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "productVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-.][0-9A-Za-z.-]+)?$"
+        },
+        "companyName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "copyright": {
+          "type": "string"
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "icon": {
+          "type": "string"
+        },
+        "licenseFile": {
+          "type": "string"
+        },
+        "readmeFile": {
+          "type": "string"
+        },
+        "outputDirectory": {
+          "type": "string",
+          "default": "dist",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "packageNamePattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "archiveFormat": {
+          "enum": [
+            "folder",
+            "zip",
+            "tar-gz"
+          ]
+        },
+        "cleanOutput": {
+          "type": "boolean"
+        },
+        "buildBeforePackaging": {
+          "type": "boolean"
+        },
+        "includeQtRuntime": {
+          "type": "boolean"
+        },
+        "includeTranslations": {
+          "type": "boolean"
+        },
+        "includeDebugSymbols": {
+          "type": "boolean"
+        },
+        "extraFiles": {
+          "$ref": "#/$defs/pathArray"
+        },
+        "windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "embedVersionResource",
+            "fileDescription",
+            "internalName",
+            "originalFilename",
+            "executionLevel",
+            "dpiAwareness",
+            "manifestFile",
+            "resourceCompilerPath"
+          ],
+          "properties": {
+            "embedVersionResource": {
+              "type": "boolean"
+            },
+            "fileDescription": {
+              "type": "string"
+            },
+            "internalName": {
+              "type": "string"
+            },
+            "originalFilename": {
+              "type": "string"
+            },
+            "executionLevel": {
+              "enum": [
+                "asInvoker",
+                "highestAvailable",
+                "requireAdministrator"
+              ]
+            },
+            "dpiAwareness": {
+              "enum": [
+                "unaware",
+                "system",
+                "per-monitor",
+                "per-monitor-v2"
+              ]
+            },
+            "manifestFile": {
+              "type": "string"
+            },
+            "resourceCompilerPath": {
+              "type": "string"
+            }
+          }
+        },
+        "linux": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "generateDesktopEntry",
+            "appId",
+            "categories",
+            "comment",
+            "installPrefix"
+          ],
+          "properties": {
+            "generateDesktopEntry": {
+              "type": "boolean"
+            },
+            "appId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "comment": {
+              "type": "string"
+            },
+            "installPrefix": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "profiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outputDirectory",
+        "buildBeforeRun",
+        "timeoutMs",
+        "arguments",
+        "environment",
+        "qml",
+        "cpu",
+        "memory",
+        "cppcheck",
+        "tracing"
+      ],
+      "properties": {
+        "outputDirectory": {
+          "type": "string",
+          "default": ".qpm/profiling"
+        },
+        "buildBeforeRun": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000,
+          "default": 300000
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "qml": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "host",
+            "port",
+            "services",
+            "outputFile",
+            "profilerPath"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "host": {
+              "type": "string",
+              "default": "127.0.0.1"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 3769
+            },
+            "services": {
+              "type": "string",
+              "default": "CanvasFrameRate,EngineControl,DebugMessages"
+            },
+            "outputFile": {
+              "type": "string",
+              "default": "${target}-qml.qtd"
+            },
+            "profilerPath": {
+              "type": "string",
+              "default": ""
+            }
+          }
+        },
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "samplingFrequency",
+            "callgrindCacheSimulation",
+            "callgrindBranchSimulation",
+            "outputFile"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "perf",
+                "callgrind"
+              ],
+              "default": "auto"
+            },
+            "samplingFrequency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000,
+              "default": 99
+            },
+            "callgrindCacheSimulation": {
+              "type": "boolean",
+              "default": false
+            },
+            "callgrindBranchSimulation": {
+              "type": "boolean",
+              "default": false
+            },
+            "outputFile": {
+              "type": "string",
+              "default": "${target}-cpu"
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "leakCheck",
+            "trackOrigins",
+            "showReachable",
+            "outputFile"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "valgrind-memcheck",
+                "heob"
+              ],
+              "default": "auto"
+            },
+            "leakCheck": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "full"
+              ],
+              "default": "full"
+            },
+            "trackOrigins": {
+              "type": "boolean",
+              "default": true
+            },
+            "showReachable": {
+              "type": "boolean",
+              "default": false
+            },
+            "outputFile": {
+              "type": "string",
+              "default": "${target}-memcheck.xml"
+            }
+          }
+        },
+        "cppcheck": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "checks",
+            "inconclusive",
+            "suppressionsFile",
+            "additionalArguments"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "checks": {
+              "type": "string",
+              "default": "warning,style,performance,portability"
+            },
+            "inconclusive": {
+              "type": "boolean",
+              "default": false
+            },
+            "suppressionsFile": {
+              "type": "string",
+              "default": ""
+            },
+            "additionalArguments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
+        },
+        "tracing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "followForks",
+            "timestamps",
+            "outputFile"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "strace",
+                "none"
+              ],
+              "default": "auto"
+            },
+            "followForks": {
+              "type": "boolean",
+              "default": false
+            },
+            "timestamps": {
+              "type": "boolean",
+              "default": true
+            },
+            "outputFile": {
+              "type": "string",
+              "default": "${target}-trace.log"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pathArray": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "buildVariant": {
+      "type": "object",
+      "required": [
+        "defines",
+        "compilerFlags",
+        "linkerFlags"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "defines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "compilerFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkerFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "profileId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "kitProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "architecture",
+        "debuggerType",
+        "deviceType"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qtInstallation": {
+          "type": "string"
+        },
+        "compilerPath": {
+          "type": "string"
+        },
+        "debuggerPath": {
+          "type": "string"
+        },
+        "architecture": {
+          "enum": [
+            "auto",
+            "x86",
+            "x64"
+          ]
+        },
+        "cCompilerPath": {
+          "type": "string"
+        },
+        "debuggerType": {
+          "enum": [
+            "auto",
+            "gdb",
+            "lldb",
+            "cdb",
+            "cppvsdbg"
+          ],
+          "default": "auto"
+        },
+        "compilerFamily": {
+          "enum": [
+            "mingw",
+            "msvc",
+            "clang",
+            "gcc",
+            "emscripten",
+            "unknown"
+          ]
+        },
+        "deviceType": {
+          "enum": [
+            "desktop",
+            "linux-local",
+            "remote-linux",
+            "docker",
+            "webassembly",
+            "android"
+          ],
+          "default": "desktop"
+        },
+        "environmentScript": {
+          "type": "string"
+        },
+        "qmakePath": {
+          "type": "string"
+        },
+        "cmakePath": {
+          "type": "string"
+        },
+        "buildToolPath": {
+          "type": "string"
+        },
+        "generator": {
+          "type": "string"
+        },
+        "compilerTargetTriple": {
+          "type": "string"
+        },
+        "compilerVersion": {
+          "type": "string"
+        },
+        "compatibility": {
+          "enum": [
+            "compatible",
+            "incompatible",
+            "unknown"
+          ]
+        },
+        "diagnostic": {
+          "type": "string"
+        }
+      }
+    },
+    "buildProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "variant",
+        "kitId",
+        "system",
+        "cppStandard",
+        "outputDirectory",
+        "generatedDirectory",
+        "defines",
+        "compilerFlags",
+        "linkerFlags",
+        "autoMoc",
+        "autoUic",
+        "autoRcc",
+        "parallelJobs",
+        "configureArguments",
+        "buildArguments",
+        "cleanArguments",
+        "sourceDirectory",
+        "projectFile",
+        "cmakeConfigurePreset",
+        "cmakeBuildPreset",
+        "generateProjectFiles",
+        "precompiledHeader",
+        "unityBuild",
+        "useResponseFiles"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variant": {
+          "enum": [
+            "debug",
+            "release"
+          ]
+        },
+        "kitId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "system": {
+          "enum": [
+            "direct",
+            "qmake",
+            "cmake"
+          ]
+        },
+        "cppStandard": {
+          "type": "string"
+        },
+        "outputDirectory": {
+          "type": "string",
+          "default": "build",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "generatedDirectory": {
+          "type": "string",
+          "default": "generated",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "defines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "compilerFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "linkerFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "autoMoc": {
+          "type": "boolean"
+        },
+        "autoUic": {
+          "type": "boolean"
+        },
+        "autoRcc": {
+          "type": "boolean"
+        },
+        "parallelJobs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "configureArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "buildArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cleanArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sourceDirectory": {
+          "type": "string",
+          "default": "."
+        },
+        "projectFile": {
+          "type": "string"
+        },
+        "cmakeConfigurePreset": {
+          "type": "string"
+        },
+        "cmakeBuildPreset": {
+          "type": "string"
+        },
+        "generateProjectFiles": {
+          "type": "boolean",
+          "default": true
+        },
+        "precompiledHeader": {
+          "type": "string"
+        },
+        "unityBuild": {
+          "type": "boolean",
+          "default": false
+        },
+        "useResponseFiles": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "runProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "buildProfileId",
+        "arguments",
+        "workingDirectory",
+        "environment"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buildProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "arguments": {
+          "type": "string"
+        },
+        "workingDirectory": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deployProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "buildProfileId",
+        "enabled",
+        "translations"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buildProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "translations": {
+          "type": "boolean"
+        }
+      }
+    },
+    "debugProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "request",
+        "buildProfileId",
+        "runProfileId",
+        "debuggerType",
+        "program",
+        "arguments",
+        "workingDirectory",
+        "environment",
+        "stopAtEntry",
+        "externalConsole",
+        "processId",
+        "coreDumpPath",
+        "remoteHost",
+        "remotePort",
+        "remoteProgram",
+        "remoteWorkingDirectory",
+        "sshHost",
+        "sshUser",
+        "sshPort",
+        "sshExecutable",
+        "startGdbServerViaSsh",
+        "sourceFileMap",
+        "additionalSolibSearchPath",
+        "symbolSearchPath",
+        "setupCommands",
+        "enableQtPrettyPrinters",
+        "breakOnQtWarnings",
+        "qmlDebug",
+        "qmlHost",
+        "qmlPort",
+        "qmlBlock",
+        "qmlServices"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "enum": [
+            "launch",
+            "attach",
+            "remote-gdb",
+            "core-dump",
+            "qml-attach"
+          ]
+        },
+        "buildProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "runProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "debuggerType": {
+          "enum": [
+            "auto",
+            "gdb",
+            "lldb",
+            "cdb",
+            "cppvsdbg"
+          ]
+        },
+        "program": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "string"
+        },
+        "workingDirectory": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "stopAtEntry": {
+          "type": "boolean"
+        },
+        "externalConsole": {
+          "type": "boolean"
+        },
+        "processId": {
+          "type": "string"
+        },
+        "coreDumpPath": {
+          "type": "string"
+        },
+        "remoteHost": {
+          "type": "string"
+        },
+        "remotePort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "remoteProgram": {
+          "type": "string"
+        },
+        "remoteWorkingDirectory": {
+          "type": "string"
+        },
+        "sshHost": {
+          "type": "string"
+        },
+        "sshUser": {
+          "type": "string"
+        },
+        "sshPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "sshExecutable": {
+          "type": "string"
+        },
+        "startGdbServerViaSsh": {
+          "type": "boolean"
+        },
+        "sourceFileMap": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "additionalSolibSearchPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "symbolSearchPath": {
+          "type": "string"
+        },
+        "setupCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enableQtPrettyPrinters": {
+          "type": "boolean"
+        },
+        "breakOnQtWarnings": {
+          "type": "boolean"
+        },
+        "qmlDebug": {
+          "type": "boolean"
+        },
+        "qmlHost": {
+          "type": "string"
+        },
+        "qmlPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "qmlBlock": {
+          "type": "boolean"
+        },
+        "qmlServices": {
+          "type": "string"
+        }
+      }
+    },
+    "platformProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "type",
+        "kitId",
+        "buildProfileId",
+        "runProfileId",
+        "deployProfileId",
+        "debugProfileId",
+        "buildLocation",
+        "environment",
+        "sysroot",
+        "sshHost",
+        "sshUser",
+        "sshPort",
+        "sshExecutable",
+        "scpExecutable",
+        "rsyncExecutable",
+        "remoteProjectDirectory",
+        "remoteDeployDirectory",
+        "remoteBuildCommand",
+        "remoteRunCommand",
+        "useRsync",
+        "startGdbServer",
+        "gdbServerPort",
+        "dockerExecutable",
+        "dockerImage",
+        "dockerContainerName",
+        "dockerWorkspace",
+        "dockerBuildCommand",
+        "dockerRunCommand",
+        "dockerArguments",
+        "dockerKeepContainer",
+        "dockerForwardDisplay",
+        "dockerHostNetwork",
+        "emsdkRoot",
+        "emsdkEnvironmentScript",
+        "wasmServerExecutable",
+        "wasmServerPort",
+        "wasmHtmlEntry",
+        "wasmOpenBrowser",
+        "wasmServerArguments",
+        "androidSdkRoot",
+        "androidNdkRoot",
+        "androidJdkRoot",
+        "androidDeployQtPath",
+        "androidAdbPath",
+        "androidEmulatorPath",
+        "androidAvdManagerPath",
+        "androidSdkManagerPath",
+        "androidAbis",
+        "androidBuildAllAbis",
+        "androidCompileSdk",
+        "androidTargetSdk",
+        "androidMinSdk",
+        "androidBuildToolsVersion",
+        "androidPackageName",
+        "androidAppName",
+        "androidVersionCode",
+        "androidVersionName",
+        "androidPackageFormat",
+        "androidDeviceSerial",
+        "androidAvdName",
+        "androidLogcatFilter",
+        "androidInstallReplace",
+        "androidUninstallBeforeInstall",
+        "androidOpenLogcatAfterRun",
+        "androidGradleArguments",
+        "androidCMakeArguments",
+        "androidKeystore",
+        "androidKeystoreAlias",
+        "androidStorePasswordEnvironment",
+        "androidKeyPasswordEnvironment"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/profileId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "desktop",
+            "linux-local",
+            "remote-linux",
+            "docker",
+            "webassembly",
+            "android"
+          ]
+        },
+        "kitId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "buildProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "runProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "deployProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "debugProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "buildLocation": {
+          "enum": [
+            "local",
+            "remote",
+            "container"
+          ]
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sysroot": {
+          "type": "string"
+        },
+        "sshHost": {
+          "type": "string"
+        },
+        "sshUser": {
+          "type": "string"
+        },
+        "sshPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "sshExecutable": {
+          "type": "string"
+        },
+        "scpExecutable": {
+          "type": "string"
+        },
+        "rsyncExecutable": {
+          "type": "string"
+        },
+        "remoteProjectDirectory": {
+          "type": "string"
+        },
+        "remoteDeployDirectory": {
+          "type": "string"
+        },
+        "remoteBuildCommand": {
+          "type": "string"
+        },
+        "remoteRunCommand": {
+          "type": "string"
+        },
+        "useRsync": {
+          "type": "boolean"
+        },
+        "startGdbServer": {
+          "type": "boolean"
+        },
+        "gdbServerPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "dockerExecutable": {
+          "type": "string"
+        },
+        "dockerImage": {
+          "type": "string"
+        },
+        "dockerContainerName": {
+          "type": "string"
+        },
+        "dockerWorkspace": {
+          "type": "string"
+        },
+        "dockerBuildCommand": {
+          "type": "string"
+        },
+        "dockerRunCommand": {
+          "type": "string"
+        },
+        "dockerArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dockerKeepContainer": {
+          "type": "boolean"
+        },
+        "dockerForwardDisplay": {
+          "type": "boolean"
+        },
+        "dockerHostNetwork": {
+          "type": "boolean"
+        },
+        "emsdkRoot": {
+          "type": "string"
+        },
+        "emsdkEnvironmentScript": {
+          "type": "string"
+        },
+        "wasmServerExecutable": {
+          "type": "string"
+        },
+        "wasmServerPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "wasmHtmlEntry": {
+          "type": "string"
+        },
+        "wasmOpenBrowser": {
+          "type": "boolean"
+        },
+        "wasmServerArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "androidSdkRoot": {
+          "type": "string"
+        },
+        "androidNdkRoot": {
+          "type": "string"
+        },
+        "androidJdkRoot": {
+          "type": "string"
+        },
+        "androidDeployQtPath": {
+          "type": "string"
+        },
+        "androidAdbPath": {
+          "type": "string"
+        },
+        "androidEmulatorPath": {
+          "type": "string"
+        },
+        "androidAvdManagerPath": {
+          "type": "string"
+        },
+        "androidSdkManagerPath": {
+          "type": "string"
+        },
+        "androidAbis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86_64",
+              "x86"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "androidBuildAllAbis": {
+          "type": "boolean"
+        },
+        "androidCompileSdk": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "androidTargetSdk": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "androidMinSdk": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "androidBuildToolsVersion": {
+          "type": "string"
+        },
+        "androidPackageName": {
+          "type": "string"
+        },
+        "androidAppName": {
+          "type": "string"
+        },
+        "androidVersionCode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "androidVersionName": {
+          "type": "string"
+        },
+        "androidPackageFormat": {
+          "enum": [
+            "apk",
+            "aab",
+            "aar"
+          ]
+        },
+        "androidDeviceSerial": {
+          "type": "string"
+        },
+        "androidAvdName": {
+          "type": "string"
+        },
+        "androidLogcatFilter": {
+          "type": "string"
+        },
+        "androidInstallReplace": {
+          "type": "boolean"
+        },
+        "androidUninstallBeforeInstall": {
+          "type": "boolean"
+        },
+        "androidOpenLogcatAfterRun": {
+          "type": "boolean"
+        },
+        "androidGradleArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "androidCMakeArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "androidKeystore": {
+          "type": "string"
+        },
+        "androidKeystoreAlias": {
+          "type": "string"
+        },
+        "androidStorePasswordEnvironment": {
+          "type": "string"
+        },
+        "androidKeyPasswordEnvironment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

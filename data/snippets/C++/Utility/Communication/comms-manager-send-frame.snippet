@@ -1,0 +1,21 @@
+#include "Communication/comms/comms_manager.h"
+
+jc_comms::CommsManager manager;
+std::string error;
+
+if (!manager.loadIni("${1:motherboard_trame.ini}", &error))
+{
+    ${2:/* Handle INI load error. */}
+}
+
+jc_comms::SendRequest req;
+req.transport = ${3:jc_comms::Transport::Uart};
+req.deviceSpec = "${4:/dev/ttyUSB0@115200}";
+req.payload = "${5:AA 55 01 00}";
+req.encoding = "${6:hex}";
+req.appendNewline = ${7:false};
+
+if (!manager.send(req, &error))
+{
+    ${0:/* Handle send error. */}
+}

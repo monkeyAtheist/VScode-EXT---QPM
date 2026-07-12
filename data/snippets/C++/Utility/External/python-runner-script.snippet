@@ -1,0 +1,14 @@
+#include "external/pythonExec/pythonExec.h"
+#include <iostream>
+
+jc_python::PythonConfig cfg;
+cfg.pythonExe = "${1:python}";
+cfg.scriptPath = "${2:script.py}";
+cfg.workingDirectory = "${3:.}";
+cfg.unbuffered = true;
+
+const auto result = jc_python::PythonRunner::runScript(cfg, {${4:"--help"}}, ${5:5000});
+if (!result.launched || result.exitCode != 0)
+{
+    std::cerr << result.output << "\\n";
+}

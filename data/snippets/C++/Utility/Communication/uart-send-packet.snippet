@@ -1,0 +1,12 @@
+#include "Communication/uart/uart.h"
+
+jc_uart::Uart::Packet packet;
+
+jc_uart::Uart uart;
+${1:/* Open uart before sending. */}
+uart.sendPacket(${2:0x10}, {${3:0x01, 0x02, 0x03}});
+
+if (uart.receivePacket(packet, ${4:500}))
+{
+    ${0:/* packet.type and packet.payload are available here. */}
+}

@@ -1,0 +1,5 @@
+[error]
+enabled=1
+mirrorToStderr=1
+maxLogLines=1000
+logPath=logs/cpm_error.log

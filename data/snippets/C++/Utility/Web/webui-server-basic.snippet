@@ -1,0 +1,24 @@
+#include "webui/webui.h"
+
+jc_webui::WebUiConfig cfg;
+cfg.bindAddress = "${1:0.0.0.0}";
+cfg.port = ${2:8080};
+cfg.documentRoot = "${3:./frontEnd}";
+
+jc_webui::WebUiServer server;
+server.setStateProvider([]()
+{
+    return std::string("{\\\"ok\\\":true}");
+});
+server.registerGet("${4:/api/ping}", [](const jc_webui::HttpRequest&)
+{
+    jc_webui::HttpResponse res;
+    res.contentType = "application/json";
+    res.body = jc_webui::WebUiServer::makeOkJson(true, "pong");
+    return res;
+});
+
+if (!server.start(cfg))
+{
+    ${0:throw std::runtime_error("Unable to start web UI server");}
+}

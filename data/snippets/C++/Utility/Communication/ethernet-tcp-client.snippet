@@ -1,0 +1,18 @@
+#include "Communication/ethernet/ethernet.h"
+
+jc_ethernet::EthernetConfig cfg;
+cfg.protocol = ${1:jc_ethernet::EthernetProtocol::TCP};
+cfg.mode = ${2:jc_ethernet::EthernetMode::Client};
+cfg.host = "${3:192.168.1.10}";
+cfg.port = ${4:5000};
+cfg.readTimeoutMs = ${5:500};
+cfg.writeTimeoutMs = ${6:500};
+
+jc_ethernet::EthernetLink eth;
+if (!eth.open(cfg))
+{
+    ${7:throw std::runtime_error("Unable to open Ethernet link");}
+}
+
+eth.writeString("${8:PING}\\n");
+${0:eth.close();}
