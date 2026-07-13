@@ -50,6 +50,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
+const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 /**
  * Direct Qt code generation can write outside the generic generated folder.
  * In particular, windres writes the product metadata object into the object
@@ -106,7 +107,12 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
     const generatedHeaderFiles = [];
     const additionalObjectFiles = [];
     const usedGeneratedNames = new Map();
-    const moduleOrder = resolveQtModuleOrder(manifest.qt.modules);
+    const moduleInference = (0, qpmQtModuleInference_1.effectiveQtModules)(manifestPath, manifest);
+    const autoDetectedModules = (0, qpmQtModuleInference_1.describeAutoDetectedQtModules)(manifest, moduleInference);
+    if (autoDetectedModules.length > 0) {
+        warnings.push(`Automatically detected Qt module requirements: ${autoDetectedModules.join('; ')}.`);
+    }
+    const moduleOrder = resolveQtModuleOrder(moduleInference.modules);
     for (const module of moduleOrder) {
         const moduleInclude = path.join(installation.includeDir, `Qt${module}`);
         if (!fs.existsSync(moduleInclude)) {
@@ -269,7 +275,8 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         userLibraries: manifest.libraries,
         platformLibraries: windowsEntryPoint.platformLibraries,
         generationSteps,
-        warnings
+        warnings,
+        autoDetectedModules
     };
 }
 function qtCompileArguments(plan, sourcePath, objectPath) {
@@ -413,7 +420,12 @@ function resolveQtModuleOrder(requestedModules) {
         HttpServer: ['Network', 'Core'],
         Positioning: ['Core'],
         Sensors: ['Core'],
-        Test: ['Core']
+        Test: ['Core'],
+        WebEngineCore: ['Network', 'Gui', 'Core'],
+        WebEngineQuick: ['WebEngineCore', 'Quick', 'Qml', 'Gui', 'Core'],
+        WebEngineWidgets: ['WebEngineCore', 'Widgets', 'Gui', 'Core'],
+        Pdf: ['Gui', 'Core'],
+        PdfWidgets: ['Pdf', 'Widgets', 'Gui', 'Core']
     };
     const result = [];
     const visiting = new Set();

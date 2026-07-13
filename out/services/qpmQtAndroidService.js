@@ -43,6 +43,7 @@ const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
+const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 class QpmQtAndroidService {
     workspaces;
     qtInstallations;
@@ -691,8 +692,9 @@ function generateAndroidCMakeProject(context) {
     const files = (0, qtProjectManifest_1.resolveQtProjectFiles)(context.manifestPath, context.manifest);
     const sources = [...files.sources, ...files.headers, ...files.forms, ...files.resources, ...files.qml];
     const sourceList = sources.map(cmakeQuote).join('\n  ');
-    const modules = context.manifest.qt.modules.join(' ');
-    const qtTargets = context.manifest.qt.modules.map((module) => `Qt6::${module}`).join(' ');
+    const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
+    const modules = effectiveModules.join(' ');
+    const qtTargets = effectiveModules.map((module) => `Qt6::${module}`).join(' ');
     const target = cmakeIdentifier(context.manifest.targetName);
     const includeDirs = context.manifest.includeDirectories.map((entry) => cmakeQuote(path.resolve(context.root, entry))).join('\n  ');
     const definitions = [...context.manifest.defines, ...context.buildProfile.defines].map(cmakeQuote).join(' ');

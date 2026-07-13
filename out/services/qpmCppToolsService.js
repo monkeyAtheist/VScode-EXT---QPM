@@ -41,6 +41,7 @@ const vscode = __importStar(require("vscode"));
 const qpmSdlService_1 = require("./qpmSdlService");
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtDirectBuildService_1 = require("./qpmQtDirectBuildService");
+const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 const MANAGED_CONFIGURATION_NAME = 'Qt Project Manager (managed)';
 const CPPTOOLS_EXTENSION_ID = 'ms-vscode.cpptools';
 const QPM_CONFIGURATION_PROVIDER_ID = 'JerryCrozet-ElectronicEngineer.cpp-project-manager';
@@ -738,7 +739,7 @@ class QpmCppToolsService {
                 const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(activeRef.absolutePath);
                 const qt = this.qtInstallations.getActive((0, qtProjectManifest_1.getQtInstallationPreference)(manifest));
                 if (qt) {
-                    const modules = (0, qpmQtDirectBuildService_1.resolveQtModuleOrder)(manifest.qt.modules);
+                    const modules = (0, qpmQtDirectBuildService_1.resolveQtModuleOrder)((0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules);
                     base.push(qt.includeDir, ...modules.map((module) => path.join(qt.includeDir, `Qt${module}`)));
                     const mkspecDirectory = (0, qpmQtDirectBuildService_1.resolveQtMkspecDirectory)(qt);
                     if (mkspecDirectory)
@@ -891,13 +892,13 @@ class QpmCppToolsService {
                     ...manifest.includeDirectories.map((entry) => path.resolve(projectRoot, entry)),
                     generatedDirectory,
                     installation.includeDir,
-                    ...(0, qpmQtDirectBuildService_1.resolveQtModuleOrder)(manifest.qt.modules).map((module) => path.join(installation.includeDir, `Qt${module}`)),
+                    ...(0, qpmQtDirectBuildService_1.resolveQtModuleOrder)((0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules).map((module) => path.join(installation.includeDir, `Qt${module}`)),
                     (0, qpmQtDirectBuildService_1.resolveQtMkspecDirectory)(installation) || ''
                 ].filter(Boolean));
                 const defines = unique([
                     ...manifest.defines,
                     ...profile.defines,
-                    ...manifest.qt.modules.map((module) => `QT_${module.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}_LIB`)
+                    ...(0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules.map((module) => `QT_${module.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}_LIB`)
                 ]);
                 const objectDirectory = path.resolve(projectRoot, profile.outputDirectory, isReleaseBuildModeCompat(mode) ? 'release' : 'debug', 'obj');
                 const sources = unique(files.sources);

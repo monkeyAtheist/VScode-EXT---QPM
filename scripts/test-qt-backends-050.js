@@ -7,7 +7,7 @@ const Module = require('module');
 
 const projectRoot = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.15.0');
+assert.strictEqual(pkg.version, '0.15.2');
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of ['qpm.manageQtKits','qpm.detectQtKits','qpm.assignQtKit','qpm.selectQtBackend','qpm.importQtBuildProject','qpm.configureQtBackend','qpm.openQtBackendProject']) {
   assert(commands.has(id), `${id} must be contributed`);

@@ -7,7 +7,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.15.0');
+assert.strictEqual(pkg.version, '0.15.2');
 
 const association = require(path.join(root, 'out', 'utils', 'qpmWorkspaceAssociation.js'));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-workspace-association-'));

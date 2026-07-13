@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execFileSync, spawn } from 'child_process';
+import { ChildProcess, execFileSync, spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { QpmBuildMode, QpmProjectFile, QpmWorkspaceProjectRef } from '../model/types';
 import { QpmParser } from '../model/qpmParser';
@@ -10,11 +10,12 @@ import { QpmWorkspaceService } from './qpmWorkspaceService';
 import { QpmProjectSettingsService } from './qpmProjectSettingsService';
 import { normalizeRuntimePath } from '../utils/pathUtils';
 import { QpmSdlConfiguration, createSdlBuildPlan } from './qpmSdlService';
-import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
+import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, qtGeneratedDirectory, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
 import { createQtDirectBuildPlan, generationStepIsOutdated, qtCompileArguments, qtLinkArguments, qtObjectPathForSource, sourceNeedsCompilation, qtPrecompiledHeaderArguments, qtGenerationOutputDirectories, QtDirectBuildPlan } from './qpmQtDirectBuildService';
 import { QpmQtBuildBackendService } from './qpmQtBuildBackendService';
 import { createGnuResponseFileArguments, estimateGnuArgumentLength, shouldUseGnuResponseFile } from './qpmGnuResponseFile';
+import { cleanQtDirectModeDirectory, removePathWithRetries } from './qpmBuildCleanup';
 
 type QpmRuntimeDependencyMode = 'copy-dlls' | 'path-only' | 'static-link';
 
@@ -55,6 +56,7 @@ interface BuildArtifacts {
 
 export class QpmBuildService {
   private readonly qtBackends: QpmQtBuildBackendService;
+  private readonly launchedApplications = new Map<string, Set<ChildProcess>>();
 
   constructor(
     private readonly parser: QpmParser,
@@ -254,6 +256,8 @@ export class QpmBuildService {
     }
     this.beginOutput(`Clean ${ref.name}`);
     const artifacts = this.resolveArtifacts(ref);
+    await this.stopApplicationsForTarget(artifacts.targetPath, 'clean');
+
     if (isQtProjectManifestPath(ref.absolutePath)) {
       const manifest = readQtProjectManifest(ref.absolutePath);
       const profile = getActiveQtBuildProfile(manifest, this.buildMode);
@@ -265,57 +269,56 @@ export class QpmBuildService {
         else vscode.window.showErrorMessage(`Clean failed for ${ref.name}. Open the Qt Project Manager output channel.`);
         return;
       }
+
       const modeDirectory = path.dirname(artifacts.targetPath);
-      if (fs.existsSync(modeDirectory)) {
-        try {
-          fs.rmSync(modeDirectory, { recursive: true, force: true });
-          this.output.appendLine(`[Qt Direct] Deleted mode output directory: ${modeDirectory}`);
-          vscode.window.showInformationMessage(`Clean completed for ${ref.name}.`);
-          return;
-        } catch (error) {
-          this.output.appendLine(`[Qt Direct] Unable to delete ${modeDirectory}: ${error instanceof Error ? error.message : String(error)}`);
-        }
+      const generatedDirectory = qtGeneratedDirectory(ref.absolutePath, this.buildMode, manifest);
+      const objectDirectory = qtObjectDirectory(ref.absolutePath, this.buildMode, manifest);
+      const result = await cleanQtDirectModeDirectory({
+        modeDirectory,
+        requiredDirectories: [generatedDirectory, objectDirectory]
+      });
+      this.output.appendLine(`[Qt Direct] Clean strategy: ${result.strategy}.`);
+      if (result.pendingDirectory) this.output.appendLine(`[Qt Direct] Previous output is pending removal: ${result.pendingDirectory}`);
+      for (const warning of result.warnings) this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+      if (result.success) {
+        this.output.appendLine(`[Qt Direct] Clean output ready. Build directories will be recreated by the next build: ${modeDirectory}`);
+        vscode.window.showInformationMessage(`Clean completed for ${ref.name}.`);
+      } else {
+        vscode.window.showWarningMessage(`Clean completed partially for ${ref.name}. Some Windows-locked files remain; close the running application and retry.`);
       }
+      return;
     }
+
     const candidates = new Set<string>([artifacts.targetPath]);
-    if (path.extname(artifacts.targetPath).toLowerCase() === '.exe') {
-      candidates.add(replaceExtension(artifacts.targetPath, '.pdb'));
-    }
+    if (path.extname(artifacts.targetPath).toLowerCase() === '.exe') candidates.add(replaceExtension(artifacts.targetPath, '.pdb'));
     let removed = 0;
     for (const candidate of candidates) {
-      if (!fs.existsSync(candidate)) {
-        continue;
-      }
-      try {
-        fs.rmSync(candidate, { force: true });
+      if (!fs.existsSync(candidate)) continue;
+      if (await removePathWithRetries(candidate)) {
         this.output.appendLine(`[Qt/C++] Deleted: ${candidate}`);
         removed += 1;
-      } catch (error) {
-        this.output.appendLine(`[Qt/C++] Unable to delete ${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        this.output.appendLine(`[Qt/C++] Unable to delete locked file: ${candidate}`);
       }
     }
     if (fs.existsSync(artifacts.objectDirectory)) {
-      try {
-        fs.rmSync(artifacts.objectDirectory, { recursive: true, force: true });
+      if (await removePathWithRetries(artifacts.objectDirectory)) {
         this.output.appendLine(`[Qt/C++] Deleted object directory: ${artifacts.objectDirectory}`);
         removed += 1;
-      } catch (error) {
-        this.output.appendLine(`[Qt/C++] Unable to delete ${artifacts.objectDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        this.output.appendLine(`[Qt/C++] Unable to delete locked object directory: ${artifacts.objectDirectory}`);
       }
     }
     const fallbackObjectDirectory = this.resolveLocalObjectDirectory(ref, this.getCompilerConfiguration());
     if (fallbackObjectDirectory && fs.existsSync(fallbackObjectDirectory)) {
-      try {
-        fs.rmSync(fallbackObjectDirectory, { recursive: true, force: true });
+      if (await removePathWithRetries(fallbackObjectDirectory)) {
         this.output.appendLine(`[Qt/C++] Deleted local object directory: ${fallbackObjectDirectory}`);
         removed += 1;
-      } catch (error) {
-        this.output.appendLine(`[Qt/C++] Unable to delete ${fallbackObjectDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        this.output.appendLine(`[Qt/C++] Unable to delete locked local object directory: ${fallbackObjectDirectory}`);
       }
     }
-    if (removed === 0) {
-      this.output.appendLine('[Qt/C++] No generated target or object directory was found.');
-    }
+    if (removed === 0) this.output.appendLine('[Qt/C++] No generated target or object directory was found.');
     vscode.window.showInformationMessage(`Clean completed for ${ref.name}: ${removed} generated item(s) removed.`);
   }
 
@@ -412,8 +415,9 @@ export class QpmBuildService {
     this.deploySdlRuntimeDlls(executablePath, sdlPlan);
     const env = this.createRuntimeEnvironment(this.projectSettings.parseEnvironment(run.environmentOptions), config, executablePath);
     const child = spawn(executablePath, args, { cwd, env, detached: true, shell: false, stdio: 'ignore' });
+    this.trackLaunchedApplication(executablePath, child);
     child.unref();
-    this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(' ')}`);
+    this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(' ')}${child.pid ? ` (PID ${child.pid})` : ''}`);
     this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path.delimiter)}`);
   }
 
@@ -820,12 +824,18 @@ export class QpmBuildService {
     this.output.appendLine('');
 
     const modeOutputDirectory = path.dirname(plan.targetPath);
-    if (rebuild && fs.existsSync(modeOutputDirectory)) {
-      try {
-        fs.rmSync(modeOutputDirectory, { recursive: true, force: true });
-        this.output.appendLine(`[Qt Direct] Removed previous mode output: ${modeOutputDirectory}`);
-      } catch (error) {
-        this.output.appendLine(`[Qt Direct] Warning: unable to remove ${modeOutputDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+    if (rebuild) {
+      await this.stopApplicationsForTarget(plan.targetPath, 'rebuild');
+      const cleanResult = await cleanQtDirectModeDirectory({
+        modeDirectory: modeOutputDirectory,
+        requiredDirectories: [plan.generatedDirectory, plan.objectDirectory]
+      });
+      this.output.appendLine(`[Qt Direct] Rebuild clean strategy: ${cleanResult.strategy}.`);
+      if (cleanResult.pendingDirectory) this.output.appendLine(`[Qt Direct] Previous output is pending removal: ${cleanResult.pendingDirectory}`);
+      for (const warning of cleanResult.warnings) this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+      if (!cleanResult.success) {
+        vscode.window.showErrorMessage(`Unable to clean locked build artifacts for ${manifest.name}. Close the running application and retry.`);
+        return false;
       }
     }
     for (const [directory, label] of [[plan.generatedDirectory, 'Qt generated directory'], [plan.objectDirectory, 'Qt object directory'], [path.dirname(plan.targetPath), 'Qt target directory']] as Array<[string, string]>) {
@@ -902,6 +912,9 @@ export class QpmBuildService {
       // Remove stale response files from previous builds so the build directory
       // reflects the command line that was actually used.
       try { fs.rmSync(responseFilePath, { force: true }); } catch { /* best effort */ }
+    }
+    if (fs.existsSync(plan.targetPath)) {
+      await this.stopApplicationsForTarget(plan.targetPath, 'link');
     }
     const linked = await this.spawnTool(installation.toolchain.cppCompilerPath!, linkArguments, plan.projectDirectory, `Link ${path.basename(plan.targetPath)}`);
     if (!linked || !this.validateProducedFile(plan.targetPath, 'linker output')) return false;
@@ -1106,6 +1119,59 @@ export class QpmBuildService {
     this.output.appendLine(`[Qt/C++] ${label} started`);
     this.output.appendLine(`[Qt/C++] Build mode: ${this.buildMode}`);
     this.output.appendLine('');
+  }
+
+  private trackLaunchedApplication(executablePath: string, child: ChildProcess): void {
+    const key = runtimePathKey(executablePath);
+    let processes = this.launchedApplications.get(key);
+    if (!processes) {
+      processes = new Set<ChildProcess>();
+      this.launchedApplications.set(key, processes);
+    }
+    processes.add(child);
+    const forget = (): void => {
+      const current = this.launchedApplications.get(key);
+      current?.delete(child);
+      if (current?.size === 0) this.launchedApplications.delete(key);
+    };
+    child.once('exit', forget);
+    child.once('error', forget);
+  }
+
+  private async stopApplicationsForTarget(targetPath: string, reason: 'clean' | 'rebuild' | 'link'): Promise<number> {
+    const normalizedTarget = normalizeRuntimePath(targetPath);
+    const key = runtimePathKey(normalizedTarget);
+    let stopped = 0;
+
+    const activeSession = vscode.debug.activeDebugSession;
+    const debugProgram = typeof activeSession?.configuration?.program === 'string'
+      ? normalizeRuntimePath(activeSession.configuration.program)
+      : '';
+    if (activeSession && debugProgram && pathsEqual(debugProgram, normalizedTarget)) {
+      await vscode.debug.stopDebugging(activeSession);
+      stopped += 1;
+      this.output.appendLine(`[Qt/C++] Stopped active VS Code debug session before ${reason}.`);
+    }
+
+    const tracked = Array.from(this.launchedApplications.get(key) ?? []);
+    for (const child of tracked) {
+      if (await terminateChildProcessTree(child)) {
+        stopped += 1;
+        this.output.appendLine(`[Qt/C++] Stopped QPM-launched process${child.pid ? ` PID ${child.pid}` : ''} before ${reason}.`);
+      }
+    }
+    this.launchedApplications.delete(key);
+
+    if (process.platform === 'win32' && path.extname(normalizedTarget).toLowerCase() === '.exe') {
+      const exactPathPids = stopWindowsProcessesByExecutablePath(normalizedTarget);
+      if (exactPathPids.length > 0) {
+        stopped += exactPathPids.length;
+        this.output.appendLine(`[Qt/C++] Stopped process(es) using ${normalizedTarget}: ${exactPathPids.join(', ')}.`);
+      }
+    }
+
+    if (stopped > 0) await delay(180);
+    return stopped;
   }
 
   private validateProducedFile(filePath: string, label: string): boolean {
@@ -1849,6 +1915,53 @@ function appendDirectoryDiagnostics(output: vscode.OutputChannel, directoryPath:
     output.appendLine(`[Qt/C++] Directory diagnostics: parentIsDirectory=${stat.isDirectory()}, parentMode=${(stat.mode & 0o777).toString(8)}`);
   } catch (error) {
     output.appendLine(`[Qt/C++] Directory diagnostics: cannot stat parent: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function runtimePathKey(filePath: string): string {
+  const normalized = path.resolve(filePath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+async function terminateChildProcessTree(child: ChildProcess): Promise<boolean> {
+  const pid = child.pid;
+  if (!pid || child.exitCode !== null || child.killed) return false;
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore', timeout: 5000 });
+    } else {
+      try { process.kill(-pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); }
+    }
+    await delay(120);
+    return true;
+  } catch {
+    try {
+      child.kill('SIGKILL');
+      await delay(80);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function stopWindowsProcessesByExecutablePath(executablePath: string): number[] {
+  if (process.platform !== 'win32' || !fs.existsSync(executablePath)) return [];
+  const escaped = path.resolve(executablePath).replace(/'/g, "''");
+  const script = [
+    `$target = [System.IO.Path]::GetFullPath('${escaped}')`,
+    '$matches = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and [string]::Equals([System.IO.Path]::GetFullPath($_.ExecutablePath), $target, [System.StringComparison]::OrdinalIgnoreCase) })',
+    '$ids = @($matches | ForEach-Object { [int]$_.ProcessId })',
+    '$ids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }',
+    '$ids -join ","'
+  ].join('; ');
+  try {
+    const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+      encoding: 'utf8', windowsHide: true, timeout: 8000
+    }).trim();
+    return output.split(',').map((entry) => Number(entry.trim())).filter((entry) => Number.isInteger(entry) && entry > 0);
+  } catch {
+    return [];
   }
 }
 

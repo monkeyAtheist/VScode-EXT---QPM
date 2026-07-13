@@ -19,6 +19,7 @@ import {
 import { QpmBuildMode } from '../model/types';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
+import { effectiveQtModules } from './qpmQtModuleInference';
 
 export type QtAndroidPackageFormat = 'apk' | 'aab' | 'aar';
 
@@ -651,8 +652,9 @@ function generateAndroidCMakeProject(context: AndroidContext): string {
   const files = resolveQtProjectFiles(context.manifestPath, context.manifest);
   const sources = [...files.sources, ...files.headers, ...files.forms, ...files.resources, ...files.qml];
   const sourceList = sources.map(cmakeQuote).join('\n  ');
-  const modules = context.manifest.qt.modules.join(' ');
-  const qtTargets = context.manifest.qt.modules.map((module) => `Qt6::${module}`).join(' ');
+  const effectiveModules = effectiveQtModules(context.manifestPath, context.manifest).modules;
+  const modules = effectiveModules.join(' ');
+  const qtTargets = effectiveModules.map((module) => `Qt6::${module}`).join(' ');
   const target = cmakeIdentifier(context.manifest.targetName);
   const includeDirs = context.manifest.includeDirectories.map((entry) => cmakeQuote(path.resolve(context.root, entry))).join('\n  ');
   const definitions = [...context.manifest.defines, ...context.buildProfile.defines].map(cmakeQuote).join(' ');

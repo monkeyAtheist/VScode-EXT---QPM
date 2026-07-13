@@ -18,6 +18,7 @@ import {
 import { QpmBuildService } from './qpmBuildService';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
+import { effectiveQtModules } from './qpmQtModuleInference';
 
 export type QtApplePlatform = 'macos' | 'ios-simulator' | 'ios-device';
 
@@ -694,7 +695,9 @@ export function generateAppleCMakeProject(context: Pick<AppleContext, 'root' | '
   const files = resolveQtProjectFiles(context.manifestPath || path.join(context.root, `${context.manifest.name}.qtproject.json`), context.manifest);
   const sourceFiles = [...files.sources, ...files.headers, ...files.forms, ...files.resources].map(cmakePath);
   const qmlFiles = files.qml.map(cmakePath);
-  const modules = [...new Set(context.manifest.qt.modules.length ? context.manifest.qt.modules : ['Core', 'Gui'])];
+  const resolvedManifestPath = context.manifestPath || path.join(context.root, `${context.manifest.name}.qtproject.json`);
+  const inferredModules = effectiveQtModules(resolvedManifestPath, context.manifest).modules;
+  const modules = [...new Set(inferredModules.length ? inferredModules : ['Core', 'Gui'])];
   const bundleId = appleBundleIdentifier(context.platform, context.manifest);
   const target = cmakeIdentifier(context.manifest.targetName);
   const lines = [

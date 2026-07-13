@@ -43,6 +43,7 @@ const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
+const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 class QpmQtAppleService {
     workspaces;
     builds;
@@ -747,7 +748,9 @@ function generateAppleCMakeProject(context) {
     const files = (0, qtProjectManifest_1.resolveQtProjectFiles)(context.manifestPath || path.join(context.root, `${context.manifest.name}.qtproject.json`), context.manifest);
     const sourceFiles = [...files.sources, ...files.headers, ...files.forms, ...files.resources].map(cmakePath);
     const qmlFiles = files.qml.map(cmakePath);
-    const modules = [...new Set(context.manifest.qt.modules.length ? context.manifest.qt.modules : ['Core', 'Gui'])];
+    const resolvedManifestPath = context.manifestPath || path.join(context.root, `${context.manifest.name}.qtproject.json`);
+    const inferredModules = (0, qpmQtModuleInference_1.effectiveQtModules)(resolvedManifestPath, context.manifest).modules;
+    const modules = [...new Set(inferredModules.length ? inferredModules : ['Core', 'Gui'])];
     const bundleId = appleBundleIdentifier(context.platform, context.manifest);
     const target = cmakeIdentifier(context.manifest.targetName);
     const lines = [

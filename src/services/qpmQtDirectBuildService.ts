@@ -16,6 +16,7 @@ import {
 } from '../model/qtProjectManifest';
 import { QpmQtInstallation } from './qpmQtInstallationService';
 import { writeQtPackagingMetadata } from './qpmQtPackagingModel';
+import { describeAutoDetectedQtModules, effectiveQtModules } from './qpmQtModuleInference';
 
 export interface QtCodeGenerationStep {
   kind: 'moc-header' | 'moc-source' | 'uic' | 'rcc' | 'windres';
@@ -57,6 +58,7 @@ export interface QtDirectBuildPlan {
   platformLibraries: string[];
   generationSteps: QtCodeGenerationStep[];
   warnings: string[];
+  autoDetectedModules: string[];
 }
 
 
@@ -120,7 +122,12 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
   const additionalObjectFiles: string[] = [];
   const usedGeneratedNames = new Map<string, string>();
 
-  const moduleOrder = resolveQtModuleOrder(manifest.qt.modules);
+  const moduleInference = effectiveQtModules(manifestPath, manifest);
+  const autoDetectedModules = describeAutoDetectedQtModules(manifest, moduleInference);
+  if (autoDetectedModules.length > 0) {
+    warnings.push(`Automatically detected Qt module requirements: ${autoDetectedModules.join('; ')}.`);
+  }
+  const moduleOrder = resolveQtModuleOrder(moduleInference.modules);
   for (const module of moduleOrder) {
     const moduleInclude = path.join(installation.includeDir, `Qt${module}`);
     if (!fs.existsSync(moduleInclude)) {
@@ -284,7 +291,8 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     userLibraries: manifest.libraries,
     platformLibraries: windowsEntryPoint.platformLibraries,
     generationSteps,
-    warnings
+    warnings,
+    autoDetectedModules
   };
 }
 
@@ -425,7 +433,12 @@ export function resolveQtModuleOrder(requestedModules: string[]): string[] {
     HttpServer: ['Network', 'Core'],
     Positioning: ['Core'],
     Sensors: ['Core'],
-    Test: ['Core']
+    Test: ['Core'],
+    WebEngineCore: ['Network', 'Gui', 'Core'],
+    WebEngineQuick: ['WebEngineCore', 'Quick', 'Qml', 'Gui', 'Core'],
+    WebEngineWidgets: ['WebEngineCore', 'Widgets', 'Gui', 'Core'],
+    Pdf: ['Gui', 'Core'],
+    PdfWidgets: ['Pdf', 'Widgets', 'Gui', 'Core']
   };
   const result: string[] = [];
   const visiting = new Set<string>();

@@ -4525,6 +4525,215 @@ X-QPM-AppId=${desktopEscape(manifest.packaging.linux.appId)}
   }
 });
 
+// out/services/qpmQtModuleInference.js
+var require_qpmQtModuleInference = __commonJS({
+  "out/services/qpmQtModuleInference.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.inferQtModulesFromProject = inferQtModulesFromProject;
+    exports2.effectiveQtModules = effectiveQtModules;
+    exports2.describeAutoDetectedQtModules = describeAutoDetectedQtModules;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
+    var MAX_SCANNED_FILE_SIZE = 2 * 1024 * 1024;
+    var SYMBOL_MODULES = [
+      { module: "OpenGLWidgets", symbols: ["QOpenGLWidget"] },
+      { module: "QuickWidgets", symbols: ["QQuickWidget"] },
+      { module: "MultimediaWidgets", symbols: ["QVideoWidget", "QGraphicsVideoItem"] },
+      { module: "SvgWidgets", symbols: ["QSvgWidget"] },
+      { module: "Charts", symbols: ["QChartView", "QChart"] },
+      { module: "PrintSupport", symbols: ["QPrinter", "QPrintDialog", "QPageSetupDialog", "QPrintPreviewDialog", "QPrintPreviewWidget"] },
+      { module: "WebEngineWidgets", symbols: ["QWebEngineView", "QWebEnginePage", "QWebEngineProfile"] },
+      { module: "PdfWidgets", symbols: ["QPdfView"] },
+      { module: "Pdf", symbols: ["QPdfDocument", "QPdfPageNavigator", "QPdfSearchModel"] },
+      { module: "WebSockets", symbols: ["QWebSocket", "QWebSocketServer"] },
+      { module: "HttpServer", symbols: ["QHttpServer", "QHttpServerRequest", "QHttpServerResponse"] },
+      { module: "SerialPort", symbols: ["QSerialPort", "QSerialPortInfo"] },
+      { module: "SerialBus", symbols: ["QCanBus", "QCanBusDevice", "QCanBusFrame", "QModbusClient", "QModbusServer"] },
+      { module: "Bluetooth", symbols: ["QBluetoothDeviceDiscoveryAgent", "QBluetoothSocket", "QLowEnergyController"] },
+      { module: "Sql", symbols: ["QSqlDatabase", "QSqlQuery", "QSqlTableModel"] },
+      { module: "Test", symbols: ["QTest", "QSignalSpy"] }
+    ];
+    function inferQtModulesFromProject(manifestPath, manifest) {
+      const root = path2.dirname(manifestPath);
+      const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest);
+      const candidates = uniquePaths([...files.sources, ...files.headers, ...files.forms]);
+      const evidence = /* @__PURE__ */ new Map();
+      const addEvidence = (module3, filePath, symbol) => {
+        const normalizedModule = normalizeModuleName(module3);
+        if (!normalizedModule)
+          return;
+        let entry = evidence.get(normalizedModule.toLowerCase());
+        if (!entry) {
+          entry = { files: /* @__PURE__ */ new Set(), symbols: /* @__PURE__ */ new Set() };
+          evidence.set(normalizedModule.toLowerCase(), entry);
+        }
+        entry.files.add(toProjectRelativePath(root, filePath));
+        entry.symbols.add(symbol);
+      };
+      for (const filePath of candidates) {
+        const content = readSmallTextFile(filePath);
+        if (content === void 0)
+          continue;
+        for (const match of content.matchAll(/#\s*include\s*[<"]Qt([A-Za-z0-9]+)\//g)) {
+          addEvidence(match[1], filePath, `Qt${match[1]} include`);
+        }
+        for (const mapping of SYMBOL_MODULES) {
+          for (const symbol of mapping.symbols) {
+            if (new RegExp(`\\b${escapeRegExp(symbol)}\\b`).test(content)) {
+              addEvidence(mapping.module, filePath, symbol);
+            }
+          }
+        }
+      }
+      const orderedEvidence = Array.from(evidence.entries()).map(([key, value]) => ({
+        module: canonicalModuleName(key),
+        files: Array.from(value.files).sort((a, b) => a.localeCompare(b)),
+        symbols: Array.from(value.symbols).sort((a, b) => a.localeCompare(b))
+      })).sort((a, b) => a.module.localeCompare(b.module));
+      return {
+        modules: orderedEvidence.map((entry) => entry.module),
+        evidence: orderedEvidence
+      };
+    }
+    function effectiveQtModules(manifestPath, manifest) {
+      const inferred = inferQtModulesFromProject(manifestPath, manifest);
+      const modules = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const module3 of [...manifest.qt.modules, ...inferred.modules]) {
+        const normalized = normalizeModuleName(module3);
+        if (!normalized)
+          continue;
+        const key = normalized.toLowerCase();
+        if (seen.has(key))
+          continue;
+        seen.add(key);
+        modules.push(normalized);
+      }
+      return { modules, evidence: inferred.evidence };
+    }
+    function describeAutoDetectedQtModules(manifest, inference) {
+      const configured = new Set(manifest.qt.modules.map((entry) => entry.toLowerCase()));
+      return inference.evidence.filter((entry) => !configured.has(entry.module.toLowerCase())).map((entry) => `${entry.module} (${entry.symbols.join(", ")} in ${entry.files.join(", ")})`);
+    }
+    function readSmallTextFile(filePath) {
+      try {
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile() || stat.size > MAX_SCANNED_FILE_SIZE)
+          return void 0;
+        return fs.readFileSync(filePath, "utf8");
+      } catch {
+        return void 0;
+      }
+    }
+    function toProjectRelativePath(root, filePath) {
+      const relative = path2.relative(root, filePath);
+      return (relative || path2.basename(filePath)).replace(/\\/g, "/");
+    }
+    function uniquePaths(values) {
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const value of values) {
+        const normalized = path2.normalize(value);
+        const key = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+        if (seen.has(key))
+          continue;
+        seen.add(key);
+        result.push(normalized);
+      }
+      return result;
+    }
+    function normalizeModuleName(value) {
+      const trimmed = value.trim().replace(/^Qt(?:5|6)?::?/i, "").replace(/^Qt/i, "");
+      if (!trimmed)
+        return "";
+      return canonicalModuleName(trimmed.toLowerCase());
+    }
+    function canonicalModuleName(key) {
+      const known = {
+        core: "Core",
+        core5compat: "Core5Compat",
+        gui: "Gui",
+        widgets: "Widgets",
+        network: "Network",
+        concurrent: "Concurrent",
+        serialport: "SerialPort",
+        serialbus: "SerialBus",
+        bluetooth: "Bluetooth",
+        sql: "Sql",
+        xml: "Xml",
+        multimedia: "Multimedia",
+        multimediawidgets: "MultimediaWidgets",
+        opengl: "OpenGL",
+        openglwidgets: "OpenGLWidgets",
+        printsupport: "PrintSupport",
+        qml: "Qml",
+        qmlmodels: "QmlModels",
+        quick: "Quick",
+        quickcontrols2: "QuickControls2",
+        quickwidgets: "QuickWidgets",
+        quicktest: "QuickTest",
+        svg: "Svg",
+        svgwidgets: "SvgWidgets",
+        charts: "Charts",
+        statemachine: "StateMachine",
+        websockets: "WebSockets",
+        httpserver: "HttpServer",
+        positioning: "Positioning",
+        sensors: "Sensors",
+        test: "Test",
+        webenginecore: "WebEngineCore",
+        webenginequick: "WebEngineQuick",
+        webenginewidgets: "WebEngineWidgets",
+        pdf: "Pdf",
+        pdfwidgets: "PdfWidgets"
+      };
+      return known[key] ?? key.replace(/(^|[^A-Za-z0-9])([A-Za-z0-9])/g, (_match, _prefix, char) => char.toUpperCase());
+    }
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+});
+
 // out/services/qpmQtDirectBuildService.js
 var require_qpmQtDirectBuildService = __commonJS({
   "out/services/qpmQtDirectBuildService.js"(exports2) {
@@ -4584,6 +4793,7 @@ var require_qpmQtDirectBuildService = __commonJS({
     var path2 = __importStar2(require("path"));
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
+    var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     function qtGenerationOutputDirectories(plan) {
       return unique([
         plan.generatedDirectory,
@@ -4635,7 +4845,12 @@ var require_qpmQtDirectBuildService = __commonJS({
       const generatedHeaderFiles = [];
       const additionalObjectFiles = [];
       const usedGeneratedNames = /* @__PURE__ */ new Map();
-      const moduleOrder = resolveQtModuleOrder(manifest.qt.modules);
+      const moduleInference = (0, qpmQtModuleInference_1.effectiveQtModules)(manifestPath, manifest);
+      const autoDetectedModules = (0, qpmQtModuleInference_1.describeAutoDetectedQtModules)(manifest, moduleInference);
+      if (autoDetectedModules.length > 0) {
+        warnings.push(`Automatically detected Qt module requirements: ${autoDetectedModules.join("; ")}.`);
+      }
+      const moduleOrder = resolveQtModuleOrder(moduleInference.modules);
       for (const module3 of moduleOrder) {
         const moduleInclude = path2.join(installation.includeDir, `Qt${module3}`);
         if (!fs.existsSync(moduleInclude)) {
@@ -4814,7 +5029,8 @@ var require_qpmQtDirectBuildService = __commonJS({
         userLibraries: manifest.libraries,
         platformLibraries: windowsEntryPoint.platformLibraries,
         generationSteps,
-        warnings
+        warnings,
+        autoDetectedModules
       };
     }
     function qtCompileArguments(plan, sourcePath, objectPath) {
@@ -4961,7 +5177,12 @@ var require_qpmQtDirectBuildService = __commonJS({
         HttpServer: ["Network", "Core"],
         Positioning: ["Core"],
         Sensors: ["Core"],
-        Test: ["Core"]
+        Test: ["Core"],
+        WebEngineCore: ["Network", "Gui", "Core"],
+        WebEngineQuick: ["WebEngineCore", "Quick", "Qml", "Gui", "Core"],
+        WebEngineWidgets: ["WebEngineCore", "Widgets", "Gui", "Core"],
+        Pdf: ["Gui", "Core"],
+        PdfWidgets: ["Pdf", "Widgets", "Gui", "Core"]
       };
       const result = [];
       const visiting = /* @__PURE__ */ new Set();
@@ -7095,6 +7316,7 @@ var require_qpmQtBuildBackendService = __commonJS({
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
+    var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var QpmQtBuildBackendService = class {
       output;
       constructor(output) {
@@ -7393,9 +7615,10 @@ var require_qpmQtBuildBackendService = __commonJS({
         config.push("precompile_header");
       const targetDirectory = path2.dirname(context.targetPath);
       const packagingMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource ? (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(context.manifestPath, context.manifest, context.mode) : void 0;
+      const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
       const lines = [
-        "# Generated by Qt Project Manager 0.5.0",
-        `QT += ${context.manifest.qt.modules.map((module3) => qmakeModuleName(module3)).join(" ")}`,
+        "# Generated by Qt Project Manager",
+        `QT += ${effectiveModules.map((module3) => qmakeModuleName(module3)).join(" ")}`,
         `TEMPLATE = ${template}`,
         `TARGET = ${qmakeQuote(context.manifest.targetName)}`,
         `CONFIG += ${config.join(" ")}`,
@@ -7429,8 +7652,9 @@ var require_qpmQtBuildBackendService = __commonJS({
       const packagingMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource ? (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(context.manifestPath, context.manifest, context.mode) : void 0;
       const sourceEntries = [...files.sources, ...files.headers, ...files.forms, ...files.resources, ...files.qml, ...packagingMetadata && process.platform === "win32" ? [packagingMetadata.windowsResource] : []];
       const sourceList = sourceEntries.map(cmakeQuote).join("\n  ");
-      const modules = context.manifest.qt.modules.join(" ");
-      const qtTargets = context.manifest.qt.modules.map((module3) => `Qt${major}::${module3}`).join(" ");
+      const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
+      const modules = effectiveModules.join(" ");
+      const qtTargets = effectiveModules.map((module3) => `Qt${major}::${module3}`).join(" ");
       const kind = context.manifest.kind;
       const addTarget = kind === "static-library" ? `add_library(${target} STATIC` : kind === "shared-library" ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === "win32" ? " WIN32" : ""}`;
       const closeTarget = `  ${sourceList}
@@ -7441,7 +7665,7 @@ var require_qpmQtBuildBackendService = __commonJS({
       const libraries = context.manifest.libraries.map(cmakeQuote).join(" ");
       const libraryDirs = context.manifest.libraryDirectories.map((entry) => cmakeQuote(path2.resolve(context.root, entry))).join("\n  ");
       const lines = [
-        "# Generated by Qt Project Manager 0.5.0",
+        "# Generated by Qt Project Manager",
         "cmake_minimum_required(VERSION 3.21)",
         `project(${cmakeIdentifier(context.manifest.name)} LANGUAGES CXX${packagingMetadata && process.platform === "win32" ? " RC" : ""})`,
         `set(CMAKE_CXX_STANDARD ${context.profile.cppStandard.replace(/\D/g, "") || "17"})`,
@@ -7710,6 +7934,197 @@ var require_qpmGnuResponseFile = __commonJS({
   }
 });
 
+// out/services/qpmBuildCleanup.js
+var require_qpmBuildCleanup = __commonJS({
+  "out/services/qpmBuildCleanup.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.cleanQtDirectModeDirectory = cleanQtDirectModeDirectory;
+    exports2.removePathWithRetries = removePathWithRetries;
+    exports2.createPendingDirectoryName = createPendingDirectoryName;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    async function cleanQtDirectModeDirectory(options) {
+      const modeDirectory = path2.normalize(options.modeDirectory);
+      const requiredDirectories = unique(options.requiredDirectories.map((entry) => path2.normalize(entry)));
+      const retryCount = Math.max(1, options.retryCount ?? 8);
+      const retryDelayMs = Math.max(10, options.retryDelayMs ?? 120);
+      const warnings = [];
+      for (const pending of findPendingDirectories(modeDirectory)) {
+        if (!await removePathWithRetries(pending, Math.max(2, Math.ceil(retryCount / 2)), retryDelayMs)) {
+          warnings.push(`A previous pending clean directory is still locked: ${pending}`);
+        }
+      }
+      if (!fs.existsSync(modeDirectory)) {
+        return { success: true, strategy: "absent", warnings };
+      }
+      const pendingDirectory = createPendingDirectoryName(modeDirectory);
+      let lastRenameError;
+      for (let attempt = 1; attempt <= retryCount; attempt++) {
+        try {
+          fs.renameSync(modeDirectory, pendingDirectory);
+          const removed = await removePathWithRetries(pendingDirectory, Math.max(3, Math.ceil(retryCount / 2)), retryDelayMs);
+          if (!removed) {
+            warnings.push(`The previous build was moved to ${pendingDirectory}, but Windows still has a handle open. QPM will retry removal during the next clean.`);
+          }
+          return { success: true, strategy: "rename", pendingDirectory: removed ? void 0 : pendingDirectory, warnings };
+        } catch (error) {
+          lastRenameError = error;
+          if (!isRetryableFileSystemError(error) || attempt === retryCount)
+            break;
+          await delay(retryDelayMs * attempt);
+        }
+      }
+      warnings.push(`Atomic clean rename was unavailable: ${formatError(lastRenameError)}. Falling back to in-place cleanup.`);
+      const failures = [];
+      try {
+        const preservedRoots = requiredDirectories.filter((entry) => isSameOrChildPath(entry, modeDirectory));
+        for (const entry of fs.readdirSync(modeDirectory)) {
+          const candidate = path2.join(modeDirectory, entry);
+          const preserved = preservedRoots.find((root) => pathsEqual(root, candidate));
+          if (preserved && isDirectory(candidate)) {
+            if (!await clearDirectoryContents(candidate, retryCount, retryDelayMs))
+              failures.push(candidate);
+            continue;
+          }
+          if (!await removePathWithRetries(candidate, retryCount, retryDelayMs))
+            failures.push(candidate);
+        }
+      } catch (error) {
+        failures.push(modeDirectory);
+        warnings.push(`Unable to enumerate the build output directory: ${formatError(error)}.`);
+      }
+      if (failures.length > 0) {
+        warnings.push(`Unable to remove ${failures.length} locked build item(s): ${failures.join(", ")}`);
+      }
+      return { success: failures.length === 0, strategy: "in-place", warnings };
+    }
+    async function removePathWithRetries(targetPath, retryCount = 8, retryDelayMs = 120) {
+      for (let attempt = 1; attempt <= Math.max(1, retryCount); attempt++) {
+        try {
+          fs.rmSync(targetPath, { recursive: true, force: true, maxRetries: 0 });
+          if (!fs.existsSync(targetPath))
+            return true;
+        } catch (error) {
+          if (!isRetryableFileSystemError(error) || attempt === retryCount)
+            return !fs.existsSync(targetPath);
+        }
+        await delay(Math.max(10, retryDelayMs) * attempt);
+      }
+      return !fs.existsSync(targetPath);
+    }
+    function createPendingDirectoryName(modeDirectory, now = Date.now(), processId = process.pid) {
+      const parent = path2.dirname(modeDirectory);
+      const base = path2.basename(modeDirectory);
+      let candidate = path2.join(parent, `.${base}.qpm-clean-pending-${processId}-${now}`);
+      let suffix = 1;
+      while (fs.existsSync(candidate))
+        candidate = path2.join(parent, `.${base}.qpm-clean-pending-${processId}-${now}-${suffix++}`);
+      return candidate;
+    }
+    async function clearDirectoryContents(directory, retryCount, retryDelayMs) {
+      let entries;
+      try {
+        entries = fs.readdirSync(directory);
+      } catch (error) {
+        return !fs.existsSync(directory);
+      }
+      let success = true;
+      for (const entry of entries) {
+        if (!await removePathWithRetries(path2.join(directory, entry), retryCount, retryDelayMs))
+          success = false;
+      }
+      return success;
+    }
+    function findPendingDirectories(modeDirectory) {
+      const parent = path2.dirname(modeDirectory);
+      const prefix = `.${path2.basename(modeDirectory)}.qpm-clean-pending-`;
+      try {
+        return fs.readdirSync(parent).filter((entry) => entry.startsWith(prefix)).map((entry) => path2.join(parent, entry));
+      } catch {
+        return [];
+      }
+    }
+    function isRetryableFileSystemError(error) {
+      const code = error?.code;
+      return code === "EPERM" || code === "EACCES" || code === "EBUSY" || code === "ENOTEMPTY" || code === "ENOENT";
+    }
+    function formatError(error) {
+      if (error instanceof Error)
+        return error.message;
+      return String(error ?? "unknown error");
+    }
+    function unique(values) {
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const value of values) {
+        const key = process.platform === "win32" ? value.toLowerCase() : value;
+        if (seen.has(key))
+          continue;
+        seen.add(key);
+        result.push(value);
+      }
+      return result;
+    }
+    function pathsEqual(left, right) {
+      const normalizedLeft = path2.resolve(left);
+      const normalizedRight = path2.resolve(right);
+      return process.platform === "win32" ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase() : normalizedLeft === normalizedRight;
+    }
+    function isSameOrChildPath(candidate, parent) {
+      const relative = path2.relative(path2.resolve(parent), path2.resolve(candidate));
+      return relative === "" || !relative.startsWith("..") && !path2.isAbsolute(relative);
+    }
+    function isDirectory(candidate) {
+      try {
+        return fs.statSync(candidate).isDirectory();
+      } catch {
+        return false;
+      }
+    }
+    function delay(milliseconds) {
+      return new Promise((resolve) => setTimeout(resolve, milliseconds));
+    }
+  }
+});
+
 // out/services/qpmBuildService.js
 var require_qpmBuildService = __commonJS({
   "out/services/qpmBuildService.js"(exports2) {
@@ -7768,6 +8183,7 @@ var require_qpmBuildService = __commonJS({
     var qpmQtDirectBuildService_1 = require_qpmQtDirectBuildService();
     var qpmQtBuildBackendService_1 = require_qpmQtBuildBackendService();
     var qpmGnuResponseFile_1 = require_qpmGnuResponseFile();
+    var qpmBuildCleanup_1 = require_qpmBuildCleanup();
     var QpmBuildService = class {
       parser;
       workspaces;
@@ -7775,6 +8191,7 @@ var require_qpmBuildService = __commonJS({
       projectSettings;
       output;
       qtBackends;
+      launchedApplications = /* @__PURE__ */ new Map();
       constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output) {
         this.parser = parser;
         this.workspaces = workspaces;
@@ -7952,6 +8369,7 @@ var require_qpmBuildService = __commonJS({
         }
         this.beginOutput(`Clean ${ref.name}`);
         const artifacts = this.resolveArtifacts(ref);
+        await this.stopApplicationsForTarget(artifacts.targetPath, "clean");
         if ((0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
           const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
           const profile = (0, qtProjectManifest_12.getActiveQtBuildProfile)(manifest, this.buildMode);
@@ -7967,56 +8385,58 @@ var require_qpmBuildService = __commonJS({
             return;
           }
           const modeDirectory = path2.dirname(artifacts.targetPath);
-          if (fs.existsSync(modeDirectory)) {
-            try {
-              fs.rmSync(modeDirectory, { recursive: true, force: true });
-              this.output.appendLine(`[Qt Direct] Deleted mode output directory: ${modeDirectory}`);
-              vscode2.window.showInformationMessage(`Clean completed for ${ref.name}.`);
-              return;
-            } catch (error) {
-              this.output.appendLine(`[Qt Direct] Unable to delete ${modeDirectory}: ${error instanceof Error ? error.message : String(error)}`);
-            }
+          const generatedDirectory = (0, qtProjectManifest_12.qtGeneratedDirectory)(ref.absolutePath, this.buildMode, manifest);
+          const objectDirectory = (0, qtProjectManifest_12.qtObjectDirectory)(ref.absolutePath, this.buildMode, manifest);
+          const result = await (0, qpmBuildCleanup_1.cleanQtDirectModeDirectory)({
+            modeDirectory,
+            requiredDirectories: [generatedDirectory, objectDirectory]
+          });
+          this.output.appendLine(`[Qt Direct] Clean strategy: ${result.strategy}.`);
+          if (result.pendingDirectory)
+            this.output.appendLine(`[Qt Direct] Previous output is pending removal: ${result.pendingDirectory}`);
+          for (const warning of result.warnings)
+            this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+          if (result.success) {
+            this.output.appendLine(`[Qt Direct] Clean output ready. Build directories will be recreated by the next build: ${modeDirectory}`);
+            vscode2.window.showInformationMessage(`Clean completed for ${ref.name}.`);
+          } else {
+            vscode2.window.showWarningMessage(`Clean completed partially for ${ref.name}. Some Windows-locked files remain; close the running application and retry.`);
           }
+          return;
         }
         const candidates = /* @__PURE__ */ new Set([artifacts.targetPath]);
-        if (path2.extname(artifacts.targetPath).toLowerCase() === ".exe") {
+        if (path2.extname(artifacts.targetPath).toLowerCase() === ".exe")
           candidates.add(replaceExtension(artifacts.targetPath, ".pdb"));
-        }
         let removed = 0;
         for (const candidate of candidates) {
-          if (!fs.existsSync(candidate)) {
+          if (!fs.existsSync(candidate))
             continue;
-          }
-          try {
-            fs.rmSync(candidate, { force: true });
+          if (await (0, qpmBuildCleanup_1.removePathWithRetries)(candidate)) {
             this.output.appendLine(`[Qt/C++] Deleted: ${candidate}`);
             removed += 1;
-          } catch (error) {
-            this.output.appendLine(`[Qt/C++] Unable to delete ${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+          } else {
+            this.output.appendLine(`[Qt/C++] Unable to delete locked file: ${candidate}`);
           }
         }
         if (fs.existsSync(artifacts.objectDirectory)) {
-          try {
-            fs.rmSync(artifacts.objectDirectory, { recursive: true, force: true });
+          if (await (0, qpmBuildCleanup_1.removePathWithRetries)(artifacts.objectDirectory)) {
             this.output.appendLine(`[Qt/C++] Deleted object directory: ${artifacts.objectDirectory}`);
             removed += 1;
-          } catch (error) {
-            this.output.appendLine(`[Qt/C++] Unable to delete ${artifacts.objectDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+          } else {
+            this.output.appendLine(`[Qt/C++] Unable to delete locked object directory: ${artifacts.objectDirectory}`);
           }
         }
         const fallbackObjectDirectory = this.resolveLocalObjectDirectory(ref, this.getCompilerConfiguration());
         if (fallbackObjectDirectory && fs.existsSync(fallbackObjectDirectory)) {
-          try {
-            fs.rmSync(fallbackObjectDirectory, { recursive: true, force: true });
+          if (await (0, qpmBuildCleanup_1.removePathWithRetries)(fallbackObjectDirectory)) {
             this.output.appendLine(`[Qt/C++] Deleted local object directory: ${fallbackObjectDirectory}`);
             removed += 1;
-          } catch (error) {
-            this.output.appendLine(`[Qt/C++] Unable to delete ${fallbackObjectDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+          } else {
+            this.output.appendLine(`[Qt/C++] Unable to delete locked local object directory: ${fallbackObjectDirectory}`);
           }
         }
-        if (removed === 0) {
+        if (removed === 0)
           this.output.appendLine("[Qt/C++] No generated target or object directory was found.");
-        }
         vscode2.window.showInformationMessage(`Clean completed for ${ref.name}: ${removed} generated item(s) removed.`);
       }
       async compileFile(filePath, projectRef) {
@@ -8108,8 +8528,9 @@ var require_qpmBuildService = __commonJS({
         this.deploySdlRuntimeDlls(executablePath, sdlPlan);
         const env = this.createRuntimeEnvironment(this.projectSettings.parseEnvironment(run.environmentOptions), config, executablePath);
         const child = (0, child_process_1.spawn)(executablePath, args, { cwd, env, detached: true, shell: false, stdio: "ignore" });
+        this.trackLaunchedApplication(executablePath, child);
         child.unref();
-        this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(" ")}`);
+        this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(" ")}${child.pid ? ` (PID ${child.pid})` : ""}`);
         this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path2.delimiter)}`);
       }
       async debugWithGdb(projectRef) {
@@ -8499,12 +8920,20 @@ var require_qpmBuildService = __commonJS({
           this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
         this.output.appendLine("");
         const modeOutputDirectory = path2.dirname(plan.targetPath);
-        if (rebuild && fs.existsSync(modeOutputDirectory)) {
-          try {
-            fs.rmSync(modeOutputDirectory, { recursive: true, force: true });
-            this.output.appendLine(`[Qt Direct] Removed previous mode output: ${modeOutputDirectory}`);
-          } catch (error) {
-            this.output.appendLine(`[Qt Direct] Warning: unable to remove ${modeOutputDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+        if (rebuild) {
+          await this.stopApplicationsForTarget(plan.targetPath, "rebuild");
+          const cleanResult = await (0, qpmBuildCleanup_1.cleanQtDirectModeDirectory)({
+            modeDirectory: modeOutputDirectory,
+            requiredDirectories: [plan.generatedDirectory, plan.objectDirectory]
+          });
+          this.output.appendLine(`[Qt Direct] Rebuild clean strategy: ${cleanResult.strategy}.`);
+          if (cleanResult.pendingDirectory)
+            this.output.appendLine(`[Qt Direct] Previous output is pending removal: ${cleanResult.pendingDirectory}`);
+          for (const warning of cleanResult.warnings)
+            this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+          if (!cleanResult.success) {
+            vscode2.window.showErrorMessage(`Unable to clean locked build artifacts for ${manifest.name}. Close the running application and retry.`);
+            return false;
           }
         }
         for (const [directory, label] of [[plan.generatedDirectory, "Qt generated directory"], [plan.objectDirectory, "Qt object directory"], [path2.dirname(plan.targetPath), "Qt target directory"]]) {
@@ -8580,6 +9009,9 @@ var require_qpmBuildService = __commonJS({
             fs.rmSync(responseFilePath, { force: true });
           } catch {
           }
+        }
+        if (fs.existsSync(plan.targetPath)) {
+          await this.stopApplicationsForTarget(plan.targetPath, "link");
         }
         const linked = await this.spawnTool(installation.toolchain.cppCompilerPath, linkArguments, plan.projectDirectory, `Link ${path2.basename(plan.targetPath)}`);
         if (!linked || !this.validateProducedFile(plan.targetPath, "linker output"))
@@ -8767,6 +9199,53 @@ var require_qpmBuildService = __commonJS({
         this.output.appendLine(`[Qt/C++] ${label} started`);
         this.output.appendLine(`[Qt/C++] Build mode: ${this.buildMode}`);
         this.output.appendLine("");
+      }
+      trackLaunchedApplication(executablePath, child) {
+        const key = runtimePathKey(executablePath);
+        let processes = this.launchedApplications.get(key);
+        if (!processes) {
+          processes = /* @__PURE__ */ new Set();
+          this.launchedApplications.set(key, processes);
+        }
+        processes.add(child);
+        const forget = () => {
+          const current = this.launchedApplications.get(key);
+          current?.delete(child);
+          if (current?.size === 0)
+            this.launchedApplications.delete(key);
+        };
+        child.once("exit", forget);
+        child.once("error", forget);
+      }
+      async stopApplicationsForTarget(targetPath, reason) {
+        const normalizedTarget = (0, pathUtils_1.normalizeRuntimePath)(targetPath);
+        const key = runtimePathKey(normalizedTarget);
+        let stopped = 0;
+        const activeSession = vscode2.debug.activeDebugSession;
+        const debugProgram = typeof activeSession?.configuration?.program === "string" ? (0, pathUtils_1.normalizeRuntimePath)(activeSession.configuration.program) : "";
+        if (activeSession && debugProgram && pathsEqual(debugProgram, normalizedTarget)) {
+          await vscode2.debug.stopDebugging(activeSession);
+          stopped += 1;
+          this.output.appendLine(`[Qt/C++] Stopped active VS Code debug session before ${reason}.`);
+        }
+        const tracked = Array.from(this.launchedApplications.get(key) ?? []);
+        for (const child of tracked) {
+          if (await terminateChildProcessTree(child)) {
+            stopped += 1;
+            this.output.appendLine(`[Qt/C++] Stopped QPM-launched process${child.pid ? ` PID ${child.pid}` : ""} before ${reason}.`);
+          }
+        }
+        this.launchedApplications.delete(key);
+        if (process.platform === "win32" && path2.extname(normalizedTarget).toLowerCase() === ".exe") {
+          const exactPathPids = stopWindowsProcessesByExecutablePath(normalizedTarget);
+          if (exactPathPids.length > 0) {
+            stopped += exactPathPids.length;
+            this.output.appendLine(`[Qt/C++] Stopped process(es) using ${normalizedTarget}: ${exactPathPids.join(", ")}.`);
+          }
+        }
+        if (stopped > 0)
+          await delay(180);
+        return stopped;
       }
       validateProducedFile(filePath, label) {
         if (fs.existsSync(filePath))
@@ -9437,6 +9916,58 @@ var require_qpmBuildService = __commonJS({
         output.appendLine(`[Qt/C++] Directory diagnostics: cannot stat parent: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+    function runtimePathKey(filePath) {
+      const normalized = path2.resolve(filePath);
+      return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+    }
+    async function terminateChildProcessTree(child) {
+      const pid = child.pid;
+      if (!pid || child.exitCode !== null || child.killed)
+        return false;
+      try {
+        if (process.platform === "win32") {
+          (0, child_process_1.execFileSync)("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 5e3 });
+        } else {
+          try {
+            process.kill(-pid, "SIGTERM");
+          } catch {
+            child.kill("SIGTERM");
+          }
+        }
+        await delay(120);
+        return true;
+      } catch {
+        try {
+          child.kill("SIGKILL");
+          await delay(80);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+    function stopWindowsProcessesByExecutablePath(executablePath) {
+      if (process.platform !== "win32" || !fs.existsSync(executablePath))
+        return [];
+      const escaped = path2.resolve(executablePath).replace(/'/g, "''");
+      const script = [
+        `$target = [System.IO.Path]::GetFullPath('${escaped}')`,
+        "$matches = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and [string]::Equals([System.IO.Path]::GetFullPath($_.ExecutablePath), $target, [System.StringComparison]::OrdinalIgnoreCase) })",
+        "$ids = @($matches | ForEach-Object { [int]$_.ProcessId })",
+        "$ids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }",
+        '$ids -join ","'
+      ].join("; ");
+      try {
+        const output = (0, child_process_1.execFileSync)("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 8e3
+        }).trim();
+        return output.split(",").map((entry) => Number(entry.trim())).filter((entry) => Number.isInteger(entry) && entry > 0);
+      } catch {
+        return [];
+      }
+    }
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -9894,6 +10425,7 @@ var require_qpmCppToolsService = __commonJS({
     var qpmSdlService_12 = require_qpmSdlService();
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtDirectBuildService_1 = require_qpmQtDirectBuildService();
+    var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var MANAGED_CONFIGURATION_NAME = "Qt Project Manager (managed)";
     var CPPTOOLS_EXTENSION_ID = "ms-vscode.cpptools";
     var QPM_CONFIGURATION_PROVIDER_ID = "JerryCrozet-ElectronicEngineer.cpp-project-manager";
@@ -10563,7 +11095,7 @@ var require_qpmCppToolsService = __commonJS({
             const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(activeRef.absolutePath);
             const qt = this.qtInstallations.getActive((0, qtProjectManifest_12.getQtInstallationPreference)(manifest));
             if (qt) {
-              const modules = (0, qpmQtDirectBuildService_1.resolveQtModuleOrder)(manifest.qt.modules);
+              const modules = (0, qpmQtDirectBuildService_1.resolveQtModuleOrder)((0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules);
               base.push(qt.includeDir, ...modules.map((module3) => path2.join(qt.includeDir, `Qt${module3}`)));
               const mkspecDirectory = (0, qpmQtDirectBuildService_1.resolveQtMkspecDirectory)(qt);
               if (mkspecDirectory)
@@ -10697,13 +11229,13 @@ var require_qpmCppToolsService = __commonJS({
               ...manifest.includeDirectories.map((entry) => path2.resolve(projectRoot, entry)),
               generatedDirectory,
               installation.includeDir,
-              ...(0, qpmQtDirectBuildService_1.resolveQtModuleOrder)(manifest.qt.modules).map((module3) => path2.join(installation.includeDir, `Qt${module3}`)),
+              ...(0, qpmQtDirectBuildService_1.resolveQtModuleOrder)((0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules).map((module3) => path2.join(installation.includeDir, `Qt${module3}`)),
               (0, qpmQtDirectBuildService_1.resolveQtMkspecDirectory)(installation) || ""
             ].filter(Boolean));
             const defines = unique([
               ...manifest.defines,
               ...profile.defines,
-              ...manifest.qt.modules.map((module3) => `QT_${module3.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}_LIB`)
+              ...(0, qpmQtModuleInference_1.effectiveQtModules)(activeRef.absolutePath, manifest).modules.map((module3) => `QT_${module3.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}_LIB`)
             ]);
             const objectDirectory = path2.resolve(projectRoot, profile.outputDirectory, isReleaseBuildModeCompat(mode) ? "release" : "debug", "obj");
             const sources = unique(files.sources);
@@ -50725,6 +51257,7 @@ var require_qpmQtAppleService = __commonJS({
     var child_process_1 = require("child_process");
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
+    var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var QpmQtAppleService = class {
       workspaces;
       builds;
@@ -51426,7 +51959,9 @@ var require_qpmQtAppleService = __commonJS({
       const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(context.manifestPath || path2.join(context.root, `${context.manifest.name}.qtproject.json`), context.manifest);
       const sourceFiles = [...files.sources, ...files.headers, ...files.forms, ...files.resources].map(cmakePath);
       const qmlFiles = files.qml.map(cmakePath);
-      const modules = [...new Set(context.manifest.qt.modules.length ? context.manifest.qt.modules : ["Core", "Gui"])];
+      const resolvedManifestPath = context.manifestPath || path2.join(context.root, `${context.manifest.name}.qtproject.json`);
+      const inferredModules = (0, qpmQtModuleInference_1.effectiveQtModules)(resolvedManifestPath, context.manifest).modules;
+      const modules = [...new Set(inferredModules.length ? inferredModules : ["Core", "Gui"])];
       const bundleId = appleBundleIdentifier(context.platform, context.manifest);
       const target = cmakeIdentifier(context.manifest.targetName);
       const lines = [
@@ -55075,6 +55610,7 @@ var require_qpmQtAndroidService = __commonJS({
     var child_process_1 = require("child_process");
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
+    var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var QpmQtAndroidService = class {
       workspaces;
       qtInstallations;
@@ -55736,8 +56272,9 @@ var require_qpmQtAndroidService = __commonJS({
       const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(context.manifestPath, context.manifest);
       const sources = [...files.sources, ...files.headers, ...files.forms, ...files.resources, ...files.qml];
       const sourceList = sources.map(cmakeQuote).join("\n  ");
-      const modules = context.manifest.qt.modules.join(" ");
-      const qtTargets = context.manifest.qt.modules.map((module3) => `Qt6::${module3}`).join(" ");
+      const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
+      const modules = effectiveModules.join(" ");
+      const qtTargets = effectiveModules.map((module3) => `Qt6::${module3}`).join(" ");
       const target = cmakeIdentifier(context.manifest.targetName);
       const includeDirs = context.manifest.includeDirectories.map((entry) => cmakeQuote(path2.resolve(context.root, entry))).join("\n  ");
       const definitions = [...context.manifest.defines, ...context.buildProfile.defines].map(cmakeQuote).join(" ");

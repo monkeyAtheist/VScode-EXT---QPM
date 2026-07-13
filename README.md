@@ -2,6 +2,16 @@
 
 Qt Project Manager and Build (QPM) provides a project-oriented Qt/C++ workflow in Visual Studio Code. Projects can use QPM's direct `moc`/`uic`/`rcc` build engine, qmake or CMake, while kits keep the Qt installation, compiler, debugger, environment and build tools consistent per project.
 
+## Version 0.15.2 — EPERM-safe deferred clean
+
+Version 0.15.2 removes the last Windows clean race. **Clean Project** no longer recreates `generated` and `obj` immediately after moving the previous build directory aside. Their creation is deferred to the next build, where QPM applies its existing retry and diagnostic logic. If Windows prevents the atomic rename, QPM cleans in place while preserving the directory roots and deleting only their contents.
+
+## Version 0.15.1 — Qt Designer module inference and reliable clean
+
+Version 0.15.1 detects module requirements introduced by `.ui` files and source headers. For example, adding `QOpenGLWidget` in Qt Designer automatically adds the `OpenGLWidgets` module to direct, qmake, CMake, Android, Apple and IntelliSense plans. The project manifest can still list the module explicitly, but a missing manual entry no longer causes an undefined-reference linker failure.
+
+Direct-build cleanup stops matching applications launched by QPM and atomically moves the previous mode directory aside. The initial 0.15.1 implementation recreated `generated` and `obj` immediately; version 0.15.2 supersedes that step by deferring directory creation to the next build to avoid a remaining Windows `EPERM` race.
+
 ## Version 0.15.0 — Publication and application updates
 
 Version 0.15.0 adds a complete desktop release-publication layer on top of QPM packaging and installer workflows. Projects can generate Windows MSIX packages, `.appinstaller` update descriptors, WinGet manifest sets, release metadata and SHA-256 checksum files, then publish the assembled bundle to a local directory, an SSH/rsync destination or a GitHub Release.

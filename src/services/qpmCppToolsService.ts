@@ -8,6 +8,7 @@ import { describeSdlRoot, getSdlConfigurationFromWorkspace } from './qpmSdlServi
 import { getActiveQtBuildProfile, getQtKitProfileForBuild, getQtInstallationPreference, isQtProjectManifestPath, qtGeneratedDirectory, qtManifestToQpmProject, readQtProjectManifest, resolveQtProjectFiles } from '../model/qtProjectManifest';
 import { QpmQtInstallationService } from './qpmQtInstallationService';
 import { createQtDirectBuildPlan, qtCompileArguments, qtObjectPathForSource, resolveQtMkspecDirectory, resolveQtModuleOrder } from './qpmQtDirectBuildService';
+import { effectiveQtModules } from './qpmQtModuleInference';
 
 const MANAGED_CONFIGURATION_NAME = 'Qt Project Manager (managed)';
 const CPPTOOLS_EXTENSION_ID = 'ms-vscode.cpptools';
@@ -841,7 +842,7 @@ export class QpmCppToolsService implements vscode.Disposable {
         const manifest = readQtProjectManifest(activeRef.absolutePath);
         const qt = this.qtInstallations.getActive(getQtInstallationPreference(manifest));
         if (qt) {
-          const modules = resolveQtModuleOrder(manifest.qt.modules);
+          const modules = resolveQtModuleOrder(effectiveQtModules(activeRef.absolutePath, manifest).modules);
           base.push(qt.includeDir, ...modules.map((module) => path.join(qt.includeDir, `Qt${module}`)));
           const mkspecDirectory = resolveQtMkspecDirectory(qt);
           if (mkspecDirectory) base.push(mkspecDirectory);
@@ -997,13 +998,13 @@ export class QpmCppToolsService implements vscode.Disposable {
           ...manifest.includeDirectories.map((entry) => path.resolve(projectRoot, entry)),
           generatedDirectory,
           installation.includeDir,
-          ...resolveQtModuleOrder(manifest.qt.modules).map((module) => path.join(installation.includeDir, `Qt${module}`)),
+          ...resolveQtModuleOrder(effectiveQtModules(activeRef.absolutePath, manifest).modules).map((module) => path.join(installation.includeDir, `Qt${module}`)),
           resolveQtMkspecDirectory(installation) || ''
         ].filter(Boolean));
         const defines = unique([
           ...manifest.defines,
           ...profile.defines,
-          ...manifest.qt.modules.map((module) => `QT_${module.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}_LIB`)
+          ...effectiveQtModules(activeRef.absolutePath, manifest).modules.map((module) => `QT_${module.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}_LIB`)
         ]);
         const objectDirectory = path.resolve(projectRoot, profile.outputDirectory, isReleaseBuildModeCompat(mode) ? 'release' : 'debug', 'obj');
         const sources = unique(files.sources);

@@ -1,3 +1,37 @@
+# 0.15.2
+
+### Fixed
+
+- Prevented `Clean Project` from recreating `build/<mode>/generated` and `obj` while Windows file watchers are still transitioning from the previous build directory.
+- Removed the clean-time `mkdir` operation that could fail with `EPERM` immediately after a successful atomic directory rename.
+- Deferred build-directory creation to the next build, where QPM already provides retries, Windows shell fallback and detailed diagnostics.
+- Changed the in-place fallback to preserve the `generated` and `obj` directory roots while deleting only their contents, avoiding delete/recreate races.
+- Made an already absent build directory a successful no-op instead of recreating an empty skeleton.
+- Kept locked pending-clean directories isolated for a later retry without failing the active clean command.
+
+### Validation
+
+- Added simulated `EPERM` coverage that rejects every clean-time `mkdir` for `generated` and `obj`.
+- Added atomic-rename, absent-directory and forced in-place-fallback scenarios.
+- Full regression from QPM 0.2.0 through QPM 0.15.2 passes.
+
+# 0.15.1
+
+### Fixed
+
+- Automatically detects Qt module dependencies introduced by Qt Designer forms and C++ headers/sources, including `QOpenGLWidget` → `OpenGLWidgets`.
+- Adds inferred modules to direct, qmake, CMake, Android, Apple and IntelliSense configurations without requiring a manual manifest edit.
+- Tracks applications launched by QPM and stops the matching process before clean, rebuild or relink operations.
+- Cleans direct-build output through an atomic rename-and-recreate strategy to avoid Windows `EPERM` races with IntelliSense, antivirus scanners and file watchers.
+- Recreates the `generated` and `obj` directories immediately after clean so the next build starts from a stable directory skeleton.
+- Retries removal of Windows-locked artifacts and preserves pending cleanup directories for a later retry instead of leaving the active build directory half-deleted.
+
+### Validation
+
+- Reproduced the reported `QOpenGLWidget` form with a manifest that omitted `OpenGLWidgets` and verified `-lQt6OpenGLWidgets` is added to the direct linker command.
+- Added atomic clean/recreate tests and source checks for exact-path process termination on Windows.
+- Full regression from QPM 0.2.0 through QPM 0.15.1 passes.
+
 # 0.15.0
 
 ### Added

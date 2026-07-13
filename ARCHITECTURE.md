@@ -257,3 +257,12 @@ For iOS, QPM writes an isolated generated `CMakeLists.txt` under `.qpm/apple/gen
 For macOS, the normal QPM build produces the application bundle, after which `macdeployqt` deploys Qt frameworks/plugins and may create a DMG. Signing, verification, notarization and stapling are separate explicit stages using system Apple tools. Credentials are not stored in the project manifest; notarization references a Keychain profile managed by `notarytool`.
 
 The Apple provider is read-only apart from command dispatch. Durable configuration remains in the schema-v14 platform profile, and tool readiness is also surfaced through the generic project-health/platform capability path.
+
+
+## Qt module inference and direct-build cleanup (0.15.1)
+
+`QpmQtModuleInference` scans project sources, headers and Qt Designer forms before a build plan is generated. Module-prefixed includes such as `QtOpenGLWidgets/QOpenGLWidget` and known widget/class names are mapped to their owning Qt module. The inferred set is merged with the explicit `manifest.qt.modules` list and is consumed by the direct linker, generated qmake/CMake projects, Android and Apple generators, and C/C++ IntelliSense. Inference is non-destructive: it does not silently rewrite the project manifest.
+
+`QpmBuildCleanup` handles direct-build cleaning independently from code generation. The preferred strategy renames the complete mode directory to a unique pending path and removes that pending tree with bounded retries. It intentionally does not recreate `generated` or `obj` during the clean command: directory creation is owned by the next build and its retry-aware `ensureDirectory()` path. If Windows refuses the rename, QPM falls back to in-place removal while preserving the `generated` and `obj` roots and deleting only their contents.
+
+`QpmBuildService` retains process handles for applications it launches. Clean, rebuild and relink operations stop the tracked process, stop a matching active VS Code debug session, and on Windows query processes by exact executable path before modifying the target directory. This avoids both executable locks and the delete/recreate race with IntelliSense.
