@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const packageJson = JSON.parse(read('package.json'));
 
-assert.strictEqual(packageJson.version, '0.17.2', 'package version must be 0.17.2');
+assert.strictEqual(packageJson.version, '0.17.6', 'package version must be 0.17.3');
 
 const commandIds = packageJson.contributes.commands.map((entry) => entry.command);
 assert.strictEqual(new Set(commandIds).size, commandIds.length, 'VS Code commands must not be duplicated');

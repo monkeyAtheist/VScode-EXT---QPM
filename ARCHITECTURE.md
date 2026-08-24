@@ -1,3 +1,8 @@
+
+## Qt Designer launcher policy (0.17.5)
+
+The Qt/C++ and PySide6 Designer launch paths are deliberately isolated. Native Qt/C++ forms use a direct standalone Designer process (`designer.exe <form.ui>`) with `windowsHide` on Windows. QPM does not use Designer server mode, does not intercept Designer recovery state, and does not redirect native forms to Qt Creator. PySide6 uses its own `pyside6-designer` launcher.
+
 # QPM architecture
 
 ## Schema v17 persistence
@@ -300,3 +305,12 @@ project creation -> .venv -> PySide6 readiness -> pyside6-project -> run/debug/d
 ```
 
 Widgets projects can keep Designer `.ui` files and generate `ui_*.py` through `pyside6-uic`; resource files use `pyside6-rcc`. Quick projects keep QML sources in the normal manifest file lists and can reuse QPM's `qmlls` lifecycle. Desktop deployment is delegated to the PySide6 deployment tools rather than the C++ packaging backend.
+
+
+### Qt Widgets Designer session broker (0.17.3)
+
+Standalone Qt Widgets Designer is treated as a shared GUI tool rather than a per-file subprocess. QPM starts `designer --server`, reads the loopback TCP port emitted by Designer, and sends absolute `.ui` paths to that server. A session is keyed by the resolved Designer executable so different Qt kits can keep isolated Designer processes. Qt Creator launchers bypass this broker and keep their direct file-opening behavior.
+
+### Recovery-safe Qt Widgets Designer fallback (0.17.4)
+
+On Windows, standalone Qt Widgets Designer stores crash-recovery lists in the native QSettings registry hierarchy `HKCU\Software\QtProject\Designer\backup`. QPM probes the `fileListOrg` and `fileListBak` values read-only before starting an auto-detected standalone Designer. If recovery state is pending, QPM does not clear, rewrite or import those values. Instead it discovers Qt Creator from the active Qt installation tree and opens the `.ui` file in Qt Creator's integrated Widgets Designer with `-no-crashcheck`. This avoids blocking the QPM workflow while preserving the user's recoverable standalone Designer forms. Explicitly configured Designer launchers remain authoritative.

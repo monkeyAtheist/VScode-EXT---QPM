@@ -626,7 +626,7 @@ async function spawnDesigner(installation: QpmQtInstallation, target: string, ou
     const child = spawn(executable, [target], {
       cwd: path.dirname(target),
       detached: true,
-      windowsHide: process.platform === 'win32',
+      windowsHide: false,
       stdio: 'ignore',
       shell: false,
       env: designerEnvironment(installation)

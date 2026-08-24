@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const commandIds = pkg.contributes.commands.map((entry) => entry.command);
 for (const command of [

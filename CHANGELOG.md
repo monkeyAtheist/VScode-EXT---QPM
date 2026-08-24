@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.17.6 — Restore pre-Python Qt Designer launch semantics
+
+- Restores the Qt/C++ `.ui` launcher to the exact Windows process flags used by QPM 0.10.0, the version physically validated on the target workstation.
+- Qt/C++ Designer again launches directly with `designer.exe <form.ui>`, `cwd` set to the form directory, `detached: true`, `windowsHide: false`, `stdio: ignore`, and `shell: false`.
+- Keeps the PySide6 launcher isolated and unchanged: Python projects still suppress the transient Windows console window.
+- Removes no user settings and does not use Qt Creator, Designer server mode, recovery interception, or the VS Code integrated terminal.
+- Adds a regression test that pins the C++ launcher to the known-good 0.10.0 semantics.
+
+## 0.17.5 — Restore validated direct Qt Designer launch for C++
+
+- Restores the Qt/C++ `.ui` opening path validated in QPM 0.17.1/0.17.2: QPM launches `designer.exe <form.ui>` directly.
+- Removes the experimental `designer.exe --server` session introduced in 0.17.3.
+- Removes the Qt Creator recovery fallback introduced in 0.17.4, so opening a C++ form no longer starts the full Qt Creator IDE.
+- Keeps Windows console suppression (`windowsHide`) for standalone Designer.
+- Keeps the PySide6-specific console suppression introduced in 0.17.2; the Python and C++ Designer launchers remain independent.
+- Existing Designer backup/recovery data is left to Qt Designer itself. A normal Designer shutdown clears its backup state.
+- Adds a regression test that prevents the server/fallback mechanisms from being reintroduced into the C++ path.
+
+## 0.17.4
+
+- Detect pending standalone Qt Widgets Designer recovery state on Windows from the `QtProject/Designer` QSettings registry entries.
+- Preserve all Designer recovery metadata and backup files; QPM performs no registry deletion.
+- Automatically fall back to the integrated Qt Creator Designer when recovery state would otherwise block `designer.exe`.
+- Auto-discover Qt Creator under `Tools/QtCreator/bin` relative to the active Qt installation.
+- Launch the fallback with `-no-crashcheck` and without a Windows console.
+- Keep the 0.17.3 single-session `designer.exe --server` workflow when the standalone Designer state is clean.
+- Add QPM 0.17.4 recovery-safe Designer regression coverage.
+
+# Changelog
+
+## 0.17.3
+
+- Fixes repeated standalone Qt Widgets Designer processes when a `.ui` entry is clicked more than once from the QPM tree.
+- QPM now starts one `designer.exe --server` process per resolved Designer executable and sends subsequent `.ui` open requests to that existing process over the loopback interface.
+- Prevents concurrent Designer instances from sharing the same global backup state and incorrectly reporting that the previous Designer session terminated abnormally.
+- The Windows Designer server runs without a detached process group and with its console hidden.
+- Qt Creator remains supported as an explicit Designer launcher and keeps its direct file-open path.
+- Existing Qt Designer recovery files are not deleted automatically; after updating, dismiss/recover any one-time stale backup prompt and close old Designer instances normally.
+
 ## 0.17.2
 
 - Fixes the transient Windows console that still appeared when opening a `.ui` file from a Qt for Python / PySide6 project.

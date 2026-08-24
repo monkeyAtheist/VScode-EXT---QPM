@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const cleanup = require('../out/services/qpmBuildCleanup.js');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-clean-deferred-0152-'));

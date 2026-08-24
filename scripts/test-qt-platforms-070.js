@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const manifestModule = require(path.join(root, 'out', 'model', 'qtProjectManifest.js'));
 const manifest = manifestModule.createDefaultQtProjectManifest('PlatformApp', 'widgets-application');

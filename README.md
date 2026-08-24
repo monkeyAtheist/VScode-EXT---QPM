@@ -1,6 +1,23 @@
 # Qt Project Manager and Build
 
+## QPM 0.17.6 — Qt/C++ Designer regression fix
+
+QPM 0.17.6 restores the exact Qt/C++ Designer process-launch behavior from QPM 0.10.0, which was physically validated on Windows before Qt for Python was integrated. The C++ and PySide6 Designer launchers are now intentionally different: C++ uses the historical direct `designer.exe` behavior, while PySide6 retains Windows console suppression.
+
+## Version 0.17.4 — Recovery-safe Qt Widgets Designer
+
+QPM now detects pending crash-recovery state from the standalone Qt Widgets Designer on Windows. When such state is present and the Designer executable was auto-detected, QPM leaves the recovery registry entries and backup files untouched and automatically opens the requested `.ui` file with the Qt Creator integrated Designer instead. Qt Creator is discovered from the Qt installation tree (for example `Tools/QtCreator/bin/qtcreator.exe`) and is launched with `-no-crashcheck` so an unrelated Qt Creator crash-check dialog cannot replace the Designer recovery dialog.
+
+The normal single-session `designer.exe --server` broker remains the default when no recovery state is pending. An explicitly configured `designer.exe` override is also respected.
+
+
 Qt Project Manager and Build (QPM) provides project-oriented Qt workflows in Visual Studio Code for both **Qt/C++** and **Qt for Python / PySide6**. C++ projects can use QPM's direct `moc`/`uic`/`rcc` build engine, qmake or CMake, while Python projects can use project-local interpreters, virtual environments, `pyside6-project`, Designer and PySide6 deployment tools.
+
+## Version 0.17.3 — Single-session Qt Widgets Designer
+
+QPM now keeps one standalone Qt Widgets Designer process per resolved `designer.exe` and opens additional `.ui` forms through Designer's built-in local server channel instead of spawning a new Designer process for every click. This avoids multiple Designer instances competing for the same QtProject/Designer recovery state, which could incorrectly trigger the “last session was not terminated correctly” backup prompt.
+
+On Windows the Designer server is launched with its console hidden and without a detached Windows process group. Qt Creator remains available as an explicit launcher through **Select Qt Widgets Designer Executable**. QPM never deletes Designer recovery data automatically; if a stale recovery dialog exists from an older session, handle it once and close any old Designer processes normally.
 
 ## Version 0.17.0 — C/C++ dependency managers
 

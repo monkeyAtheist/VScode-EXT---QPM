@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 assert.strictEqual(pkg.dependencies['vscode-languageclient'], '^9.0.1');
 
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));

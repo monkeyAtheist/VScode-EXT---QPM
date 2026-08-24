@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const source = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtPythonService.ts'), 'utf8');
 const start = source.indexOf('async openDesigner(');
@@ -23,4 +23,4 @@ assert(emitted.includes("windowsHide: process.platform === 'win32'"), 'Emitted r
 assert(emitted.includes("detached: process.platform !== 'win32'"), 'Emitted runtime must avoid detached Windows console creation');
 assert(emitted.includes('shell: false'), 'Emitted runtime must disable shell spawning');
 
-console.log('QPM 0.17.2 PySide6 Designer Windows console suppression tests: PASS');
+console.log('QPM 0.17.4 PySide6 Designer Windows console suppression tests: PASS');

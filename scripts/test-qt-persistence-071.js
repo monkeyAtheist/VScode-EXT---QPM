@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
 const model = require(path.join(root, 'out', 'model', 'qtProjectManifest.js'));
 const debug = require(path.join(root, 'out', 'services', 'qpmQtDebugService.js'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-persistence-071-'));
 const manifestPath = path.join(temp, 'PersistentApp.qtproject.json');

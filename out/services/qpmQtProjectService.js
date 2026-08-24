@@ -639,7 +639,7 @@ async function spawnDesigner(installation, target, output) {
         const child = (0, child_process_1.spawn)(executable, [target], {
             cwd: path.dirname(target),
             detached: true,
-            windowsHide: process.platform === 'win32',
+            windowsHide: false,
             stdio: 'ignore',
             shell: false,
             env: designerEnvironment(installation)

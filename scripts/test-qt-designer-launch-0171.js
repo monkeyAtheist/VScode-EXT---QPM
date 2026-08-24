@@ -6,10 +6,10 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.2');
+assert.strictEqual(pkg.version, '0.17.6');
 
 const projectSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
-assert(projectSource.includes("windowsHide: process.platform === 'win32'"), 'Qt Designer must be started without a visible Windows console');
+assert(projectSource.includes('windowsHide: false'), 'C++ Designer must preserve the validated pre-Python Windows launch behavior');
 const starterStart = projectSource.indexOf('function widgetsMainWindowUi');
 const starterEnd = projectSource.indexOf('function quickMainQml', starterStart);
 assert(starterStart >= 0 && starterEnd > starterStart, 'Widgets starter UI generator must exist');
@@ -28,4 +28,4 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 assert(readme.includes('Ctrl+0'), 'README must explain how to break an existing Qt layout');
 assert(readme.includes('QtCreator\\bin\\qtcreator.exe'), 'README must document the Qt Creator integrated Designer launcher path');
 
-console.log('QPM 0.17.1 Designer launch, free-form starter and Windows console suppression tests: PASS');
+console.log('QPM 0.17.6 Designer launch and free-form starter compatibility tests: PASS');
