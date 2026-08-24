@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Qt Project Manager native project (schema v15)",
+  "title": "Qt Project Manager native project (schema v17)",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -14,6 +14,8 @@
     "testing",
     "quality",
     "profiling",
+    "dependencies",
+    "python",
     "qml",
     "packaging",
     "publication"
@@ -22,7 +24,7 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 15
+      "const": 17
     },
     "name": {
       "type": "string",
@@ -37,7 +39,9 @@
         "quick-test-application",
         "test-application",
         "shared-library",
-        "static-library"
+        "static-library",
+        "python-widgets-application",
+        "python-quick-application"
       ]
     },
     "targetName": {
@@ -166,6 +170,13 @@
         },
         "other": {
           "$ref": "#/$defs/pathArray"
+        },
+        "python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     },
@@ -1722,6 +1733,389 @@
             },
             "deleteRemote": {
               "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "python": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "binding",
+        "interpreter",
+        "virtualEnvironment",
+        "autoCreateVirtualEnvironment",
+        "autoInstallPySide6",
+        "pySideVersion",
+        "projectFile",
+        "entryPoint",
+        "uiMode",
+        "buildBeforeRun",
+        "deployEnabled",
+        "deploySpecFile",
+        "androidDeployEnabled",
+        "toolOverrides",
+        "additionalProjectArguments",
+        "additionalDeployArguments",
+        "environment"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "binding": {
+          "type": "string",
+          "enum": [
+            "pyside6"
+          ]
+        },
+        "interpreter": {
+          "type": "string"
+        },
+        "virtualEnvironment": {
+          "type": "string"
+        },
+        "autoCreateVirtualEnvironment": {
+          "type": "boolean"
+        },
+        "autoInstallPySide6": {
+          "type": "boolean"
+        },
+        "pySideVersion": {
+          "type": "string"
+        },
+        "projectFile": {
+          "type": "string"
+        },
+        "entryPoint": {
+          "type": "string"
+        },
+        "uiMode": {
+          "type": "string",
+          "enum": [
+            "compiled",
+            "runtime"
+          ]
+        },
+        "buildBeforeRun": {
+          "type": "boolean"
+        },
+        "deployEnabled": {
+          "type": "boolean"
+        },
+        "deploySpecFile": {
+          "type": "string"
+        },
+        "androidDeployEnabled": {
+          "type": "boolean"
+        },
+        "toolOverrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "project",
+            "designer",
+            "uic",
+            "rcc",
+            "deploy",
+            "androidDeploy",
+            "linguist",
+            "lupdate",
+            "lrelease",
+            "qmllint"
+          ],
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "designer": {
+              "type": "string"
+            },
+            "uic": {
+              "type": "string"
+            },
+            "rcc": {
+              "type": "string"
+            },
+            "deploy": {
+              "type": "string"
+            },
+            "androidDeploy": {
+              "type": "string"
+            },
+            "linguist": {
+              "type": "string"
+            },
+            "lupdate": {
+              "type": "string"
+            },
+            "lrelease": {
+              "type": "string"
+            },
+            "qmllint": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProjectArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "additionalDeployArguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "autoInstallBeforeBuild",
+        "outputDirectory",
+        "cmakeFindPackages",
+        "cmakeLinkTargets",
+        "additionalIncludeDirectories",
+        "additionalLibraryDirectories",
+        "additionalLibraries",
+        "vcpkg",
+        "conan",
+        "pkgConfig"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "autoInstallBeforeBuild": {
+          "type": "boolean"
+        },
+        "outputDirectory": {
+          "type": "string"
+        },
+        "cmakeFindPackages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cmakeLinkTargets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "additionalIncludeDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "additionalLibraryDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "additionalLibraries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "vcpkg": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "executable",
+            "root",
+            "manifestFile",
+            "installRoot",
+            "triplet",
+            "hostTriplet",
+            "baseline",
+            "dependencies",
+            "features",
+            "overlayPorts",
+            "overlayTriplets",
+            "additionalArguments"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "executable": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "manifestFile": {
+              "type": "string"
+            },
+            "installRoot": {
+              "type": "string"
+            },
+            "triplet": {
+              "type": "string"
+            },
+            "hostTriplet": {
+              "type": "string"
+            },
+            "baseline": {
+              "type": "string"
+            },
+            "dependencies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "overlayPorts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "overlayTriplets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "additionalArguments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "conan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "executable",
+            "manifestFile",
+            "outputDirectory",
+            "requires",
+            "toolRequires",
+            "options",
+            "profileHost",
+            "profileBuild",
+            "buildMissing",
+            "lockfile",
+            "additionalArguments"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "executable": {
+              "type": "string"
+            },
+            "manifestFile": {
+              "type": "string"
+            },
+            "outputDirectory": {
+              "type": "string"
+            },
+            "requires": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "toolRequires": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "profileHost": {
+              "type": "string"
+            },
+            "profileBuild": {
+              "type": "string"
+            },
+            "buildMissing": {
+              "type": "boolean"
+            },
+            "lockfile": {
+              "type": "string"
+            },
+            "additionalArguments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "pkgConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "executable",
+            "packages",
+            "searchPaths",
+            "staticLink",
+            "additionalArguments"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "executable": {
+              "type": "string"
+            },
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "searchPaths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "staticLink": {
+              "type": "boolean"
+            },
+            "additionalArguments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         }

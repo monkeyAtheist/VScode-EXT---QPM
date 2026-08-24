@@ -1,6 +1,55 @@
 # Qt Project Manager and Build
 
-Qt Project Manager and Build (QPM) provides a project-oriented Qt/C++ workflow in Visual Studio Code. Projects can use QPM's direct `moc`/`uic`/`rcc` build engine, qmake or CMake, while kits keep the Qt installation, compiler, debugger, environment and build tools consistent per project.
+Qt Project Manager and Build (QPM) provides project-oriented Qt workflows in Visual Studio Code for both **Qt/C++** and **Qt for Python / PySide6**. C++ projects can use QPM's direct `moc`/`uic`/`rcc` build engine, qmake or CMake, while Python projects can use project-local interpreters, virtual environments, `pyside6-project`, Designer and PySide6 deployment tools.
+
+## Version 0.17.0 — C/C++ dependency managers
+
+Version 0.17.0 adds project-local dependency management for native Qt/C++ projects. QPM can drive **vcpkg manifest mode**, **Conan 2** and **pkg-config/pkgconf**, then publish a normalized build-integration file consumed by the direct, qmake and CMake backends. Qt for Python projects continue to use their Python environment and `pip`/`pyproject.toml` workflow.
+
+A dedicated **Qt Dependencies** view reports configured managers, executable discovery, synchronization state, package count and generated output. The same operations are available from Qt Project Settings and the consolidated editor/Explorer context menus.
+
+### Manifest schema v17
+
+Schema v17 adds a top-level `dependencies` section. It stores manager enablement, tool overrides, manifests, triplets/profiles, package requirements, pkg-config search paths, additional libraries/include paths and optional CMake package/target metadata. Existing schema-v1 through schema-v16 projects migrate automatically with dependency management disabled by default and a sibling backup of the previous manifest.
+
+The dependency workflow supports:
+
+- generation of project-local `vcpkg.json` manifests with optional builtin baseline, features, target/host triplets and overlay ports/triplets;
+- project-local vcpkg installation under `.qpm/dependencies/vcpkg_installed` by default;
+- Conan 2 `conanfile.txt` generation with `[requires]`, `[tool_requires]`, `[options]`, `CMakeDeps`, `CMakeToolchain`, `PkgConfigDeps` and `cmake_layout`;
+- Conan host/build profiles, lockfiles, `--build=missing` and additional install arguments;
+- `pkg-config`/`pkgconf` resolution of compiler/linker flags, including static-link mode and project-local `PKG_CONFIG_PATH` entries;
+- normalized `.qpm/dependencies/integration.json` output shared by all native C++ build backends;
+- automatic dependency synchronization before Build when explicitly enabled;
+- additional CMake `find_package(...)` declarations and imported targets for generated CMake backends;
+- dependency reports, tool detection, output reveal and cleanup actions.
+
+## Version 0.16.0 — Qt for Python / PySide6
+
+Version 0.16.0 adds first-class **Qt for Python** support without replacing the existing C++ workflow. QPM can create Qt Widgets and Qt Quick projects backed by PySide6, maintain a project-local `.venv`, select or synchronize the Python interpreter, install PySide6 on request, build/run/debug the application, open PySide6 Designer, compile `.ui` and `.qrc` resources and drive the PySide6 deployment tools.
+
+Two native project kinds are available:
+
+- **Qt for Python — Widgets (PySide6)** for traditional QWidget applications and Designer `.ui` files;
+- **Qt for Python — Quick (PySide6)** for QML/Qt Quick applications.
+
+A dedicated **Qt for Python** view reports Python/PySide6 readiness and exposes environment, build, run, debug, clean, Designer, deployment and report commands. The central Qt Project Settings page contains interpreter, virtual-environment, project-file, entry-point, UI-generation, tool-override and deployment settings.
+
+### Manifest schema v16
+
+Schema v16 adds a top-level `python` block and Python source-file registration. Existing C++/Qt projects migrate with the Python backend disabled, so their build and deployment behavior remains unchanged. Qt Quick Python projects can reuse the QML language-server and module infrastructure introduced in QPM 0.13.
+
+The Qt for Python workflow supports:
+
+- project-local `.venv` creation with `python -m venv`;
+- explicit interpreter selection and VS Code `python.defaultInterpreterPath` synchronization;
+- optional `python -m pip install PySide6`;
+- `pyside6-project` build/run integration;
+- `pyside6-designer`, `pyside6-uic` and `pyside6-rcc`;
+- `debugpy` launch configuration generation;
+- desktop deployment through `pyside6-project deploy` or `pyside6-deploy`;
+- `pyside6-android-deploy` integration when enabled and supported by the host/toolchain;
+- project-local environment variables and additional build/deployment arguments.
 
 ## Version 0.15.2 — EPERM-safe deferred clean
 
@@ -500,7 +549,13 @@ The generated configuration uses the active Qt kit compiler, module include dire
 
 ### Qt Widgets Designer
 
-Clicking a `.ui` file in the QPM workspace launches Qt Widgets Designer directly. QPM searches the selected kit, the surrounding Qt installation and its `Tools` directory, then uses Qt Creator as a controlled fallback. A custom path can be selected with **Qt Project Manager: Select Qt Widgets Designer Executable**.
+Clicking a `.ui` file in the QPM workspace launches Qt Widgets Designer directly. On Windows QPM launches the GUI process without creating a visible console window.
+
+New QPM Widgets forms start with an empty `centralWidget`, without an imposed top-level layout, so widgets can initially be positioned and resized freely with the mouse. Once a Qt layout is applied, Qt itself owns the child-widget geometry; use **Form > Break Layout** or `Ctrl+0` to return to free positioning. Existing `.ui` files are not changed by QPM.
+
+QPM can also use Qt Creator's integrated Widgets Designer. Select `qtcreator.exe` with **Qt Project Manager: Select Qt Widgets Designer Executable**. A typical Qt 6.11 installation uses `C:\Qt\Qt6.11.0\Tools\QtCreator\bin\qtcreator.exe`.
+
+QPM searches the selected kit, the surrounding Qt installation and its `Tools` directory, then uses Qt Creator as a controlled fallback. A custom path can be selected with **Qt Project Manager: Select Qt Widgets Designer Executable**.
 
 ### Native project templates
 

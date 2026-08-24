@@ -3,9 +3,12 @@ import * as path from 'path';
 import { QpmBuildMode, QpmProject, QpmProjectFile, QpmWorkspace } from './types';
 
 export const QT_PROJECT_SUFFIX = '.qtproject.json';
-export const QT_PROJECT_SCHEMA_VERSION = 15;
+export const QT_PROJECT_SCHEMA_VERSION = 17;
 
-export type QtProjectKind = 'widgets-application' | 'console-application' | 'quick-application' | 'test-application' | 'quick-test-application' | 'shared-library' | 'static-library';
+export type QtProjectKind = 'widgets-application' | 'console-application' | 'quick-application' | 'test-application' | 'quick-test-application' | 'shared-library' | 'static-library' | 'python-widgets-application' | 'python-quick-application';
+export type QtProjectLanguage = 'cpp' | 'python';
+export type QtPythonBinding = 'pyside6';
+export type QtPythonUiMode = 'compiled' | 'runtime';
 export type QtTestFramework = 'auto' | 'qttest' | 'qtquicktest' | 'gtest' | 'catch2' | 'boost' | 'ctest';
 export type QtTestRepeatMode = 'never' | 'until-fail' | 'after-timeout';
 export type QtBuildSystem = 'direct' | 'qmake' | 'cmake';
@@ -23,6 +26,7 @@ export interface QtProjectFiles {
   forms: string[];
   resources: string[];
   qml: string[];
+  python: string[];
   translations: string[];
   other: string[];
 }
@@ -508,6 +512,59 @@ export interface QtQmlConfiguration {
   };
 }
 
+
+export interface QtDependenciesConfiguration {
+  enabled: boolean;
+  autoInstallBeforeBuild: boolean;
+  outputDirectory: string;
+  cmakeFindPackages: string[];
+  cmakeLinkTargets: string[];
+  additionalIncludeDirectories: string[];
+  additionalLibraryDirectories: string[];
+  additionalLibraries: string[];
+  vcpkg: {
+    enabled: boolean; executable: string; root: string; manifestFile: string; installRoot: string; triplet: string; hostTriplet: string; baseline: string; dependencies: string[]; features: string[]; overlayPorts: string[]; overlayTriplets: string[]; additionalArguments: string[];
+  };
+  conan: {
+    enabled: boolean; executable: string; manifestFile: string; outputDirectory: string; requires: string[]; toolRequires: string[]; options: string[]; profileHost: string; profileBuild: string; buildMissing: boolean; lockfile: string; additionalArguments: string[];
+  };
+  pkgConfig: {
+    enabled: boolean; executable: string; packages: string[]; searchPaths: string[]; staticLink: boolean; additionalArguments: string[];
+  };
+}
+
+export interface QtPythonConfiguration {
+  enabled: boolean;
+  binding: QtPythonBinding;
+  interpreter: string;
+  virtualEnvironment: string;
+  autoCreateVirtualEnvironment: boolean;
+  autoInstallPySide6: boolean;
+  pySideVersion: string;
+  projectFile: string;
+  entryPoint: string;
+  uiMode: QtPythonUiMode;
+  buildBeforeRun: boolean;
+  deployEnabled: boolean;
+  deploySpecFile: string;
+  androidDeployEnabled: boolean;
+  toolOverrides: {
+    project: string;
+    designer: string;
+    uic: string;
+    rcc: string;
+    deploy: string;
+    androidDeploy: string;
+    linguist: string;
+    lupdate: string;
+    lrelease: string;
+    qmllint: string;
+  };
+  additionalProjectArguments: string[];
+  additionalDeployArguments: string[];
+  environment: Record<string, string>;
+}
+
 export interface QtProfilingConfiguration {
   outputDirectory: string;
   buildBeforeRun: boolean;
@@ -597,6 +654,8 @@ export interface QtProjectManifest {
   quality: QtQualityConfiguration;
   profiling: QtProfilingConfiguration;
   qml: QtQmlConfiguration;
+  python: QtPythonConfiguration;
+  dependencies: QtDependenciesConfiguration;
   packaging: QtPackagingConfiguration;
   publication: QtPublicationConfiguration;
   files: QtProjectFiles;
@@ -612,11 +671,12 @@ export interface ResolvedQtProjectFiles {
   forms: string[];
   resources: string[];
   qml: string[];
+  python: string[];
   translations: string[];
   other: string[];
 }
 
-const FILE_KEYS: Array<keyof QtProjectFiles> = ['sources', 'headers', 'forms', 'resources', 'qml', 'translations', 'other'];
+const FILE_KEYS: Array<keyof QtProjectFiles> = ['sources', 'headers', 'forms', 'resources', 'qml', 'python', 'translations', 'other'];
 
 export function isQtProjectManifestPath(filePath: string): boolean {
   return filePath.toLowerCase().endsWith(QT_PROJECT_SUFFIX);
@@ -651,10 +711,12 @@ export function createDefaultQtProjectManifest(name: string, kind: QtProjectKind
     quality: defaultQualityConfiguration(),
     profiling: defaultProfilingConfiguration(),
     qml: defaultQmlConfiguration(name, kind),
+    python: defaultPythonConfiguration(kind),
+    dependencies: defaultDependenciesConfiguration(),
     packaging: defaultPackagingConfiguration(name),
     publication: defaultPublicationConfiguration(name),
     files: {
-      sources: [], headers: [], forms: [], resources: [], qml: [], translations: [], other: []
+      sources: [], headers: [], forms: [], resources: [], qml: [], python: [], translations: [], other: []
     },
     includeDirectories: ['include'],
     libraryDirectories: [],
@@ -744,6 +806,8 @@ export function validateAndNormalizeManifest(raw: unknown, manifestPath = '<memo
     quality: normalizeQualityConfiguration(value.quality),
     profiling: normalizeProfilingConfiguration(value.profiling),
     qml: normalizeQmlConfiguration(value.qml, name, kind),
+    python: normalizePythonConfiguration(value.python, kind),
+    dependencies: normalizeDependenciesConfiguration(value.dependencies),
     packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name),
     publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name)),
     files,
@@ -1433,13 +1497,14 @@ export function qtManifestToQpmProject(manifestPath: string, manifest = readQtPr
   add(resolved.forms, 'Qt Form', 'Forms');
   add(resolved.resources, 'Qt Resource', 'Resources');
   add(resolved.qml, 'QML', 'QML Files');
+  add(resolved.python, 'Python', 'Python Files');
   add(resolved.translations, 'Qt Translation', 'Translations');
   add(resolved.other, 'Other', 'Other Files');
   return {
     path: manifestPath,
     name: manifest.name,
     targetType: targetTypeForKind(manifest.kind),
-    folders: ['Source Files', 'Header Files', 'Forms', 'Resources', 'QML Files', 'Translations', 'Other Files'],
+    folders: ['Source Files', 'Header Files', 'Python Files', 'Forms', 'Resources', 'QML Files', 'Translations', 'Other Files'],
     files
   };
 }
@@ -1526,6 +1591,7 @@ export function fileCategoryForPath(filePath: string): keyof QtProjectFiles {
     case '.ui': return 'forms';
     case '.qrc': return 'resources';
     case '.qml': case '.js': case '.mjs': return 'qml';
+    case '.py': case '.pyi': return 'python';
     case '.ts': case '.qm': return 'translations';
     default: return 'other';
   }
@@ -1576,13 +1642,15 @@ export function defaultModulesForKind(kind: QtProjectKind): string[] {
     case 'test-application': return ['Core', 'Test'];
     case 'quick-test-application': return ['Core', 'Gui', 'Qml', 'Quick', 'QuickTest', 'Test'];
     case 'console-application': return ['Core'];
+    case 'python-widgets-application': return ['Core', 'Gui', 'Widgets'];
+    case 'python-quick-application': return ['Core', 'Gui', 'Qml', 'Quick', 'QuickControls2'];
     case 'shared-library':
     case 'static-library': return ['Core'];
   }
 }
 
 function normalizeKind(value: unknown, manifestPath: string): QtProjectKind {
-  const allowed: QtProjectKind[] = ['widgets-application', 'console-application', 'quick-application', 'test-application', 'quick-test-application', 'shared-library', 'static-library'];
+  const allowed: QtProjectKind[] = ['widgets-application', 'console-application', 'quick-application', 'test-application', 'quick-test-application', 'shared-library', 'static-library', 'python-widgets-application', 'python-quick-application'];
   if (typeof value === 'string' && allowed.includes(value as QtProjectKind)) return value as QtProjectKind;
   throw new Error(`Invalid Qt project manifest ${manifestPath}: unsupported kind ${String(value)}.`);
 }
@@ -1680,7 +1748,7 @@ function defaultProfilingConfiguration(): QtProfilingConfiguration {
 
 
 function defaultQmlConfiguration(name: string, kind: QtProjectKind): QtQmlConfiguration {
-  const quickProject = kind === 'quick-application' || kind === 'quick-test-application';
+  const quickProject = kind === 'quick-application' || kind === 'quick-test-application' || kind === 'python-quick-application';
   return {
     languageServer: {
       enabled: quickProject,
@@ -1740,6 +1808,131 @@ function normalizeQmlConfiguration(raw: unknown, name: string, kind: QtProjectKi
       resourcePrefix: normalizeQmlResourcePrefix(optionalString(moduleValue.resourcePrefix) || fallback.module.resourcePrefix)
     }
   };
+}
+
+
+function defaultDependenciesConfiguration(): QtDependenciesConfiguration {
+  return {
+    enabled: false,
+    autoInstallBeforeBuild: false,
+    outputDirectory: '.qpm/dependencies',
+    cmakeFindPackages: [],
+    cmakeLinkTargets: [],
+    additionalIncludeDirectories: [],
+    additionalLibraryDirectories: [],
+    additionalLibraries: [],
+    vcpkg: { enabled: false, executable: '', root: '', manifestFile: 'vcpkg.json', installRoot: '.qpm/dependencies/vcpkg_installed', triplet: '', hostTriplet: '', baseline: '', dependencies: [], features: [], overlayPorts: [], overlayTriplets: [], additionalArguments: [] },
+    conan: { enabled: false, executable: '', manifestFile: 'conanfile.txt', outputDirectory: '.qpm/dependencies/conan', requires: [], toolRequires: [], options: [], profileHost: 'default', profileBuild: 'default', buildMissing: true, lockfile: '', additionalArguments: [] },
+    pkgConfig: { enabled: false, executable: '', packages: [], searchPaths: [], staticLink: false, additionalArguments: [] }
+  };
+}
+
+function normalizeDependenciesConfiguration(raw: unknown): QtDependenciesConfiguration {
+  const fallback = defaultDependenciesConfiguration();
+  const value = objectValue(raw);
+  const vcpkg = objectValue(value.vcpkg);
+  const conan = objectValue(value.conan);
+  const pkg = objectValue(value.pkgConfig);
+  return {
+    enabled: booleanValue(value.enabled, fallback.enabled),
+    autoInstallBeforeBuild: booleanValue(value.autoInstallBeforeBuild, fallback.autoInstallBeforeBuild),
+    outputDirectory: normalizeRelativeDirectoryAllowDot(optionalString(value.outputDirectory) || fallback.outputDirectory),
+    cmakeFindPackages: normalizeStringArray(value.cmakeFindPackages),
+    cmakeLinkTargets: normalizeStringArray(value.cmakeLinkTargets),
+    additionalIncludeDirectories: normalizeStringArray(value.additionalIncludeDirectories),
+    additionalLibraryDirectories: normalizeStringArray(value.additionalLibraryDirectories),
+    additionalLibraries: normalizeStringArray(value.additionalLibraries),
+    vcpkg: {
+      enabled: booleanValue(vcpkg.enabled, false), executable: optionalString(vcpkg.executable), root: optionalString(vcpkg.root),
+      manifestFile: normalizeOptionalRelativePath(optionalString(vcpkg.manifestFile) || fallback.vcpkg.manifestFile),
+      installRoot: normalizeRelativeDirectoryAllowDot(optionalString(vcpkg.installRoot) || fallback.vcpkg.installRoot),
+      triplet: optionalString(vcpkg.triplet), hostTriplet: optionalString(vcpkg.hostTriplet), baseline: optionalString(vcpkg.baseline),
+      dependencies: normalizeStringArray(vcpkg.dependencies), features: normalizeStringArray(vcpkg.features), overlayPorts: normalizeStringArray(vcpkg.overlayPorts), overlayTriplets: normalizeStringArray(vcpkg.overlayTriplets), additionalArguments: normalizeStringArray(vcpkg.additionalArguments)
+    },
+    conan: {
+      enabled: booleanValue(conan.enabled, false), executable: optionalString(conan.executable),
+      manifestFile: normalizeOptionalRelativePath(optionalString(conan.manifestFile) || fallback.conan.manifestFile),
+      outputDirectory: normalizeRelativeDirectoryAllowDot(optionalString(conan.outputDirectory) || fallback.conan.outputDirectory),
+      requires: normalizeStringArray(conan.requires), toolRequires: normalizeStringArray(conan.toolRequires), options: normalizeStringArray(conan.options),
+      profileHost: optionalString(conan.profileHost) || fallback.conan.profileHost, profileBuild: optionalString(conan.profileBuild) || fallback.conan.profileBuild,
+      buildMissing: booleanValue(conan.buildMissing, true), lockfile: normalizeOptionalRelativePath(optionalString(conan.lockfile)), additionalArguments: normalizeStringArray(conan.additionalArguments)
+    },
+    pkgConfig: {
+      enabled: booleanValue(pkg.enabled, false), executable: optionalString(pkg.executable), packages: normalizeStringArray(pkg.packages), searchPaths: normalizeStringArray(pkg.searchPaths), staticLink: booleanValue(pkg.staticLink, false), additionalArguments: normalizeStringArray(pkg.additionalArguments)
+    }
+  };
+}
+
+function defaultPythonConfiguration(kind: QtProjectKind): QtPythonConfiguration {
+  const enabled = kind === 'python-widgets-application' || kind === 'python-quick-application';
+  return {
+    enabled,
+    binding: 'pyside6',
+    interpreter: '',
+    virtualEnvironment: '.venv',
+    autoCreateVirtualEnvironment: enabled,
+    autoInstallPySide6: false,
+    pySideVersion: '',
+    projectFile: 'pyproject.toml',
+    entryPoint: 'main.py',
+    uiMode: 'compiled',
+    buildBeforeRun: true,
+    deployEnabled: true,
+    deploySpecFile: 'pysidedeploy.spec',
+    androidDeployEnabled: false,
+    toolOverrides: {
+      project: '', designer: '', uic: '', rcc: '', deploy: '', androidDeploy: '', linguist: '', lupdate: '', lrelease: '', qmllint: ''
+    },
+    additionalProjectArguments: [],
+    additionalDeployArguments: [],
+    environment: {}
+  };
+}
+
+function normalizePythonConfiguration(raw: unknown, kind: QtProjectKind): QtPythonConfiguration {
+  const fallback = defaultPythonConfiguration(kind);
+  const value = objectValue(raw);
+  const tools = objectValue(value.toolOverrides);
+  const uiMode: QtPythonUiMode = value.uiMode === 'runtime' ? 'runtime' : 'compiled';
+  return {
+    enabled: booleanValue(value.enabled, fallback.enabled),
+    binding: 'pyside6',
+    interpreter: optionalString(value.interpreter),
+    virtualEnvironment: normalizeRelativeDirectoryAllowDot(optionalString(value.virtualEnvironment) || fallback.virtualEnvironment),
+    autoCreateVirtualEnvironment: booleanValue(value.autoCreateVirtualEnvironment, fallback.autoCreateVirtualEnvironment),
+    autoInstallPySide6: booleanValue(value.autoInstallPySide6, fallback.autoInstallPySide6),
+    pySideVersion: optionalString(value.pySideVersion),
+    projectFile: normalizeOptionalRelativePath(optionalString(value.projectFile) || fallback.projectFile),
+    entryPoint: normalizeOptionalRelativePath(optionalString(value.entryPoint) || fallback.entryPoint),
+    uiMode,
+    buildBeforeRun: booleanValue(value.buildBeforeRun, fallback.buildBeforeRun),
+    deployEnabled: booleanValue(value.deployEnabled, fallback.deployEnabled),
+    deploySpecFile: normalizeOptionalRelativePath(optionalString(value.deploySpecFile) || fallback.deploySpecFile),
+    androidDeployEnabled: booleanValue(value.androidDeployEnabled, fallback.androidDeployEnabled),
+    toolOverrides: {
+      project: optionalString(tools.project),
+      designer: optionalString(tools.designer),
+      uic: optionalString(tools.uic),
+      rcc: optionalString(tools.rcc),
+      deploy: optionalString(tools.deploy),
+      androidDeploy: optionalString(tools.androidDeploy),
+      linguist: optionalString(tools.linguist),
+      lupdate: optionalString(tools.lupdate),
+      lrelease: optionalString(tools.lrelease),
+      qmllint: optionalString(tools.qmllint)
+    },
+    additionalProjectArguments: normalizeStringArray(value.additionalProjectArguments),
+    additionalDeployArguments: normalizeStringArray(value.additionalDeployArguments),
+    environment: normalizeStringRecord(value.environment)
+  };
+}
+
+export function isQtPythonProject(manifest: QtProjectManifest): boolean {
+  return manifest.python.enabled || manifest.kind === 'python-widgets-application' || manifest.kind === 'python-quick-application';
+}
+
+export function qtProjectLanguage(manifest: QtProjectManifest): QtProjectLanguage {
+  return isQtPythonProject(manifest) ? 'python' : 'cpp';
 }
 
 function normalizeQmlModuleUri(value: string): string {
@@ -2343,6 +2536,15 @@ function normalizeModules(values: string[]): string[] {
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean))];
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  const source = objectValue(value);
+  const result: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(source)) {
+    if (typeof entry === 'string' && key.trim()) result[key.trim()] = entry;
+  }
+  return result;
 }
 
 function optionalString(value: unknown): string {

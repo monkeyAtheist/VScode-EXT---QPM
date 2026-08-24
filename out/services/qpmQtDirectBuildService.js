@@ -51,6 +51,7 @@ const path = __importStar(require("path"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
 const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
+const qpmQtDependencyModel_1 = require("./qpmQtDependencyModel");
 /**
  * Direct Qt code generation can write outside the generic generated folder.
  * In particular, windres writes the product metadata object into the object
@@ -98,6 +99,7 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         throw new Error(`Build mode ${mode} is 64-bit, but the selected Qt kit is x86. Select Debug x86 or Release x86.`);
     }
     const projectDirectory = path.dirname(manifestPath);
+    const dependencyIntegration = manifest.dependencies.enabled ? (0, qpmQtDependencyModel_1.readDependencyIntegration)(projectDirectory, manifest.dependencies.outputDirectory) : undefined;
     const files = (0, qtProjectManifest_1.resolveQtProjectFiles)(manifestPath, manifest);
     const generatedDirectory = (0, qtProjectManifest_1.qtGeneratedDirectory)(manifestPath, mode, manifest);
     const objectDirectory = (0, qtProjectManifest_1.qtObjectDirectory)(manifestPath, mode, manifest);
@@ -126,7 +128,8 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         generatedDirectory,
         installation.includeDir,
         ...moduleOrder.map((module) => path.join(installation.includeDir, `Qt${module}`)),
-        ...(resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)] : [])
+        ...(resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)] : []),
+        ...(dependencyIntegration?.includeDirectories ?? [])
     ]);
     const modeSettings = buildProfile;
     const guiApplication = manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
@@ -266,13 +269,13 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         precompiledHeaderCopyPath,
         precompiledHeaderOutputPath,
         includeDirectories,
-        libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry))]),
+        libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry)), ...(dependencyIntegration?.libraryDirectories ?? [])]),
         defines,
-        compilerFlags: unique([...(modeSettings.compilerFlags ?? [])]),
-        linkerFlags: unique([...(modeSettings.linkerFlags ?? [])]),
+        compilerFlags: unique([...(modeSettings.compilerFlags ?? []), ...(dependencyIntegration?.compilerFlags ?? [])]),
+        linkerFlags: unique([...(modeSettings.linkerFlags ?? []), ...(dependencyIntegration?.linkerFlags ?? [])]),
         entryPointArguments: windowsEntryPoint.arguments,
         qtLibraries,
-        userLibraries: manifest.libraries,
+        userLibraries: unique([...manifest.libraries, ...(dependencyIntegration?.libraries ?? [])]),
         platformLibraries: windowsEntryPoint.platformLibraries,
         generationSteps,
         warnings,

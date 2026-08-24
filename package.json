@@ -1,8 +1,8 @@
 {
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
-  "description": "Native Qt project manager and build system for VS Code with direct/qmake/CMake backends, QML tooling, testing, profiling, installers, MSIX, WinGet and release publication.",
-  "version": "0.15.2",
+  "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
+  "version": "0.17.2",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -70,7 +70,14 @@
     "WinGet",
     "GitHub Releases",
     "release publication",
-    "application updates"
+    "application updates",
+    "PySide6",
+    "Qt for Python",
+    "Python",
+    "vcpkg",
+    "Conan 2",
+    "pkg-config",
+    "C++ dependencies"
   ],
   "activationEvents": [
     "workspaceContains:**/*.qtproject.json",
@@ -270,7 +277,31 @@
     "onCommand:qpm.openPublicationReport",
     "onCommand:qpm.revealPublicationOutput",
     "onCommand:qpm.cleanPublicationOutput",
-    "onView:qpm.publication"
+    "onView:qpm.publication",
+    "onView:qpm.python",
+    "onCommand:qpm.python.bootstrap",
+    "onCommand:qpm.python.selectInterpreter",
+    "onCommand:qpm.python.createVirtualEnvironment",
+    "onCommand:qpm.python.installPySide6",
+    "onCommand:qpm.python.build",
+    "onCommand:qpm.python.run",
+    "onCommand:qpm.python.debug",
+    "onCommand:qpm.python.clean",
+    "onCommand:qpm.python.compileUi",
+    "onCommand:qpm.python.compileResources",
+    "onCommand:qpm.python.openDesigner",
+    "onCommand:qpm.python.deploy",
+    "onCommand:qpm.python.deployAndroid",
+    "onCommand:qpm.python.openReport",
+    "onCommand:qpm.python.revealEnvironment",
+    "onView:qpm.dependencies",
+    "onCommand:qpm.dependencies.configure",
+    "onCommand:qpm.dependencies.detectTools",
+    "onCommand:qpm.dependencies.generateManifests",
+    "onCommand:qpm.dependencies.install",
+    "onCommand:qpm.dependencies.openReport",
+    "onCommand:qpm.dependencies.revealOutput",
+    "onCommand:qpm.dependencies.clean"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -283,10 +314,10 @@
     "test:qt-direct": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js",
     "test:qt-ux": "npm run compile && node scripts/test-qt-ux-021.js",
     "test:qt-workspace": "npm run compile && node scripts/test-qt-workspace-021.js",
-    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js",
+    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js && node scripts/test-qt-python-0160.js && node scripts/test-qt-dependency-managers-0170.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js",
     "test:qt-toolchain": "npm run compile && node scripts/test-qt-toolchain-022.js",
     "test:qt-intellisense": "npm run compile && node scripts/test-qt-intellisense-022.js",
-    "test:qt-designer": "npm run compile && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js",
+    "test:qt-designer": "npm run compile && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js",
     "test:jclib": "npm run compile && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js",
     "test:consolidation": "npm run compile && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js",
     "test:intellisense-auto": "npm run compile && node scripts/test-qt-auto-intellisense-027.js",
@@ -310,7 +341,9 @@
     "bundle": "node ./scripts/bundle-extension.js",
     "test:qt-apple": "npm run compile && node scripts/test-qt-apple-0140.js",
     "test:qt-publication": "npm run compile && node scripts/test-qt-publication-0150.js",
-    "test:qt-reliability": "npm run compile && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-ui-modules-clean-0151.js"
+    "test:qt-reliability": "npm run compile && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-ui-modules-clean-0151.js",
+    "test:qt-python": "npm run compile && node scripts/test-qt-python-0160.js",
+    "test:qt-dependencies-0170": "npm run compile && node scripts/test-qt-dependency-managers-0170.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -419,6 +452,18 @@
           "id": "qpm.publication",
           "name": "Qt Publication & Updates",
           "contextualTitle": "Qt Publication & Updates",
+          "showCollapseAll": false
+        },
+        {
+          "id": "qpm.dependencies",
+          "name": "Qt Dependencies",
+          "contextualTitle": "Qt Dependencies & Package Managers",
+          "showCollapseAll": false
+        },
+        {
+          "id": "qpm.python",
+          "name": "Qt for Python",
+          "contextualTitle": "Qt for Python / PySide6",
           "showCollapseAll": false
         },
         {
@@ -1867,6 +1912,131 @@
         "title": "Qt Project Manager: Clean Publication Output",
         "category": "QPM",
         "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.python.bootstrap",
+        "title": "Qt Project Manager: Prepare Qt for Python Environment",
+        "category": "QPM",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "qpm.python.selectInterpreter",
+        "title": "Qt Project Manager: Select Qt for Python Interpreter",
+        "category": "QPM",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.python.createVirtualEnvironment",
+        "title": "Qt Project Manager: Create Python Virtual Environment",
+        "category": "QPM",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "qpm.python.installPySide6",
+        "title": "Qt Project Manager: Install or Update PySide6",
+        "category": "QPM",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "qpm.python.build",
+        "title": "Qt Project Manager: Build Qt for Python Project",
+        "category": "QPM",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "qpm.python.run",
+        "title": "Qt Project Manager: Run Qt for Python Project",
+        "category": "QPM",
+        "icon": "$(play)"
+      },
+      {
+        "command": "qpm.python.debug",
+        "title": "Qt Project Manager: Debug Qt for Python Project",
+        "category": "QPM",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "qpm.python.clean",
+        "title": "Qt Project Manager: Clean Qt for Python Project",
+        "category": "QPM",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.python.compileUi",
+        "title": "Qt Project Manager: Generate Python UI Files",
+        "category": "QPM",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "qpm.python.compileResources",
+        "title": "Qt Project Manager: Generate Python Resource Files",
+        "category": "QPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "qpm.python.openDesigner",
+        "title": "Qt Project Manager: Open PySide6 Designer",
+        "category": "QPM",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "qpm.python.deploy",
+        "title": "Qt Project Manager: Deploy Qt for Python Desktop Application",
+        "category": "QPM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "qpm.python.deployAndroid",
+        "title": "Qt Project Manager: Deploy Qt for Python Android Application",
+        "category": "QPM",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "qpm.python.openReport",
+        "title": "Qt Project Manager: Open Qt for Python Report",
+        "category": "QPM",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.python.revealEnvironment",
+        "title": "Qt Project Manager: Reveal Qt for Python Environment",
+        "category": "QPM",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.dependencies.configure",
+        "title": "Qt Project Manager: Configure Dependency Managers",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "qpm.dependencies.detectTools",
+        "title": "Qt Project Manager: Detect Dependency Tools",
+        "icon": "$(search)"
+      },
+      {
+        "command": "qpm.dependencies.generateManifests",
+        "title": "Qt Project Manager: Generate Dependency Manifests",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "qpm.dependencies.install",
+        "title": "Qt Project Manager: Install / Synchronize Dependencies",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "qpm.dependencies.openReport",
+        "title": "Qt Project Manager: Open Dependency Report",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "qpm.dependencies.revealOutput",
+        "title": "Qt Project Manager: Reveal Dependency Output",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.dependencies.clean",
+        "title": "Qt Project Manager: Clean Dependency Output",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -2109,6 +2279,21 @@
         {
           "command": "qpm.openPublicationReport",
           "when": "view == qpm.publication",
+          "group": "navigation@3"
+        },
+        {
+          "command": "qpm.python.run",
+          "when": "view == qpm.python",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.python.debug",
+          "when": "view == qpm.python",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.python.openReport",
+          "when": "view == qpm.python",
           "group": "navigation@3"
         }
       ],
@@ -2810,6 +2995,16 @@
           "submenu": "qpm.editorPublication",
           "group": "6_publication",
           "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.editorPython",
+          "group": "2_python@1",
+          "when": "qpm.qtPythonProjectActive"
+        },
+        {
+          "submenu": "qpm.editorDependencies",
+          "group": "2_dependencies@1",
+          "when": "qpm.qtCppProjectActive"
         }
       ],
       "qpm.editorDocumentation": [
@@ -3350,6 +3545,16 @@
           "submenu": "qpm.explorerPublication",
           "group": "6_publication",
           "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "submenu": "qpm.editorPython",
+          "group": "2_python@1",
+          "when": "qpm.qtPythonProjectActive"
+        },
+        {
+          "submenu": "qpm.explorerDependencies",
+          "group": "2_dependencies@1",
+          "when": "qpm.qtCppProjectActive"
         }
       ],
       "qpm.editorPackaging": [
@@ -3869,6 +4074,138 @@
           "command": "qpm.cleanPublicationOutput",
           "group": "5_clean@1",
           "when": "qpm.nativeQtProjectActive"
+        }
+      ],
+      "qpm.editorPython": [
+        {
+          "command": "qpm.python.bootstrap",
+          "group": "1_env@1"
+        },
+        {
+          "command": "qpm.python.selectInterpreter",
+          "group": "1_env@2"
+        },
+        {
+          "command": "qpm.python.createVirtualEnvironment",
+          "group": "1_env@3"
+        },
+        {
+          "command": "qpm.python.installPySide6",
+          "group": "1_env@4"
+        },
+        {
+          "command": "qpm.python.build",
+          "group": "2_build@1"
+        },
+        {
+          "command": "qpm.python.run",
+          "group": "2_build@2"
+        },
+        {
+          "command": "qpm.python.debug",
+          "group": "2_build@3"
+        },
+        {
+          "command": "qpm.python.clean",
+          "group": "2_build@4"
+        },
+        {
+          "command": "qpm.python.openDesigner",
+          "group": "3_tools@1"
+        },
+        {
+          "command": "qpm.python.compileUi",
+          "group": "3_tools@2"
+        },
+        {
+          "command": "qpm.python.compileResources",
+          "group": "3_tools@3"
+        },
+        {
+          "command": "qpm.python.deploy",
+          "group": "4_deploy@1"
+        },
+        {
+          "command": "qpm.python.deployAndroid",
+          "group": "4_deploy@2"
+        },
+        {
+          "command": "qpm.python.openReport",
+          "group": "5_info@1"
+        }
+      ],
+      "qpm.editorDependencies": [
+        {
+          "command": "qpm.dependencies.configure",
+          "group": "1_config@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.detectTools",
+          "group": "1_config@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.generateManifests",
+          "group": "2_sync@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.install",
+          "group": "2_sync@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.openReport",
+          "group": "3_info@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.revealOutput",
+          "group": "3_info@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.clean",
+          "group": "4_clean@1",
+          "when": "qpm.qtCppProjectActive"
+        }
+      ],
+      "qpm.explorerDependencies": [
+        {
+          "command": "qpm.dependencies.configure",
+          "group": "1_config@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.detectTools",
+          "group": "1_config@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.generateManifests",
+          "group": "2_sync@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.install",
+          "group": "2_sync@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.openReport",
+          "group": "3_info@1",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.revealOutput",
+          "group": "3_info@2",
+          "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.dependencies.clean",
+          "group": "4_clean@1",
+          "when": "qpm.qtCppProjectActive"
         }
       ]
     },
@@ -4594,6 +4931,18 @@
       {
         "id": "qpm.explorerPublication",
         "label": "Publication / updates"
+      },
+      {
+        "id": "qpm.editorPython",
+        "label": "Qt for Python / PySide6"
+      },
+      {
+        "id": "qpm.editorDependencies",
+        "label": "Dependencies / package managers"
+      },
+      {
+        "id": "qpm.explorerDependencies",
+        "label": "Dependencies / package managers"
       }
     ],
     "breakpoints": [

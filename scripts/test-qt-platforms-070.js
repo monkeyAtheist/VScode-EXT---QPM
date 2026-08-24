@@ -5,11 +5,11 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
-assert.strictEqual(pkg.version, '0.15.2');
+assert.strictEqual(pkg.version, '0.17.2');
 
 const manifestModule = require(path.join(root, 'out', 'model', 'qtProjectManifest.js'));
 const manifest = manifestModule.createDefaultQtProjectManifest('PlatformApp', 'widgets-application');
-assert.strictEqual(manifest.schemaVersion, 15);
+assert.strictEqual(manifest.schemaVersion, 17);
 assert.ok(Array.isArray(manifest.profiles.platforms));
 assert.strictEqual(manifest.profiles.platforms.length, 1);
 assert.strictEqual(manifest.profiles.active.platformProfileId, 'desktop-platform');
@@ -47,7 +47,7 @@ assert.match(settings, /platformDockerImage/);
 assert.match(settings, /platformRemoteProjectDirectory/);
 assert.match(settings, /platformWasmServerPort/);
 const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-assert.strictEqual(schema.properties.schemaVersion.const, 15);
+assert.strictEqual(schema.properties.schemaVersion.const, 17);
 assert.ok(schema.properties.profiles.properties.platforms);
 assert.ok(schema.$defs.platformProfile);
 

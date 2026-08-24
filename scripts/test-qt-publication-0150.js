@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.15.2');
+assert.strictEqual(pkg.version, '0.17.2');
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const command of [
   'qpm.detectPublicationTools','qpm.generatePublicationSources','qpm.createMsixPackage',
@@ -59,7 +59,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-publication-0150-'));
     const publicationApi = require('../out/services/qpmQtPublicationService');
     const manifestPath = path.join(temp, 'PublishApp.qtproject.json');
     const manifest = model.createDefaultQtProjectManifest('PublishApp', 'widgets-application');
-    assert.strictEqual(manifest.schemaVersion, 15);
+    assert.strictEqual(manifest.schemaVersion, 17);
     assert.strictEqual(manifest.publication.enabled, false);
     assert.strictEqual(manifest.publication.channel, 'stable');
     assert.strictEqual(manifest.publication.msix.generateAppInstaller, true);
@@ -108,7 +108,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-publication-0150-'));
     fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
     assert.strictEqual(model.migrateQtProjectManifestFile(legacyPath), true);
     const migrated = model.readQtProjectManifest(legacyPath);
-    assert.strictEqual(migrated.schemaVersion, 15);
+    assert.strictEqual(migrated.schemaVersion, 17);
     assert.strictEqual(migrated.publication.outputDirectory, 'dist/publication');
     assert(fs.existsSync(`${legacyPath}.schema-v14.backup`));
 
@@ -173,7 +173,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-publication-0150-'));
     service.dispose();
 
     const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-    assert.strictEqual(schema.properties.schemaVersion.const, 15);
+    assert.strictEqual(schema.properties.schemaVersion.const, 17);
     assert(schema.required.includes('publication'));
     assert.deepStrictEqual(schema.properties.publication.properties.channel.enum, ['stable','beta','nightly']);
     assert(schema.properties.publication.properties.msix.properties.generateAppInstaller);

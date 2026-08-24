@@ -153,7 +153,9 @@ try {
 
   const widgetsRoot = path.join(root, 'WidgetsTemplate');
   projectService.createProject(widgetsRoot, 'WidgetsTemplate', 'widgets-application', ['Widgets'], qtRoot);
-  assert(fs.readFileSync(path.join(widgetsRoot, 'forms', 'mainwindow.ui'), 'utf8').includes('Qt::AlignCenter'));
+  const starterUi = fs.readFileSync(path.join(widgetsRoot, 'forms', 'mainwindow.ui'), 'utf8');
+  assert(starterUi.includes('<widget class="QWidget" name="centralWidget"/>'));
+  assert(!starterUi.includes('<layout class="QVBoxLayout"'), 'New QPM Widgets forms must allow free positioning before the user applies a layout');
 
   const quickRoot = path.join(root, 'QuickTemplate');
   projectService.createProject(quickRoot, 'QuickTemplate', 'quick-application', ['QuickControls2'], qtRoot);

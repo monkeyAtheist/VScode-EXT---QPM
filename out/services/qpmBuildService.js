@@ -56,14 +56,18 @@ class QpmBuildService {
     qtInstallations;
     projectSettings;
     output;
+    qtPython;
+    qtDependencies;
     qtBackends;
     launchedApplications = new Map();
-    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output) {
+    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
         this.projectSettings = projectSettings;
         this.output = output;
+        this.qtPython = qtPython;
+        this.qtDependencies = qtDependencies;
         this.qtBackends = new qpmQtBuildBackendService_1.QpmQtBuildBackendService(output);
     }
     get buildMode() {
@@ -203,6 +207,10 @@ class QpmBuildService {
             return false;
         }
         const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
+        if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+            this.output.appendLine('[Qt/Python] IntelliSense preparation is handled by the Python/PySide6 toolchain.');
+            return true;
+        }
         const installation = this.resolveQtInstallation(manifest);
         if (!installation) {
             this.output.appendLine('[Qt/C++] IntelliSense preparation skipped: no valid Qt installation is selected.');
@@ -249,6 +257,17 @@ class QpmBuildService {
             return;
         }
         this.beginOutput(`Clean ${ref.name}`);
+        if ((0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
+            const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
+            if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+                if (!this.qtPython)
+                    throw new Error('Qt for Python service is not available.');
+                const ok = await this.qtPython.clean(ref.absolutePath);
+                if (ok)
+                    vscode.window.showInformationMessage(`Clean completed for ${ref.name} (Qt for Python).`);
+                return;
+            }
+        }
         const artifacts = this.resolveArtifacts(ref);
         await this.stopApplicationsForTarget(artifacts.targetPath, 'clean');
         if ((0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
@@ -377,6 +396,15 @@ class QpmBuildService {
         if (!ref?.exists) {
             vscode.window.showErrorMessage('No existing Qt project is available to run.');
             return;
+        }
+        if ((0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
+            const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
+            if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+                if (!this.qtPython)
+                    throw new Error('Qt for Python service is not available.');
+                await this.qtPython.run(ref.absolutePath, false);
+                return;
+            }
         }
         const project = this.workspaces.getProject(ref);
         if (project?.targetType !== 'Executable' && project?.targetType !== 'Dynamic Link Library') {
@@ -707,6 +735,17 @@ class QpmBuildService {
     }
     async buildOneProject(ref, rebuild) {
         if ((0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
+            const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
+            if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+                if (!this.qtPython)
+                    throw new Error('Qt for Python service is not available.');
+                return this.qtPython.build(ref.absolutePath, rebuild);
+            }
+            if (this.qtDependencies && manifest.dependencies.enabled) {
+                const dependenciesReady = await this.qtDependencies.prepareForBuild(ref.absolutePath, this.buildMode);
+                if (!dependenciesReady)
+                    return false;
+            }
             return await this.buildNativeQtProject(ref, rebuild);
         }
         this.output.appendLine('[Qt/C++] Compatibility project detected: .prj projects use the generic C/C++ pipeline and do not run moc, uic or rcc. Create or open a .qtproject.json project to use the selected Qt kit and native Qt build engine.');
@@ -764,6 +803,10 @@ class QpmBuildService {
     }
     async compileNativeQtFile(ref, filePath) {
         const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
+        if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+            vscode.window.showErrorMessage('Compile File is a C/C++ action. Use Build Project for Qt for Python sources.');
+            return false;
+        }
         const installation = this.resolveQtInstallation(manifest);
         if (!installation)
             throw new Error('No valid Qt installation is selected for this project.');

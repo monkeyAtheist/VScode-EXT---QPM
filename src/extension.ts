@@ -49,7 +49,11 @@ import { QpmQtPublicationService } from './services/qpmQtPublicationService';
 import { QpmQtPublicationProvider } from './providers/qpmQtPublicationProvider';
 import { QpmQmlLanguageService } from './services/qpmQmlLanguageService';
 import { QpmQmlLanguageProvider } from './providers/qpmQmlLanguageProvider';
-import { getQtInstallationPreference, isQtProjectManifestPath, readQtProjectManifest } from './model/qtProjectManifest';
+import { QpmQtPythonService } from './services/qpmQtPythonService';
+import { QpmQtPythonProvider } from './providers/qpmQtPythonProvider';
+import { QpmQtDependencyService } from './services/qpmQtDependencyService';
+import { QpmQtDependencyProvider } from './providers/qpmQtDependencyProvider';
+import { getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, readQtProjectManifest } from './model/qtProjectManifest';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('Qt Project Manager');
@@ -66,7 +70,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const projectSettings = new QpmProjectSettingsService(workspaces, parser, output);
   const qtTools = new QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new QpmQmlLanguageService(workspaces, qtInstallations, output);
-  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output);
+  const qtPython = new QpmQtPythonService(workspaces, output);
+  const qtDependencies = new QpmQtDependencyService(workspaces, output);
+  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, qtPython, qtDependencies);
   const debugging = new QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -118,6 +124,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const qtPublicationProvider = new QpmQtPublicationProvider(publication);
   const qtPublicationView = vscode.window.createTreeView('qpm.publication', { treeDataProvider: qtPublicationProvider, showCollapseAll: false });
   qtPublicationProvider.attachView(qtPublicationView);
+  const qtPythonProvider = new QpmQtPythonProvider(qtPython);
+  const qtPythonView = vscode.window.createTreeView('qpm.python', { treeDataProvider: qtPythonProvider, showCollapseAll: false });
+  qtPythonProvider.attachView(qtPythonView);
+  const qtDependencyProvider = new QpmQtDependencyProvider(qtDependencies);
+  const qtDependencyView = vscode.window.createTreeView('qpm.dependencies', { treeDataProvider: qtDependencyProvider, showCollapseAll: false });
+  qtDependencyProvider.attachView(qtDependencyView);
   const completionProvider = new QpmCompletionProvider(symbols);
   const functionPanels = new QpmFunctionPanelService();
   const colorValues = new QpmColorValueService();
@@ -149,9 +161,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
     const targetKey = targetType === 'Dynamic Link Library' ? 'dll' : targetType === 'Static Library' ? 'lib' : targetType === 'Executable' ? 'exe' : 'none';
     const nativeQtProjectActive = !!activeRef?.exists && isQtProjectManifestPath(activeRef.absolutePath);
+    let qtPythonProjectActive = false;
+    if (nativeQtProjectActive && activeRef?.exists) {
+      try { qtPythonProjectActive = isQtPythonProject(readQtProjectManifest(activeRef.absolutePath)); } catch { qtPythonProjectActive = false; }
+    }
     void vscode.commands.executeCommand('setContext', 'qpm.buildMode', builds.buildMode);
     void vscode.commands.executeCommand('setContext', 'qpm.targetType', targetKey);
     void vscode.commands.executeCommand('setContext', 'qpm.nativeQtProjectActive', nativeQtProjectActive);
+    void vscode.commands.executeCommand('setContext', 'qpm.qtPythonProjectActive', qtPythonProjectActive);
+    void vscode.commands.executeCommand('setContext', 'qpm.qtCppProjectActive', nativeQtProjectActive && !qtPythonProjectActive);
   };
 
   const updateStatusBar = (): void => {
@@ -168,14 +186,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Keep the global installation as a fallback.
       }
     }
-    statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
-    statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : 'Select the Qt installation used by Qt Project Manager.';
-    statusBarItems[6].text = '$(debug-alt-small) Debug';
-    statusBarItems[6].tooltip = 'Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).';
-    statusBarItems[7].text = modeText;
-    statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
-    statusBarItems[8].text = targetText;
-    statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+    const pythonProject = isQtPythonActive();
+    if (pythonProject) {
+      const pythonStatus = qtPython.status;
+      statusBarItems[0].text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : '$(symbol-class) PySide6';
+      statusBarItems[0].tooltip = pythonStatus?.message ?? 'Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.';
+      statusBarItems[6].text = '$(debug-alt-small) Python Debug';
+      statusBarItems[6].tooltip = 'Build and debug the active PySide6 application with the VS Code Python debugger.';
+      statusBarItems[7].text = 'PY';
+      statusBarItems[7].tooltip = 'Qt for Python project. Build variants are managed by Python deployment tooling.';
+      statusBarItems[8].text = 'APP';
+      statusBarItems[8].tooltip = 'Qt for Python application target.';
+    } else {
+      statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
+      statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : 'Select the Qt installation used by Qt Project Manager.';
+      statusBarItems[6].text = '$(debug-alt-small) Debug';
+      statusBarItems[6].tooltip = 'Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).';
+      statusBarItems[7].text = modeText;
+      statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
+      statusBarItems[8].text = targetText;
+      statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+    }
     const show = vscode.workspace.getConfiguration('qpm').get<boolean>('showPersistentStatusBarActions', true);
     for (const item of statusBarItems) {
       if (show) item.show(); else item.hide();
@@ -201,7 +232,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const isAndroidPlatformActive = (): boolean => android.activeProfile?.type === 'android';
   const isApplePlatformActive = (): boolean => !!apple.activeProfile && isApplePlatform(apple.activeProfile.type);
-  const runGdbDebug = async (): Promise<boolean> => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
+  const isQtPythonActive = (): boolean => {
+    const ref = workspaces.activeProjectRef;
+    if (!ref?.exists || !isQtProjectManifestPath(ref.absolutePath)) return false;
+    try { return isQtPythonProject(readQtProjectManifest(ref.absolutePath)); } catch { return false; }
+  };
+  const runGdbDebug = async (): Promise<boolean> => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
 
   context.subscriptions.push(
     output,
@@ -239,6 +275,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     qmlLanguage,
     qmlLanguageProvider,
     qmlLanguageView,
+    qtPython,
+    qtPythonProvider,
+    qtPythonView,
+    qtDependencies,
+    qtDependencyProvider,
+    qtDependencyView,
     qtAndroidProvider,
     qtAndroidView,
     qtAppleProvider,
@@ -285,6 +327,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       qtAndroidProvider.refresh();
       qtAppleProvider.refresh();
       qmlLanguageProvider.refresh();
+      qtPythonProvider.refresh();
+      void qtPython.refresh().then(() => updateStatusBar());
       void qmlLanguage.autoStartIfNeeded();
       void testing.refresh();
       // The native project manifest is the durable source of truth for the
@@ -320,8 +364,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const manifestPath = await qtProjects.createProjectWizard();
       if (manifestPath) {
         await workspaces.load(manifestPath);
-        await builds.prepareNativeQtGeneratedFiles();
-        await cppTools.synchronizeNativeProject(workspaces.currentWorkspace, { force: true, ensureWorkspaceFolder: true, reason: 'native Qt project created' });
+        const manifest = readQtProjectManifest(manifestPath);
+        if (isQtPythonProject(manifest)) {
+          await qtPython.bootstrap(manifestPath, true);
+          qtPythonProvider.refresh();
+        } else {
+          await builds.prepareNativeQtGeneratedFiles();
+          await cppTools.synchronizeNativeProject(workspaces.currentWorkspace, { force: true, ensureWorkspaceFolder: true, reason: 'native Qt project created' });
+        }
       }
     }),
     register('qpm.createSdlWorkspaceProject', () => workspaces.createSdlWorkspaceProject()),
@@ -472,8 +522,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.chooseRunAction', () => builds.chooseRunAction()),
     register('qpm.runWithoutBuild', () => isAndroidPlatformActive() ? android.runApplication() : isApplePlatformActive() ? platforms.runActive() : builds.runWithoutBuild()),
     register('qpm.debugWithGdb', () => runGdbDebug()),
-    register('qpm.startQtDebugProfile', () => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()),
-    register('qpm.startQtDebugProfileWithoutBuild', () => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })),
+    register('qpm.startQtDebugProfile', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()),
+    register('qpm.startQtDebugProfileWithoutBuild', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })),
     register('qpm.attachQtProcess', () => debugging.attachToLocalProcess()),
     register('qpm.debugQtCoreDump', () => debugging.debugCoreDump()),
     register('qpm.attachQmlDebugger', () => debugging.attachQmlDebugger()),
@@ -559,6 +609,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.openProfilingReport', () => profiling.openReport()),
     register('qpm.revealProfilingOutput', () => profiling.revealOutput()),
     register('qpm.cleanProfilingOutput', async () => { await profiling.cleanOutput(); qtProfilingProvider.refresh(); }),
+    register('qpm.python.bootstrap', async () => { await qtPython.bootstrapActiveProject(true); qtPythonProvider.refresh(); updateStatusBar(); }),
+    register('qpm.python.selectInterpreter', async () => { await qtPython.selectInterpreter(); qtPythonProvider.refresh(); updateStatusBar(); }),
+    register('qpm.python.createVirtualEnvironment', async () => { await qtPython.createVirtualEnvironment(); qtPythonProvider.refresh(); updateStatusBar(); }),
+    register('qpm.python.installPySide6', async () => { await qtPython.installPySide6(); qtPythonProvider.refresh(); updateStatusBar(); }),
+    register('qpm.python.build', async () => { await qtPython.build(); qtPythonProvider.refresh(); }),
+    register('qpm.python.run', async () => { await qtPython.run(); qtPythonProvider.refresh(); }),
+    register('qpm.python.debug', async () => { await qtPython.debug(); qtPythonProvider.refresh(); }),
+    register('qpm.python.clean', async () => { await qtPython.clean(); qtPythonProvider.refresh(); }),
+    register('qpm.python.compileUi', async () => { await qtPython.compileUiFiles(); qtPythonProvider.refresh(); }),
+    register('qpm.python.compileResources', async () => { await qtPython.compileResourceFiles(); qtPythonProvider.refresh(); }),
+    register('qpm.python.openDesigner', (target?: unknown) => qtPython.openDesigner(undefined, target)),
+    register('qpm.python.deploy', async () => { await qtPython.deploy(); qtPythonProvider.refresh(); }),
+    register('qpm.python.deployAndroid', async () => { await qtPython.deployAndroid(); qtPythonProvider.refresh(); }),
+    register('qpm.python.openReport', () => qtPython.openReport()),
+    register('qpm.python.revealEnvironment', () => qtPython.revealEnvironment()),
+    register('qpm.dependencies.configure', async () => { await qtDependencies.configure(); qtDependencyProvider.refresh?.(); }),
+    register('qpm.dependencies.detectTools', async () => { await qtDependencies.detectTools(); }),
+    register('qpm.dependencies.generateManifests', async () => { await qtDependencies.generateManifests(); }),
+    register('qpm.dependencies.install', async () => { await qtDependencies.install(); }),
+    register('qpm.dependencies.openReport', () => qtDependencies.openReport()),
+    register('qpm.dependencies.revealOutput', () => qtDependencies.revealOutput()),
+    register('qpm.dependencies.clean', async () => { await qtDependencies.clean(); }),
     register('qpm.openWorkspaceFile', () => builds.openWorkspaceFile()),
     register('qpm.setActiveProject', (node?: ProjectNode) => workspaces.setActiveProject(node?.ref)),
     register('qpm.buildProject', (node?: ProjectNode) => node ? builds.build(false, node.ref) : undefined),
@@ -615,7 +687,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.revealFileSymbol', (symbol?: QpmSourceSymbol) => symbol ? fileSymbolsProvider.reveal(symbol) : undefined),
     register('qpm.saveFile', (node?: FileNode) => node ? workspaces.saveFile(node.file.absolutePath) : undefined),
     register('qpm.openPanelFile', (node?: FileNode) => node ? builds.openPanelFile(node.file.absolutePath) : undefined),
-    register('qpm.openQtDesigner', (target?: unknown) => qtProjects.openDesigner(target)),
+    register('qpm.openQtDesigner', (target?: unknown) => isQtPythonActive() ? qtPython.openDesigner(undefined, target) : qtProjects.openDesigner(target)),
     register('qpm.openPanelPathFile', (filePath?: string) => filePath ? builds.openPanelFile(filePath) : undefined),
     register('qpm.openFunctionPanel', (node?: FileNode) => node ? functionPanels.open(node.file.absolutePath) : undefined),
     register('qpm.insertSnippet', () => templates.insertSnippet()),
@@ -669,6 +741,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await builds.restoreBuildModeFromActiveProject();
   await testing.refresh();
   qtQualityProvider.refresh();
+  await qtPython.refresh();
   void qmlLanguage.autoStartIfNeeded();
 
   // Keep activation deterministic and short. Toolchain discovery and Qt/C++

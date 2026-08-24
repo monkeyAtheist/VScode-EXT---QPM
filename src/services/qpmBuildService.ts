@@ -10,12 +10,14 @@ import { QpmWorkspaceService } from './qpmWorkspaceService';
 import { QpmProjectSettingsService } from './qpmProjectSettingsService';
 import { normalizeRuntimePath } from '../utils/pathUtils';
 import { QpmSdlConfiguration, createSdlBuildPlan } from './qpmSdlService';
-import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, qtGeneratedDirectory, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
+import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, qtGeneratedDirectory, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
 import { createQtDirectBuildPlan, generationStepIsOutdated, qtCompileArguments, qtLinkArguments, qtObjectPathForSource, sourceNeedsCompilation, qtPrecompiledHeaderArguments, qtGenerationOutputDirectories, QtDirectBuildPlan } from './qpmQtDirectBuildService';
 import { QpmQtBuildBackendService } from './qpmQtBuildBackendService';
 import { createGnuResponseFileArguments, estimateGnuArgumentLength, shouldUseGnuResponseFile } from './qpmGnuResponseFile';
 import { cleanQtDirectModeDirectory, removePathWithRetries } from './qpmBuildCleanup';
+import { QpmQtPythonService } from './qpmQtPythonService';
+import { QpmQtDependencyService } from './qpmQtDependencyService';
 
 type QpmRuntimeDependencyMode = 'copy-dlls' | 'path-only' | 'static-link';
 
@@ -64,7 +66,9 @@ export class QpmBuildService {
     private readonly qtInstallations: QpmQtInstallationService,
     private readonly projectSettings: QpmProjectSettingsService,
     _breakpoints: unknown,
-    private readonly output: vscode.OutputChannel
+    private readonly output: vscode.OutputChannel,
+    private readonly qtPython?: QpmQtPythonService,
+    private readonly qtDependencies?: QpmQtDependencyService
   ) { this.qtBackends = new QpmQtBuildBackendService(output); }
 
   get buildMode(): QpmBuildMode {
@@ -207,6 +211,10 @@ export class QpmBuildService {
     }
 
     const manifest = readQtProjectManifest(ref.absolutePath);
+    if (isQtPythonProject(manifest)) {
+      this.output.appendLine('[Qt/Python] IntelliSense preparation is handled by the Python/PySide6 toolchain.');
+      return true;
+    }
     const installation = this.resolveQtInstallation(manifest);
     if (!installation) {
       this.output.appendLine('[Qt/C++] IntelliSense preparation skipped: no valid Qt installation is selected.');
@@ -255,6 +263,15 @@ export class QpmBuildService {
       return;
     }
     this.beginOutput(`Clean ${ref.name}`);
+    if (isQtProjectManifestPath(ref.absolutePath)) {
+      const manifest = readQtProjectManifest(ref.absolutePath);
+      if (isQtPythonProject(manifest)) {
+        if (!this.qtPython) throw new Error('Qt for Python service is not available.');
+        const ok = await this.qtPython.clean(ref.absolutePath);
+        if (ok) vscode.window.showInformationMessage(`Clean completed for ${ref.name} (Qt for Python).`);
+        return;
+      }
+    }
     const artifacts = this.resolveArtifacts(ref);
     await this.stopApplicationsForTarget(artifacts.targetPath, 'clean');
 
@@ -378,6 +395,14 @@ export class QpmBuildService {
     if (!ref?.exists) {
       vscode.window.showErrorMessage('No existing Qt project is available to run.');
       return;
+    }
+    if (isQtProjectManifestPath(ref.absolutePath)) {
+      const manifest = readQtProjectManifest(ref.absolutePath);
+      if (isQtPythonProject(manifest)) {
+        if (!this.qtPython) throw new Error('Qt for Python service is not available.');
+        await this.qtPython.run(ref.absolutePath, false);
+        return;
+      }
     }
     const project = this.workspaces.getProject(ref);
     if (project?.targetType !== 'Executable' && project?.targetType !== 'Dynamic Link Library') {
@@ -713,6 +738,15 @@ export class QpmBuildService {
 
   private async buildOneProject(ref: QpmWorkspaceProjectRef, rebuild: boolean): Promise<boolean> {
     if (isQtProjectManifestPath(ref.absolutePath)) {
+      const manifest = readQtProjectManifest(ref.absolutePath);
+      if (isQtPythonProject(manifest)) {
+        if (!this.qtPython) throw new Error('Qt for Python service is not available.');
+        return this.qtPython.build(ref.absolutePath, rebuild);
+      }
+      if (this.qtDependencies && manifest.dependencies.enabled) {
+        const dependenciesReady = await this.qtDependencies.prepareForBuild(ref.absolutePath, this.buildMode);
+        if (!dependenciesReady) return false;
+      }
       return await this.buildNativeQtProject(ref, rebuild);
     }
     this.output.appendLine('[Qt/C++] Compatibility project detected: .prj projects use the generic C/C++ pipeline and do not run moc, uic or rcc. Create or open a .qtproject.json project to use the selected Qt kit and native Qt build engine.');
@@ -771,6 +805,10 @@ export class QpmBuildService {
 
   private async compileNativeQtFile(ref: QpmWorkspaceProjectRef, filePath: string): Promise<boolean> {
     const manifest = readQtProjectManifest(ref.absolutePath);
+    if (isQtPythonProject(manifest)) {
+      vscode.window.showErrorMessage('Compile File is a C/C++ action. Use Build Project for Qt for Python sources.');
+      return false;
+    }
     const installation = this.resolveQtInstallation(manifest);
     if (!installation) throw new Error('No valid Qt installation is selected for this project.');
     const profile = getActiveQtBuildProfile(manifest, this.buildMode);

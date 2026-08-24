@@ -113,6 +113,21 @@ const PATH_BROWSE_FIELDS = {
     profilingCppcheckSuppressionsFile: { kind: 'file', relative: true },
     qmlLanguageServerExecutable: { kind: 'file' },
     qmlModuleImportRoot: { kind: 'folder', relative: true },
+    pythonInterpreter: { kind: 'file' },
+    pythonVirtualEnvironment: { kind: 'folder', relative: true },
+    pythonProjectFile: { kind: 'file', relative: true },
+    pythonEntryPoint: { kind: 'file', relative: true },
+    pythonDeploySpecFile: { kind: 'file', relative: true },
+    pythonToolProject: { kind: 'file' },
+    pythonToolDesigner: { kind: 'file' },
+    pythonToolUic: { kind: 'file' },
+    pythonToolRcc: { kind: 'file' },
+    pythonToolDeploy: { kind: 'file' },
+    pythonToolAndroidDeploy: { kind: 'file' },
+    pythonToolLinguist: { kind: 'file' },
+    pythonToolLupdate: { kind: 'file' },
+    pythonToolLrelease: { kind: 'file' },
+    pythonToolQmllint: { kind: 'file' },
     testCtestExecutable: { kind: 'file' },
     testCtestBuildDirectory: { kind: 'folder', relative: true }
 };
@@ -151,9 +166,41 @@ const FIELD_DATALISTS = {
     profilingQmlServices: ['CanvasFrameRate,EngineControl,DebugMessages', 'CanvasFrameRate,EngineControl,DebugMessages,QmlProfiler', 'QmlProfiler'],
     profilingCppcheckChecks: ['warning,style,performance,portability', 'warning,performance,portability', 'all'],
     qmlModuleUri: ['Company.Application', 'Company.Controls', 'Qpm.Application'],
-    qmlModuleResourcePrefix: ['/qt/qml', '/qml']
+    qmlModuleResourcePrefix: ['/qt/qml', '/qml'],
+    pythonVirtualEnvironment: ['.venv', 'venv'],
+    pythonPySideVersion: ['6.11.0', '6.10.0', ''],
+    pythonProjectFile: ['pyproject.toml'],
+    pythonEntryPoint: ['main.py'],
+    pythonDeploySpecFile: ['pysidedeploy.spec'],
+    dependenciesVcpkgTriplet: ['x64-windows', 'x86-windows', 'arm64-windows', 'x64-linux', 'arm64-linux', 'x64-osx', 'arm64-osx'],
+    dependenciesConanProfileHost: ['default'],
+    dependenciesConanProfileBuild: ['default']
 };
 const FIELD_HELP = {
+    dependenciesEnabled: 'Enables project-scoped third-party C/C++ dependency management. QPM supports vcpkg manifest mode, Conan 2 and pkg-config.',
+    dependenciesAutoInstall: 'Runs the enabled dependency managers before each build. Keep disabled when you prefer explicit, reproducible synchronization.',
+    dependenciesOutputDirectory: 'Directory used for generated integration metadata and package-manager build output.',
+    dependenciesCmakeFindPackages: 'CMake find_package arguments, one per line. Example: fmt CONFIG REQUIRED.',
+    dependenciesCmakeLinkTargets: 'Imported CMake targets linked to the generated QPM target, one per line. Example: fmt::fmt.',
+    dependenciesVcpkgEnabled: 'Uses vcpkg manifest mode with vcpkg.json and a project-local installed tree.',
+    dependenciesVcpkgRoot: 'Optional vcpkg root. Leave empty to use VCPKG_ROOT or an executable found on PATH.',
+    dependenciesVcpkgTriplet: 'Target triplet used by vcpkg, such as x64-windows.',
+    dependenciesConanEnabled: 'Uses Conan 2 with conanfile.txt, CMakeDeps and CMakeToolchain.',
+    dependenciesPkgConfigEnabled: 'Uses pkg-config/pkgconf to resolve compiler and linker flags for direct, qmake and CMake builds.',
+    pythonEnabled: 'Enables the Qt for Python / PySide6 backend for this project. Python project kinds enable it automatically.',
+    pythonInterpreter: 'Python interpreter used by QPM. A project-local virtual environment is recommended. Leave empty to let QPM resolve or create one.',
+    pythonVirtualEnvironment: 'Project-local virtual environment directory. QPM uses .venv by default.',
+    pythonAutoCreateVirtualEnvironment: 'Creates the configured virtual environment automatically when preparing a new Qt for Python project.',
+    pythonAutoInstallPySide6: 'Allows QPM to install PySide6 automatically with pip when it is missing. If disabled, QPM asks before installation.',
+    pythonPySideVersion: 'Optional exact PySide6 version. Leave empty to install the current version allowed by pip.',
+    pythonProjectFile: 'Modern PySide6 project file. pyproject.toml is recommended since PySide6 6.9.',
+    pythonEntryPoint: 'Main Python file launched by Run and Debug.',
+    pythonUiMode: 'Compiled uses pyside6-uic / pyside6-project to create ui_*.py files. Runtime leaves .ui files for QUiLoader-style workflows.',
+    pythonBuildBeforeRun: 'Runs pyside6-project build before launching the entry point.',
+    pythonDeployEnabled: 'Enables desktop packaging through pyside6-project deploy / pyside6-deploy.',
+    pythonDeploySpecFile: 'Deployment configuration shared by pyside6-deploy and pyside6-android-deploy.',
+    pythonAndroidDeployEnabled: 'Enables Qt for Python Android deployment commands.',
+    pythonEnvironment: 'Additional Python process environment in NAME=value form, separated by semicolons.',
     variant: 'Chooses whether this page edits the Debug or Release build profile. The selected architecture is configured separately.',
     name: 'Logical project name displayed by QPM. It does not rename the project directory.',
     targetName: 'Base name of the generated executable or library, without a path or platform extension.',
@@ -453,6 +500,7 @@ const SECTION_HELP = {
     debugging: 'Native and QML debugger launch, attach, remote and dump settings.',
     tests: 'Test discovery, execution environment and timeout settings.',
     quality: 'Clang-Tidy, Clazy, sanitizers and coverage-related configuration.',
+    python: 'Python interpreter, virtual environment, PySide6 tools, Designer, build and deployment settings.',
     packaging: 'Product identity, executable metadata, runtime staging and portable distribution archives.',
     publication: 'MSIX, App Installer, WinGet manifests, release metadata and publication destinations.',
     steps: 'Commands executed before, during or after the selected build backend.',
@@ -729,6 +777,71 @@ class QtProjectSettingsPanel {
         manifest.profiling.tracing.followForks = payload.profilingTraceFollowForks === true;
         manifest.profiling.tracing.timestamps = payload.profilingTraceTimestamps === true;
         manifest.profiling.tracing.outputFile = String(payload.profilingTraceOutputFile ?? '${target}-trace.log').trim() || '${target}-trace.log';
+        manifest.dependencies.enabled = payload.dependenciesEnabled === true;
+        manifest.dependencies.autoInstallBeforeBuild = payload.dependenciesAutoInstall === true;
+        manifest.dependencies.outputDirectory = String(payload.dependenciesOutputDirectory ?? '.qpm/dependencies').trim() || '.qpm/dependencies';
+        manifest.dependencies.cmakeFindPackages = normalizeList(payload.dependenciesCmakeFindPackages);
+        manifest.dependencies.cmakeLinkTargets = normalizeList(payload.dependenciesCmakeLinkTargets);
+        manifest.dependencies.additionalIncludeDirectories = normalizeList(payload.dependenciesIncludeDirectories);
+        manifest.dependencies.additionalLibraryDirectories = normalizeList(payload.dependenciesLibraryDirectories);
+        manifest.dependencies.additionalLibraries = normalizeList(payload.dependenciesLibraries);
+        manifest.dependencies.vcpkg.enabled = payload.dependenciesVcpkgEnabled === true;
+        manifest.dependencies.vcpkg.executable = String(payload.dependenciesVcpkgExecutable ?? '').trim();
+        manifest.dependencies.vcpkg.root = String(payload.dependenciesVcpkgRoot ?? '').trim();
+        manifest.dependencies.vcpkg.manifestFile = String(payload.dependenciesVcpkgManifestFile ?? 'vcpkg.json').trim() || 'vcpkg.json';
+        manifest.dependencies.vcpkg.installRoot = String(payload.dependenciesVcpkgInstallRoot ?? '.qpm/dependencies/vcpkg_installed').trim() || '.qpm/dependencies/vcpkg_installed';
+        manifest.dependencies.vcpkg.triplet = String(payload.dependenciesVcpkgTriplet ?? '').trim();
+        manifest.dependencies.vcpkg.hostTriplet = String(payload.dependenciesVcpkgHostTriplet ?? '').trim();
+        manifest.dependencies.vcpkg.baseline = String(payload.dependenciesVcpkgBaseline ?? '').trim();
+        manifest.dependencies.vcpkg.dependencies = normalizeList(payload.dependenciesVcpkgPackages);
+        manifest.dependencies.vcpkg.overlayPorts = normalizeList(payload.dependenciesVcpkgOverlayPorts);
+        manifest.dependencies.vcpkg.overlayTriplets = normalizeList(payload.dependenciesVcpkgOverlayTriplets);
+        manifest.dependencies.vcpkg.additionalArguments = normalizeList(payload.dependenciesVcpkgArguments);
+        manifest.dependencies.conan.enabled = payload.dependenciesConanEnabled === true;
+        manifest.dependencies.conan.executable = String(payload.dependenciesConanExecutable ?? '').trim();
+        manifest.dependencies.conan.manifestFile = String(payload.dependenciesConanManifestFile ?? 'conanfile.txt').trim() || 'conanfile.txt';
+        manifest.dependencies.conan.outputDirectory = String(payload.dependenciesConanOutputDirectory ?? '.qpm/dependencies/conan').trim() || '.qpm/dependencies/conan';
+        manifest.dependencies.conan.requires = normalizeList(payload.dependenciesConanRequires);
+        manifest.dependencies.conan.toolRequires = normalizeList(payload.dependenciesConanToolRequires);
+        manifest.dependencies.conan.options = normalizeList(payload.dependenciesConanOptions);
+        manifest.dependencies.conan.profileHost = String(payload.dependenciesConanProfileHost ?? 'default').trim() || 'default';
+        manifest.dependencies.conan.profileBuild = String(payload.dependenciesConanProfileBuild ?? 'default').trim() || 'default';
+        manifest.dependencies.conan.buildMissing = payload.dependenciesConanBuildMissing === true;
+        manifest.dependencies.conan.lockfile = String(payload.dependenciesConanLockfile ?? '').trim();
+        manifest.dependencies.conan.additionalArguments = normalizeList(payload.dependenciesConanArguments);
+        manifest.dependencies.pkgConfig.enabled = payload.dependenciesPkgConfigEnabled === true;
+        manifest.dependencies.pkgConfig.executable = String(payload.dependenciesPkgConfigExecutable ?? '').trim();
+        manifest.dependencies.pkgConfig.packages = normalizeList(payload.dependenciesPkgConfigPackages);
+        manifest.dependencies.pkgConfig.searchPaths = normalizeList(payload.dependenciesPkgConfigSearchPaths);
+        manifest.dependencies.pkgConfig.staticLink = payload.dependenciesPkgConfigStatic === true;
+        manifest.dependencies.pkgConfig.additionalArguments = normalizeList(payload.dependenciesPkgConfigArguments);
+        manifest.python.enabled = payload.pythonEnabled === true || manifest.kind === 'python-widgets-application' || manifest.kind === 'python-quick-application';
+        manifest.python.binding = 'pyside6';
+        manifest.python.interpreter = String(payload.pythonInterpreter ?? '').trim();
+        manifest.python.virtualEnvironment = String(payload.pythonVirtualEnvironment ?? '.venv').trim() || '.venv';
+        manifest.python.autoCreateVirtualEnvironment = payload.pythonAutoCreateVirtualEnvironment === true;
+        manifest.python.autoInstallPySide6 = payload.pythonAutoInstallPySide6 === true;
+        manifest.python.pySideVersion = String(payload.pythonPySideVersion ?? '').trim();
+        manifest.python.projectFile = String(payload.pythonProjectFile ?? 'pyproject.toml').trim() || 'pyproject.toml';
+        manifest.python.entryPoint = String(payload.pythonEntryPoint ?? 'main.py').trim() || 'main.py';
+        manifest.python.uiMode = payload.pythonUiMode === 'runtime' ? 'runtime' : 'compiled';
+        manifest.python.buildBeforeRun = payload.pythonBuildBeforeRun === true;
+        manifest.python.deployEnabled = payload.pythonDeployEnabled === true;
+        manifest.python.deploySpecFile = String(payload.pythonDeploySpecFile ?? 'pysidedeploy.spec').trim() || 'pysidedeploy.spec';
+        manifest.python.androidDeployEnabled = payload.pythonAndroidDeployEnabled === true;
+        manifest.python.toolOverrides.project = String(payload.pythonToolProject ?? '').trim();
+        manifest.python.toolOverrides.designer = String(payload.pythonToolDesigner ?? '').trim();
+        manifest.python.toolOverrides.uic = String(payload.pythonToolUic ?? '').trim();
+        manifest.python.toolOverrides.rcc = String(payload.pythonToolRcc ?? '').trim();
+        manifest.python.toolOverrides.deploy = String(payload.pythonToolDeploy ?? '').trim();
+        manifest.python.toolOverrides.androidDeploy = String(payload.pythonToolAndroidDeploy ?? '').trim();
+        manifest.python.toolOverrides.linguist = String(payload.pythonToolLinguist ?? '').trim();
+        manifest.python.toolOverrides.lupdate = String(payload.pythonToolLupdate ?? '').trim();
+        manifest.python.toolOverrides.lrelease = String(payload.pythonToolLrelease ?? '').trim();
+        manifest.python.toolOverrides.qmllint = String(payload.pythonToolQmllint ?? '').trim();
+        manifest.python.additionalProjectArguments = normalizeList(payload.pythonProjectArguments);
+        manifest.python.additionalDeployArguments = normalizeList(payload.pythonDeployArguments);
+        manifest.python.environment = parseEnvironmentProfile(String(payload.pythonEnvironment ?? ''));
         manifest.qml.languageServer.enabled = payload.qmlLanguageServerEnabled === true;
         manifest.qml.languageServer.autoStart = payload.qmlLanguageServerAutoStart === true;
         manifest.qml.languageServer.executable = String(payload.qmlLanguageServerExecutable ?? '').trim();
@@ -1203,7 +1316,7 @@ class QtProjectSettingsPanel {
   </div>
   <div id="settingsNavigation" class="settings-nav">
     <input id="settingsFilter" type="search" placeholder="Filter settings, fields or tools…" aria-label="Filter project settings">
-    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section…</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
+    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section…</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-dependencies">Dependencies / package managers</option><option value="section-python">Qt for Python / PySide6</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
     <span id="dirtyState" class="dirty">Saved state</span>
   </div>
 </div>
@@ -1440,6 +1553,74 @@ class QtProjectSettingsPanel {
   ${field('Clazy checks', 'clazyChecks', manifest.quality.clazyChecks, true)}
   ${field('Header filter regular expression', 'qualityHeaderFilter', manifest.quality.headerFilter, true)}
 </div><p class="muted">Use the Qt Tests & Quality view to run analyzers and create sanitizer or coverage profiles.</p></section>
+<section id="section-dependencies" data-settings-section class="card wide"><h2>${sectionHeading('dependencies', 'Dependencies and package managers')}</h2>
+<p class="muted">Project-scoped C/C++ dependencies with vcpkg manifest mode, Conan 2 and pkg-config. Generated integration is shared by the direct, qmake and CMake backends.</p>
+<div class="fields">
+  ${field('Dependency output directory', 'dependenciesOutputDirectory', manifest.dependencies.outputDirectory)}
+  ${area('CMake find_package entries', 'dependenciesCmakeFindPackages', manifest.dependencies.cmakeFindPackages, true)}
+  ${area('CMake link targets', 'dependenciesCmakeLinkTargets', manifest.dependencies.cmakeLinkTargets, true)}
+  ${area('Additional include directories', 'dependenciesIncludeDirectories', manifest.dependencies.additionalIncludeDirectories, true)}
+  ${area('Additional library directories', 'dependenciesLibraryDirectories', manifest.dependencies.additionalLibraryDirectories, true)}
+  ${area('Additional libraries', 'dependenciesLibraries', manifest.dependencies.additionalLibraries, true)}
+</div><div class="checks">${check('dependenciesEnabled', 'Enable dependency management', manifest.dependencies.enabled)}${check('dependenciesAutoInstall', 'Install / synchronize before each build', manifest.dependencies.autoInstallBeforeBuild)}</div>
+<h3 style="margin-top:18px">vcpkg</h3><div class="fields">
+  ${field('vcpkg executable', 'dependenciesVcpkgExecutable', manifest.dependencies.vcpkg.executable, true)}
+  ${field('VCPKG_ROOT', 'dependenciesVcpkgRoot', manifest.dependencies.vcpkg.root, true)}
+  ${field('Manifest file', 'dependenciesVcpkgManifestFile', manifest.dependencies.vcpkg.manifestFile)}
+  ${field('Installed tree', 'dependenciesVcpkgInstallRoot', manifest.dependencies.vcpkg.installRoot)}
+  ${field('Target triplet', 'dependenciesVcpkgTriplet', manifest.dependencies.vcpkg.triplet, true)}
+  ${field('Host triplet', 'dependenciesVcpkgHostTriplet', manifest.dependencies.vcpkg.hostTriplet)}
+  ${field('Builtin baseline', 'dependenciesVcpkgBaseline', manifest.dependencies.vcpkg.baseline)}
+  ${area('vcpkg dependencies', 'dependenciesVcpkgPackages', manifest.dependencies.vcpkg.dependencies, true)}
+  ${area('Overlay ports', 'dependenciesVcpkgOverlayPorts', manifest.dependencies.vcpkg.overlayPorts)}
+  ${area('Overlay triplets', 'dependenciesVcpkgOverlayTriplets', manifest.dependencies.vcpkg.overlayTriplets)}
+  ${area('Additional vcpkg arguments', 'dependenciesVcpkgArguments', manifest.dependencies.vcpkg.additionalArguments, true)}
+</div><div class="checks">${check('dependenciesVcpkgEnabled', 'Enable vcpkg', manifest.dependencies.vcpkg.enabled)}</div>
+<h3 style="margin-top:18px">Conan 2</h3><div class="fields">
+  ${field('Conan executable', 'dependenciesConanExecutable', manifest.dependencies.conan.executable, true)}
+  ${field('Conan manifest', 'dependenciesConanManifestFile', manifest.dependencies.conan.manifestFile)}
+  ${field('Conan output directory', 'dependenciesConanOutputDirectory', manifest.dependencies.conan.outputDirectory)}
+  ${field('Host profile', 'dependenciesConanProfileHost', manifest.dependencies.conan.profileHost, true)}
+  ${field('Build profile', 'dependenciesConanProfileBuild', manifest.dependencies.conan.profileBuild, true)}
+  ${field('Lockfile', 'dependenciesConanLockfile', manifest.dependencies.conan.lockfile)}
+  ${area('Conan requires', 'dependenciesConanRequires', manifest.dependencies.conan.requires, true)}
+  ${area('Conan tool_requires', 'dependenciesConanToolRequires', manifest.dependencies.conan.toolRequires)}
+  ${area('Conan options', 'dependenciesConanOptions', manifest.dependencies.conan.options, true)}
+  ${area('Additional Conan arguments', 'dependenciesConanArguments', manifest.dependencies.conan.additionalArguments, true)}
+</div><div class="checks">${check('dependenciesConanEnabled', 'Enable Conan 2', manifest.dependencies.conan.enabled)}${check('dependenciesConanBuildMissing', 'Build missing packages', manifest.dependencies.conan.buildMissing)}</div>
+<h3 style="margin-top:18px">pkg-config / pkgconf</h3><div class="fields">
+  ${field('pkg-config executable', 'dependenciesPkgConfigExecutable', manifest.dependencies.pkgConfig.executable, true)}
+  ${area('pkg-config packages', 'dependenciesPkgConfigPackages', manifest.dependencies.pkgConfig.packages, true)}
+  ${area('PKG_CONFIG_PATH additions', 'dependenciesPkgConfigSearchPaths', manifest.dependencies.pkgConfig.searchPaths)}
+  ${area('Additional pkg-config arguments', 'dependenciesPkgConfigArguments', manifest.dependencies.pkgConfig.additionalArguments, true)}
+</div><div class="checks">${check('dependenciesPkgConfigEnabled', 'Enable pkg-config', manifest.dependencies.pkgConfig.enabled)}${check('dependenciesPkgConfigStatic', 'Request static pkg-config flags', manifest.dependencies.pkgConfig.staticLink)}</div>
+<div class="actions"><button class="secondary" data-command="qpm.dependencies.detectTools">Detect tools</button><button class="secondary" data-command="qpm.dependencies.generateManifests">Generate manifests</button><button class="secondary" data-command="qpm.dependencies.install">Install / synchronize</button><button class="secondary" data-command="qpm.dependencies.openReport">Open report</button><button class="secondary" data-command="qpm.dependencies.revealOutput">Reveal output</button></div></section>
+<section id="section-python" data-settings-section class="card wide"><h2>${sectionHeading('python', 'Qt for Python / PySide6')}</h2>
+<p class="muted">Official Qt for Python workflow using PySide6, a project-local Python environment, pyside6-project, Designer and deployment tools.</p>
+<h3>Python environment</h3><div class="fields">
+  ${field('Python interpreter', 'pythonInterpreter', manifest.python.interpreter, true)}
+  ${field('Virtual environment', 'pythonVirtualEnvironment', manifest.python.virtualEnvironment)}
+  ${field('PySide6 version (optional exact version)', 'pythonPySideVersion', manifest.python.pySideVersion)}
+  ${field('Python project file', 'pythonProjectFile', manifest.python.projectFile)}
+  ${field('Entry point', 'pythonEntryPoint', manifest.python.entryPoint)}
+  ${selectField('Qt Designer UI mode', 'pythonUiMode', pythonUiModeOptions(manifest.python.uiMode))}
+  ${field('Environment (NAME=value;OTHER=value)', 'pythonEnvironment', Object.entries(manifest.python.environment).map(([key, value]) => `${key}=${value}`).join(';'), true)}
+</div><div class="checks">${check('pythonEnabled', 'Enable Qt for Python backend', manifest.python.enabled)}${check('pythonAutoCreateVirtualEnvironment', 'Automatically create project virtual environment', manifest.python.autoCreateVirtualEnvironment)}${check('pythonAutoInstallPySide6', 'Automatically install PySide6 when missing', manifest.python.autoInstallPySide6)}${check('pythonBuildBeforeRun', 'Build before run', manifest.python.buildBeforeRun)}${check('pythonDeployEnabled', 'Enable desktop deployment', manifest.python.deployEnabled)}${check('pythonAndroidDeployEnabled', 'Enable Android deployment', manifest.python.androidDeployEnabled)}</div>
+<h3 style="margin-top:18px">PySide6 tool overrides</h3><div class="fields">
+  ${field('pyside6-project', 'pythonToolProject', manifest.python.toolOverrides.project, true)}
+  ${field('pyside6-designer', 'pythonToolDesigner', manifest.python.toolOverrides.designer, true)}
+  ${field('pyside6-uic', 'pythonToolUic', manifest.python.toolOverrides.uic, true)}
+  ${field('pyside6-rcc', 'pythonToolRcc', manifest.python.toolOverrides.rcc, true)}
+  ${field('pyside6-deploy', 'pythonToolDeploy', manifest.python.toolOverrides.deploy, true)}
+  ${field('pyside6-android-deploy', 'pythonToolAndroidDeploy', manifest.python.toolOverrides.androidDeploy, true)}
+  ${field('pyside6-linguist', 'pythonToolLinguist', manifest.python.toolOverrides.linguist, true)}
+  ${field('pyside6-lupdate', 'pythonToolLupdate', manifest.python.toolOverrides.lupdate, true)}
+  ${field('pyside6-lrelease', 'pythonToolLrelease', manifest.python.toolOverrides.lrelease, true)}
+  ${field('pyside6-qmllint', 'pythonToolQmllint', manifest.python.toolOverrides.qmllint, true)}
+  ${field('Deployment specification', 'pythonDeploySpecFile', manifest.python.deploySpecFile)}
+  ${area('Additional pyside6-project arguments', 'pythonProjectArguments', manifest.python.additionalProjectArguments, true)}
+  ${area('Additional deployment arguments', 'pythonDeployArguments', manifest.python.additionalDeployArguments, true)}
+</div><div class="actions"><button class="secondary" data-command="qpm.python.bootstrap">Prepare environment</button><button class="secondary" data-command="qpm.python.selectInterpreter">Select interpreter</button><button class="secondary" data-command="qpm.python.createVirtualEnvironment">Create venv</button><button class="secondary" data-command="qpm.python.installPySide6">Install PySide6</button><button class="secondary" data-command="qpm.python.build">Build</button><button class="secondary" data-command="qpm.python.run">Run</button><button class="secondary" data-command="qpm.python.debug">Debug</button><button class="secondary" data-command="qpm.python.openDesigner">Designer</button><button class="secondary" data-command="qpm.python.deploy">Deploy</button><button class="secondary" data-command="qpm.python.openReport">Open report</button></div></section>
 <section id="section-qml-language" data-settings-section class="card wide"><h2>${sectionHeading('qml-language', 'QML language and modules')}</h2>
 <p class="muted">Project-scoped QML code intelligence powered by qmlls, with explicit build/import directories and duplicate-server protection.</p>
 <h3>QML Language Server</h3><div class="fields">
@@ -1766,6 +1947,11 @@ on('save', 'click', () => {
     clangTidyChecks:value('clangTidyChecks'), clazyChecks:value('clazyChecks'), qualityHeaderFilter:value('qualityHeaderFilter'),
     profilingOutputDirectory:value('profilingOutputDirectory'), profilingBuildBeforeRun:checked('profilingBuildBeforeRun'), profilingTimeoutMs:value('profilingTimeoutMs'), profilingArguments:value('profilingArguments'), profilingEnvironment:value('profilingEnvironment'), profilingQmlEnabled:checked('profilingQmlEnabled'), profilingQmlHost:value('profilingQmlHost'), profilingQmlPort:value('profilingQmlPort'), profilingQmlServices:value('profilingQmlServices'), profilingQmlOutputFile:value('profilingQmlOutputFile'), profilingQmlProfilerPath:value('profilingQmlProfilerPath'), profilingCpuTool:value('profilingCpuTool'), profilingCpuFrequency:value('profilingCpuFrequency'), profilingCpuOutputFile:value('profilingCpuOutputFile'), profilingCallgrindCache:checked('profilingCallgrindCache'), profilingCallgrindBranch:checked('profilingCallgrindBranch'), profilingMemoryTool:value('profilingMemoryTool'), profilingLeakCheck:value('profilingLeakCheck'), profilingMemoryOutputFile:value('profilingMemoryOutputFile'), profilingTrackOrigins:checked('profilingTrackOrigins'), profilingShowReachable:checked('profilingShowReachable'), profilingCppcheckEnabled:checked('profilingCppcheckEnabled'), profilingCppcheckChecks:value('profilingCppcheckChecks'), profilingCppcheckInconclusive:checked('profilingCppcheckInconclusive'), profilingCppcheckSuppressionsFile:value('profilingCppcheckSuppressionsFile'), profilingCppcheckArguments:value('profilingCppcheckArguments'), profilingTraceTool:value('profilingTraceTool'), profilingTraceFollowForks:checked('profilingTraceFollowForks'), profilingTraceTimestamps:checked('profilingTraceTimestamps'), profilingTraceOutputFile:value('profilingTraceOutputFile'),
 
+    dependenciesEnabled:checked('dependenciesEnabled'), dependenciesAutoInstall:checked('dependenciesAutoInstall'), dependenciesOutputDirectory:value('dependenciesOutputDirectory'), dependenciesCmakeFindPackages:value('dependenciesCmakeFindPackages'), dependenciesCmakeLinkTargets:value('dependenciesCmakeLinkTargets'), dependenciesIncludeDirectories:value('dependenciesIncludeDirectories'), dependenciesLibraryDirectories:value('dependenciesLibraryDirectories'), dependenciesLibraries:value('dependenciesLibraries'),
+    dependenciesVcpkgEnabled:checked('dependenciesVcpkgEnabled'), dependenciesVcpkgExecutable:value('dependenciesVcpkgExecutable'), dependenciesVcpkgRoot:value('dependenciesVcpkgRoot'), dependenciesVcpkgManifestFile:value('dependenciesVcpkgManifestFile'), dependenciesVcpkgInstallRoot:value('dependenciesVcpkgInstallRoot'), dependenciesVcpkgTriplet:value('dependenciesVcpkgTriplet'), dependenciesVcpkgHostTriplet:value('dependenciesVcpkgHostTriplet'), dependenciesVcpkgBaseline:value('dependenciesVcpkgBaseline'), dependenciesVcpkgPackages:value('dependenciesVcpkgPackages'), dependenciesVcpkgOverlayPorts:value('dependenciesVcpkgOverlayPorts'), dependenciesVcpkgOverlayTriplets:value('dependenciesVcpkgOverlayTriplets'), dependenciesVcpkgArguments:value('dependenciesVcpkgArguments'),
+    dependenciesConanEnabled:checked('dependenciesConanEnabled'), dependenciesConanExecutable:value('dependenciesConanExecutable'), dependenciesConanManifestFile:value('dependenciesConanManifestFile'), dependenciesConanOutputDirectory:value('dependenciesConanOutputDirectory'), dependenciesConanProfileHost:value('dependenciesConanProfileHost'), dependenciesConanProfileBuild:value('dependenciesConanProfileBuild'), dependenciesConanLockfile:value('dependenciesConanLockfile'), dependenciesConanRequires:value('dependenciesConanRequires'), dependenciesConanToolRequires:value('dependenciesConanToolRequires'), dependenciesConanOptions:value('dependenciesConanOptions'), dependenciesConanArguments:value('dependenciesConanArguments'), dependenciesConanBuildMissing:checked('dependenciesConanBuildMissing'),
+    dependenciesPkgConfigEnabled:checked('dependenciesPkgConfigEnabled'), dependenciesPkgConfigExecutable:value('dependenciesPkgConfigExecutable'), dependenciesPkgConfigPackages:value('dependenciesPkgConfigPackages'), dependenciesPkgConfigSearchPaths:value('dependenciesPkgConfigSearchPaths'), dependenciesPkgConfigArguments:value('dependenciesPkgConfigArguments'), dependenciesPkgConfigStatic:checked('dependenciesPkgConfigStatic'),
+    pythonEnabled:checked('pythonEnabled'), pythonInterpreter:value('pythonInterpreter'), pythonVirtualEnvironment:value('pythonVirtualEnvironment'), pythonAutoCreateVirtualEnvironment:checked('pythonAutoCreateVirtualEnvironment'), pythonAutoInstallPySide6:checked('pythonAutoInstallPySide6'), pythonPySideVersion:value('pythonPySideVersion'), pythonProjectFile:value('pythonProjectFile'), pythonEntryPoint:value('pythonEntryPoint'), pythonUiMode:value('pythonUiMode'), pythonBuildBeforeRun:checked('pythonBuildBeforeRun'), pythonDeployEnabled:checked('pythonDeployEnabled'), pythonDeploySpecFile:value('pythonDeploySpecFile'), pythonAndroidDeployEnabled:checked('pythonAndroidDeployEnabled'), pythonToolProject:value('pythonToolProject'), pythonToolDesigner:value('pythonToolDesigner'), pythonToolUic:value('pythonToolUic'), pythonToolRcc:value('pythonToolRcc'), pythonToolDeploy:value('pythonToolDeploy'), pythonToolAndroidDeploy:value('pythonToolAndroidDeploy'), pythonToolLinguist:value('pythonToolLinguist'), pythonToolLupdate:value('pythonToolLupdate'), pythonToolLrelease:value('pythonToolLrelease'), pythonToolQmllint:value('pythonToolQmllint'), pythonProjectArguments:value('pythonProjectArguments'), pythonDeployArguments:value('pythonDeployArguments'), pythonEnvironment:value('pythonEnvironment'),
     qmlLanguageServerEnabled:checked('qmlLanguageServerEnabled'), qmlLanguageServerAutoStart:checked('qmlLanguageServerAutoStart'), qmlLanguageServerExecutable:value('qmlLanguageServerExecutable'), qmlLanguageServerBuildDirectories:value('qmlLanguageServerBuildDirectories'), qmlLanguageServerImportPaths:value('qmlLanguageServerImportPaths'), qmlLanguageServerUseEnvironment:checked('qmlLanguageServerUseEnvironment'), qmlLanguageServerNoCmakeCalls:checked('qmlLanguageServerNoCmakeCalls'), qmlLanguageServerCmakeJobs:value('qmlLanguageServerCmakeJobs'), qmlLanguageServerMaxFiles:value('qmlLanguageServerMaxFiles'), qmlLanguageServerTrace:value('qmlLanguageServerTrace'), qmlLanguageServerVerbose:checked('qmlLanguageServerVerbose'), qmlLanguageServerConflictPolicy:value('qmlLanguageServerConflictPolicy'), qmlLanguageServerGenerateConfig:checked('qmlLanguageServerGenerateConfig'), qmlLanguageServerArguments:value('qmlLanguageServerArguments'), qmlModuleUri:value('qmlModuleUri'), qmlModuleVersion:value('qmlModuleVersion'), qmlModuleImportRoot:value('qmlModuleImportRoot'), qmlModuleResourcePrefix:value('qmlModuleResourcePrefix'),
 
     packagingEnabled:checked('packagingEnabled'), packagingProductName:value('packagingProductName'), packagingProductVersion:value('packagingProductVersion'), packagingCompanyName:value('packagingCompanyName'), packagingDescription:value('packagingDescription'), packagingCopyright:value('packagingCopyright'), packagingIdentifier:value('packagingIdentifier'), packagingIcon:value('packagingIcon'), packagingLicenseFile:value('packagingLicenseFile'), packagingReadmeFile:value('packagingReadmeFile'), packagingOutputDirectory:value('packagingOutputDirectory'), packagingNamePattern:value('packagingNamePattern'), packagingArchiveFormat:value('packagingArchiveFormat'), packagingExtraFiles:value('packagingExtraFiles'), packagingCleanOutput:checked('packagingCleanOutput'), packagingBuildBefore:checked('packagingBuildBefore'), packagingQtRuntime:checked('packagingQtRuntime'), packagingTranslations:checked('packagingTranslations'), packagingDebugSymbols:checked('packagingDebugSymbols'), packagingEmbedVersion:checked('packagingEmbedVersion'), packagingFileDescription:value('packagingFileDescription'), packagingInternalName:value('packagingInternalName'), packagingOriginalFilename:value('packagingOriginalFilename'), packagingExecutionLevel:value('packagingExecutionLevel'), packagingDpiAwareness:value('packagingDpiAwareness'), packagingWindowsManifestFile:value('packagingWindowsManifestFile'), packagingResourceCompilerPath:value('packagingResourceCompilerPath'), packagingLinuxDesktop:checked('packagingLinuxDesktop'), packagingLinuxAppId:value('packagingLinuxAppId'), packagingCategories:value('packagingCategories'), packagingLinuxComment:value('packagingLinuxComment'), packagingInstallPrefix:value('packagingInstallPrefix'),
@@ -1784,8 +1970,10 @@ on('save', 'click', () => {
 exports.QtProjectSettingsPanel = QtProjectSettingsPanel;
 function requiredModulesForKind(kind) {
     switch (kind) {
-        case 'widgets-application': return ['Core', 'Gui', 'Widgets'];
-        case 'quick-application': return ['Core', 'Gui', 'Qml', 'Quick'];
+        case 'widgets-application':
+        case 'python-widgets-application': return ['Core', 'Gui', 'Widgets'];
+        case 'quick-application':
+        case 'python-quick-application': return ['Core', 'Gui', 'Qml', 'Quick'];
         case 'test-application': return ['Core', 'Test'];
         case 'quick-test-application': return ['Core', 'Gui', 'Qml', 'Quick', 'QuickTest', 'Test'];
         default: return ['Core'];
@@ -1819,7 +2007,7 @@ function boostReportLevelOptions(selected) {
     return ['confirm', 'short', 'detailed', 'no'].map((value) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join('');
 }
 function normalizeKind(value, fallback) {
-    const allowed = ['widgets-application', 'console-application', 'quick-application', 'test-application', 'quick-test-application', 'shared-library', 'static-library'];
+    const allowed = ['widgets-application', 'console-application', 'quick-application', 'test-application', 'quick-test-application', 'shared-library', 'static-library', 'python-widgets-application', 'python-quick-application'];
     return typeof value === 'string' && allowed.includes(value) ? value : fallback;
 }
 function normalizeBuildSystem(value) {
@@ -1966,6 +2154,7 @@ function cpuProfilerOptions(selected) { return `<option value="auto" ${selected 
 function memoryProfilerOptions(selected) { return `<option value="auto" ${selected === 'auto' ? 'selected' : ''}>Automatic</option><option value="valgrind-memcheck" ${selected === 'valgrind-memcheck' ? 'selected' : ''}>Valgrind Memcheck</option><option value="heob" ${selected === 'heob' ? 'selected' : ''}>Heob (Windows)</option>`; }
 function leakCheckOptions(selected) { return `<option value="summary" ${selected === 'summary' ? 'selected' : ''}>Summary</option><option value="full" ${selected === 'full' ? 'selected' : ''}>Full</option>`; }
 function traceToolOptions(selected) { return `<option value="auto" ${selected === 'auto' ? 'selected' : ''}>Automatic</option><option value="strace" ${selected === 'strace' ? 'selected' : ''}>strace</option><option value="none" ${selected === 'none' ? 'selected' : ''}>Disabled</option>`; }
+function pythonUiModeOptions(selected) { return [['compiled', 'Compile .ui to ui_*.py'], ['runtime', 'Runtime .ui loading / manual workflow']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
 function qmlLanguageTraceOptions(selected) { return [['off', 'Off'], ['messages', 'Messages'], ['verbose', 'Verbose']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
 function qmlLanguageConflictOptions(selected) { return [['avoid-duplicate', 'Avoid duplicate server'], ['allow-parallel', 'Allow QPM and official extension']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join(''); }
 function normalizeQmlLanguageTrace(value) { return value === 'messages' || value === 'verbose' ? value : 'off'; }
@@ -2004,6 +2193,8 @@ function kindOptions(value) {
         ['widgets-application', 'Qt Widgets application'],
         ['console-application', 'Qt Console application'],
         ['quick-application', 'Qt Quick application'],
+        ['python-widgets-application', 'Qt for Python — Widgets (PySide6)'],
+        ['python-quick-application', 'Qt for Python — Quick (PySide6)'],
         ['test-application', 'Qt Test application'],
         ['quick-test-application', 'Qt Quick Test application'],
         ['shared-library', 'Qt shared library'],

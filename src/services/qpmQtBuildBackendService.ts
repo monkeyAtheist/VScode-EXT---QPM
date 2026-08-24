@@ -18,6 +18,7 @@ import { QpmBuildMode } from '../model/types';
 import { QpmQtInstallation } from './qpmQtInstallationService';
 import { writeQtPackagingMetadata } from './qpmQtPackagingModel';
 import { effectiveQtModules } from './qpmQtModuleInference';
+import { QpmDependencyIntegration, emptyDependencyIntegration, readDependencyIntegration } from './qpmQtDependencyModel';
 
 export interface QpmQtBackendResult {
   success: boolean;
@@ -40,6 +41,7 @@ interface BackendContext {
   targetPath: string;
   environment: NodeJS.ProcessEnv;
   jobs: number;
+  dependencyIntegration: QpmDependencyIntegration;
 }
 
 export class QpmQtBuildBackendService {
@@ -197,6 +199,7 @@ export class QpmQtBuildBackendService {
         `-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_${cmakeConfiguration(context).toUpperCase()}=${path.dirname(context.targetPath)}`,
         `-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_${cmakeConfiguration(context).toUpperCase()}=${path.dirname(context.targetPath)}`,
         ...cmakeCompilerArguments(context, generator),
+        ...context.dependencyIntegration.cmakeConfigureArguments,
         ...context.profile.configureArguments];
       cwd = context.root;
     }
@@ -252,12 +255,14 @@ export class QpmQtBuildBackendService {
     const root = path.dirname(manifestPath);
     const modeFolder = isReleaseBuildMode(mode) ? 'release' : 'debug';
     const buildDirectory = path.resolve(root, profile.outputDirectory, modeFolder, profile.system);
-    const environment = createKitEnvironment(kit, installation);
+    const dependencyIntegration = manifest.dependencies.enabled ? readDependencyIntegration(root, manifest.dependencies.outputDirectory) : emptyDependencyIntegration();
+    const environment = { ...createKitEnvironment(kit, installation), ...dependencyIntegration.environment };
     return {
       manifestPath, manifest, profile, kit, installation, mode, root, buildDirectory,
       targetPath: backendTargetPath(manifestPath, mode, manifest, installation),
       environment,
-      jobs: profile.parallelJobs > 0 ? profile.parallelJobs : Math.max(1, os.cpus().length)
+      jobs: profile.parallelJobs > 0 ? profile.parallelJobs : Math.max(1, os.cpus().length),
+      dependencyIntegration
     };
   }
 
@@ -342,12 +347,12 @@ function generateQmakeProject(context: BackendContext): string {
     qmakeList('RESOURCES', files.resources),
     qmakeList('TRANSLATIONS', files.translations),
     qmakeList('QML_FILES', files.qml),
-    qmakeList('INCLUDEPATH', context.manifest.includeDirectories.map((entry) => path.resolve(context.root, entry))),
+    qmakeList('INCLUDEPATH', [...context.manifest.includeDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories]),
     qmakeList('DEFINES', [...context.manifest.defines, ...context.profile.defines]),
-    context.manifest.libraryDirectories.length ? `LIBS += ${context.manifest.libraryDirectories.map((entry) => `-L${qmakeQuote(path.resolve(context.root, entry))}`).join(' ')}` : '',
-    context.manifest.libraries.length ? `LIBS += ${context.manifest.libraries.map((entry) => entry.startsWith('-l') || path.isAbsolute(entry) ? qmakeQuote(entry) : `-l${entry}`).join(' ')}` : '',
-    backendCompilerFlags(context).length ? `QMAKE_CXXFLAGS += ${backendCompilerFlags(context).join(' ')}` : '',
-    backendLinkerFlags(context).length ? `QMAKE_LFLAGS += ${backendLinkerFlags(context).join(' ')}` : '',
+    (context.manifest.libraryDirectories.length || context.dependencyIntegration.libraryDirectories.length) ? `LIBS += ${[...context.manifest.libraryDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.libraryDirectories].map((entry) => `-L${qmakeQuote(entry)}`).join(' ')}` : '',
+    (context.manifest.libraries.length || context.dependencyIntegration.libraries.length) ? `LIBS += ${[...context.manifest.libraries, ...context.dependencyIntegration.libraries].map((entry) => entry.startsWith('-l') || path.isAbsolute(entry) ? qmakeQuote(entry) : `-l${entry}`).join(' ')}` : '',
+    [...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].length ? `QMAKE_CXXFLAGS += ${[...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].join(' ')}` : '',
+    [...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].length ? `QMAKE_LFLAGS += ${[...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].join(' ')}` : '',
     context.profile.precompiledHeader ? `PRECOMPILED_HEADER = ${qmakeQuote(path.resolve(context.root, context.profile.precompiledHeader))}` : '',
     packagingMetadata && process.platform === 'win32' ? `RC_FILE = ${qmakeQuote(packagingMetadata.windowsResource)}` : ''
   ].filter(Boolean);
@@ -370,10 +375,10 @@ function generateCMakeProject(context: BackendContext): string {
   const addTarget = kind === 'static-library' ? `add_library(${target} STATIC` : kind === 'shared-library' ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === 'win32' ? ' WIN32' : ''}`;
   const closeTarget = `  ${sourceList}\n)`;
   const outputDir = cmakeQuote(path.dirname(context.targetPath));
-  const includeDirs = context.manifest.includeDirectories.map((entry) => cmakeQuote(path.resolve(context.root, entry))).join('\n  ');
+  const includeDirs = [...context.manifest.includeDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories].map(cmakeQuote).join('\n  ');
   const definitions = [...context.manifest.defines, ...context.profile.defines].map(cmakeQuote).join(' ');
-  const libraries = context.manifest.libraries.map(cmakeQuote).join(' ');
-  const libraryDirs = context.manifest.libraryDirectories.map((entry) => cmakeQuote(path.resolve(context.root, entry))).join('\n  ');
+  const libraries = [...context.manifest.libraries, ...context.dependencyIntegration.libraries, ...context.dependencyIntegration.cmakeLinkTargets].map(cmakeQuote).join(' ');
+  const libraryDirs = [...context.manifest.libraryDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.libraryDirectories].map(cmakeQuote).join('\n  ');
   const lines = [
     '# Generated by Qt Project Manager',
     'cmake_minimum_required(VERSION 3.21)',
@@ -385,13 +390,14 @@ function generateCMakeProject(context: BackendContext): string {
     `set(CMAKE_AUTORCC ${context.profile.autoRcc ? 'ON' : 'OFF'})`,
     `set(CMAKE_UNITY_BUILD ${context.profile.unityBuild ? 'ON' : 'OFF'})`,
     `find_package(Qt${major} REQUIRED COMPONENTS ${modules})`,
+    ...context.dependencyIntegration.cmakeFindPackages.map((entry) => `find_package(${entry})`),
     `${addTarget}\n${closeTarget}`,
     `target_link_libraries(${target} PRIVATE ${qtTargets}${libraries ? ` ${libraries}` : ''})`,
     includeDirs ? `target_include_directories(${target} PRIVATE\n  ${includeDirs}\n)` : '',
     libraryDirs ? `target_link_directories(${target} PRIVATE\n  ${libraryDirs}\n)` : '',
     definitions ? `target_compile_definitions(${target} PRIVATE ${definitions})` : '',
-    backendCompilerFlags(context).length ? `target_compile_options(${target} PRIVATE ${backendCompilerFlags(context).map(cmakeQuote).join(' ')})` : '',
-    backendLinkerFlags(context).length ? `target_link_options(${target} PRIVATE ${backendLinkerFlags(context).map(cmakeQuote).join(' ')})` : '',
+    [...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].length ? `target_compile_options(${target} PRIVATE ${[...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].map(cmakeQuote).join(' ')})` : '',
+    [...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].length ? `target_link_options(${target} PRIVATE ${[...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].map(cmakeQuote).join(' ')})` : '',
     context.profile.precompiledHeader ? `target_precompile_headers(${target} PRIVATE ${cmakeQuote(path.resolve(context.root, context.profile.precompiledHeader))})` : '',
     `set_target_properties(${target} PROPERTIES\n  RUNTIME_OUTPUT_DIRECTORY ${outputDir}\n  LIBRARY_OUTPUT_DIRECTORY ${outputDir}\n  ARCHIVE_OUTPUT_DIRECTORY ${outputDir}\n  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${outputDir}\n  RUNTIME_OUTPUT_DIRECTORY_RELEASE ${outputDir}\n  LIBRARY_OUTPUT_DIRECTORY_DEBUG ${outputDir}\n  LIBRARY_OUTPUT_DIRECTORY_RELEASE ${outputDir}\n  ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${outputDir}\n  ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${outputDir}\n)`
   ].filter(Boolean);

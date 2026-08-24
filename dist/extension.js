@@ -1856,11 +1856,13 @@ var require_qtProjectManifest = __commonJS({
     exports2.targetExtensionForKind = targetExtensionForKind;
     exports2.isReleaseBuildMode = isReleaseBuildMode;
     exports2.defaultModulesForKind = defaultModulesForKind;
+    exports2.isQtPythonProject = isQtPythonProject;
+    exports2.qtProjectLanguage = qtProjectLanguage;
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
     exports2.QT_PROJECT_SUFFIX = ".qtproject.json";
-    exports2.QT_PROJECT_SCHEMA_VERSION = 15;
-    var FILE_KEYS = ["sources", "headers", "forms", "resources", "qml", "translations", "other"];
+    exports2.QT_PROJECT_SCHEMA_VERSION = 17;
+    var FILE_KEYS = ["sources", "headers", "forms", "resources", "qml", "python", "translations", "other"];
     function isQtProjectManifestPath(filePath) {
       return filePath.toLowerCase().endsWith(exports2.QT_PROJECT_SUFFIX);
     }
@@ -1893,6 +1895,8 @@ var require_qtProjectManifest = __commonJS({
         quality: defaultQualityConfiguration(),
         profiling: defaultProfilingConfiguration(),
         qml: defaultQmlConfiguration(name, kind),
+        python: defaultPythonConfiguration(kind),
+        dependencies: defaultDependenciesConfiguration(),
         packaging: defaultPackagingConfiguration(name),
         publication: defaultPublicationConfiguration(name),
         files: {
@@ -1901,6 +1905,7 @@ var require_qtProjectManifest = __commonJS({
           forms: [],
           resources: [],
           qml: [],
+          python: [],
           translations: [],
           other: []
         },
@@ -1990,6 +1995,8 @@ var require_qtProjectManifest = __commonJS({
         quality: normalizeQualityConfiguration(value.quality),
         profiling: normalizeProfilingConfiguration(value.profiling),
         qml: normalizeQmlConfiguration(value.qml, name, kind),
+        python: normalizePythonConfiguration(value.python, kind),
+        dependencies: normalizeDependenciesConfiguration(value.dependencies),
         packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === "string" ? value.targetName : name),
         publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === "string" ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === "string" ? value.targetName : name)),
         files,
@@ -2655,13 +2662,14 @@ var require_qtProjectManifest = __commonJS({
       add(resolved.forms, "Qt Form", "Forms");
       add(resolved.resources, "Qt Resource", "Resources");
       add(resolved.qml, "QML", "QML Files");
+      add(resolved.python, "Python", "Python Files");
       add(resolved.translations, "Qt Translation", "Translations");
       add(resolved.other, "Other", "Other Files");
       return {
         path: manifestPath,
         name: manifest.name,
         targetType: targetTypeForKind(manifest.kind),
-        folders: ["Source Files", "Header Files", "Forms", "Resources", "QML Files", "Translations", "Other Files"],
+        folders: ["Source Files", "Header Files", "Python Files", "Forms", "Resources", "QML Files", "Translations", "Other Files"],
         files
       };
     }
@@ -2758,6 +2766,9 @@ var require_qtProjectManifest = __commonJS({
         case ".js":
         case ".mjs":
           return "qml";
+        case ".py":
+        case ".pyi":
+          return "python";
         case ".ts":
         case ".qm":
           return "translations";
@@ -2819,13 +2830,17 @@ var require_qtProjectManifest = __commonJS({
           return ["Core", "Gui", "Qml", "Quick", "QuickTest", "Test"];
         case "console-application":
           return ["Core"];
+        case "python-widgets-application":
+          return ["Core", "Gui", "Widgets"];
+        case "python-quick-application":
+          return ["Core", "Gui", "Qml", "Quick", "QuickControls2"];
         case "shared-library":
         case "static-library":
           return ["Core"];
       }
     }
     function normalizeKind(value, manifestPath) {
-      const allowed = ["widgets-application", "console-application", "quick-application", "test-application", "quick-test-application", "shared-library", "static-library"];
+      const allowed = ["widgets-application", "console-application", "quick-application", "test-application", "quick-test-application", "shared-library", "static-library", "python-widgets-application", "python-quick-application"];
       if (typeof value === "string" && allowed.includes(value))
         return value;
       throw new Error(`Invalid Qt project manifest ${manifestPath}: unsupported kind ${String(value)}.`);
@@ -2914,7 +2929,7 @@ var require_qtProjectManifest = __commonJS({
       };
     }
     function defaultQmlConfiguration(name, kind) {
-      const quickProject = kind === "quick-application" || kind === "quick-test-application";
+      const quickProject = kind === "quick-application" || kind === "quick-test-application" || kind === "python-quick-application";
       return {
         languageServer: {
           enabled: quickProject,
@@ -2973,6 +2988,152 @@ var require_qtProjectManifest = __commonJS({
           resourcePrefix: normalizeQmlResourcePrefix(optionalString(moduleValue.resourcePrefix) || fallback.module.resourcePrefix)
         }
       };
+    }
+    function defaultDependenciesConfiguration() {
+      return {
+        enabled: false,
+        autoInstallBeforeBuild: false,
+        outputDirectory: ".qpm/dependencies",
+        cmakeFindPackages: [],
+        cmakeLinkTargets: [],
+        additionalIncludeDirectories: [],
+        additionalLibraryDirectories: [],
+        additionalLibraries: [],
+        vcpkg: { enabled: false, executable: "", root: "", manifestFile: "vcpkg.json", installRoot: ".qpm/dependencies/vcpkg_installed", triplet: "", hostTriplet: "", baseline: "", dependencies: [], features: [], overlayPorts: [], overlayTriplets: [], additionalArguments: [] },
+        conan: { enabled: false, executable: "", manifestFile: "conanfile.txt", outputDirectory: ".qpm/dependencies/conan", requires: [], toolRequires: [], options: [], profileHost: "default", profileBuild: "default", buildMissing: true, lockfile: "", additionalArguments: [] },
+        pkgConfig: { enabled: false, executable: "", packages: [], searchPaths: [], staticLink: false, additionalArguments: [] }
+      };
+    }
+    function normalizeDependenciesConfiguration(raw) {
+      const fallback = defaultDependenciesConfiguration();
+      const value = objectValue(raw);
+      const vcpkg = objectValue(value.vcpkg);
+      const conan = objectValue(value.conan);
+      const pkg = objectValue(value.pkgConfig);
+      return {
+        enabled: booleanValue(value.enabled, fallback.enabled),
+        autoInstallBeforeBuild: booleanValue(value.autoInstallBeforeBuild, fallback.autoInstallBeforeBuild),
+        outputDirectory: normalizeRelativeDirectoryAllowDot(optionalString(value.outputDirectory) || fallback.outputDirectory),
+        cmakeFindPackages: normalizeStringArray(value.cmakeFindPackages),
+        cmakeLinkTargets: normalizeStringArray(value.cmakeLinkTargets),
+        additionalIncludeDirectories: normalizeStringArray(value.additionalIncludeDirectories),
+        additionalLibraryDirectories: normalizeStringArray(value.additionalLibraryDirectories),
+        additionalLibraries: normalizeStringArray(value.additionalLibraries),
+        vcpkg: {
+          enabled: booleanValue(vcpkg.enabled, false),
+          executable: optionalString(vcpkg.executable),
+          root: optionalString(vcpkg.root),
+          manifestFile: normalizeOptionalRelativePath(optionalString(vcpkg.manifestFile) || fallback.vcpkg.manifestFile),
+          installRoot: normalizeRelativeDirectoryAllowDot(optionalString(vcpkg.installRoot) || fallback.vcpkg.installRoot),
+          triplet: optionalString(vcpkg.triplet),
+          hostTriplet: optionalString(vcpkg.hostTriplet),
+          baseline: optionalString(vcpkg.baseline),
+          dependencies: normalizeStringArray(vcpkg.dependencies),
+          features: normalizeStringArray(vcpkg.features),
+          overlayPorts: normalizeStringArray(vcpkg.overlayPorts),
+          overlayTriplets: normalizeStringArray(vcpkg.overlayTriplets),
+          additionalArguments: normalizeStringArray(vcpkg.additionalArguments)
+        },
+        conan: {
+          enabled: booleanValue(conan.enabled, false),
+          executable: optionalString(conan.executable),
+          manifestFile: normalizeOptionalRelativePath(optionalString(conan.manifestFile) || fallback.conan.manifestFile),
+          outputDirectory: normalizeRelativeDirectoryAllowDot(optionalString(conan.outputDirectory) || fallback.conan.outputDirectory),
+          requires: normalizeStringArray(conan.requires),
+          toolRequires: normalizeStringArray(conan.toolRequires),
+          options: normalizeStringArray(conan.options),
+          profileHost: optionalString(conan.profileHost) || fallback.conan.profileHost,
+          profileBuild: optionalString(conan.profileBuild) || fallback.conan.profileBuild,
+          buildMissing: booleanValue(conan.buildMissing, true),
+          lockfile: normalizeOptionalRelativePath(optionalString(conan.lockfile)),
+          additionalArguments: normalizeStringArray(conan.additionalArguments)
+        },
+        pkgConfig: {
+          enabled: booleanValue(pkg.enabled, false),
+          executable: optionalString(pkg.executable),
+          packages: normalizeStringArray(pkg.packages),
+          searchPaths: normalizeStringArray(pkg.searchPaths),
+          staticLink: booleanValue(pkg.staticLink, false),
+          additionalArguments: normalizeStringArray(pkg.additionalArguments)
+        }
+      };
+    }
+    function defaultPythonConfiguration(kind) {
+      const enabled = kind === "python-widgets-application" || kind === "python-quick-application";
+      return {
+        enabled,
+        binding: "pyside6",
+        interpreter: "",
+        virtualEnvironment: ".venv",
+        autoCreateVirtualEnvironment: enabled,
+        autoInstallPySide6: false,
+        pySideVersion: "",
+        projectFile: "pyproject.toml",
+        entryPoint: "main.py",
+        uiMode: "compiled",
+        buildBeforeRun: true,
+        deployEnabled: true,
+        deploySpecFile: "pysidedeploy.spec",
+        androidDeployEnabled: false,
+        toolOverrides: {
+          project: "",
+          designer: "",
+          uic: "",
+          rcc: "",
+          deploy: "",
+          androidDeploy: "",
+          linguist: "",
+          lupdate: "",
+          lrelease: "",
+          qmllint: ""
+        },
+        additionalProjectArguments: [],
+        additionalDeployArguments: [],
+        environment: {}
+      };
+    }
+    function normalizePythonConfiguration(raw, kind) {
+      const fallback = defaultPythonConfiguration(kind);
+      const value = objectValue(raw);
+      const tools = objectValue(value.toolOverrides);
+      const uiMode = value.uiMode === "runtime" ? "runtime" : "compiled";
+      return {
+        enabled: booleanValue(value.enabled, fallback.enabled),
+        binding: "pyside6",
+        interpreter: optionalString(value.interpreter),
+        virtualEnvironment: normalizeRelativeDirectoryAllowDot(optionalString(value.virtualEnvironment) || fallback.virtualEnvironment),
+        autoCreateVirtualEnvironment: booleanValue(value.autoCreateVirtualEnvironment, fallback.autoCreateVirtualEnvironment),
+        autoInstallPySide6: booleanValue(value.autoInstallPySide6, fallback.autoInstallPySide6),
+        pySideVersion: optionalString(value.pySideVersion),
+        projectFile: normalizeOptionalRelativePath(optionalString(value.projectFile) || fallback.projectFile),
+        entryPoint: normalizeOptionalRelativePath(optionalString(value.entryPoint) || fallback.entryPoint),
+        uiMode,
+        buildBeforeRun: booleanValue(value.buildBeforeRun, fallback.buildBeforeRun),
+        deployEnabled: booleanValue(value.deployEnabled, fallback.deployEnabled),
+        deploySpecFile: normalizeOptionalRelativePath(optionalString(value.deploySpecFile) || fallback.deploySpecFile),
+        androidDeployEnabled: booleanValue(value.androidDeployEnabled, fallback.androidDeployEnabled),
+        toolOverrides: {
+          project: optionalString(tools.project),
+          designer: optionalString(tools.designer),
+          uic: optionalString(tools.uic),
+          rcc: optionalString(tools.rcc),
+          deploy: optionalString(tools.deploy),
+          androidDeploy: optionalString(tools.androidDeploy),
+          linguist: optionalString(tools.linguist),
+          lupdate: optionalString(tools.lupdate),
+          lrelease: optionalString(tools.lrelease),
+          qmllint: optionalString(tools.qmllint)
+        },
+        additionalProjectArguments: normalizeStringArray(value.additionalProjectArguments),
+        additionalDeployArguments: normalizeStringArray(value.additionalDeployArguments),
+        environment: normalizeStringRecord(value.environment)
+      };
+    }
+    function isQtPythonProject(manifest) {
+      return manifest.python.enabled || manifest.kind === "python-widgets-application" || manifest.kind === "python-quick-application";
+    }
+    function qtProjectLanguage(manifest) {
+      return isQtPythonProject(manifest) ? "python" : "cpp";
     }
     function normalizeQmlModuleUri(value) {
       const parts = value.trim().split(".").map((entry) => entry.replace(/[^A-Za-z0-9_]/g, "")).filter(Boolean);
@@ -3560,6 +3721,15 @@ var require_qtProjectManifest = __commonJS({
         return [];
       return [...new Set(value.filter((entry) => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean))];
     }
+    function normalizeStringRecord(value) {
+      const source = objectValue(value);
+      const result = {};
+      for (const [key, entry] of Object.entries(source)) {
+        if (typeof entry === "string" && key.trim())
+          result[key.trim()] = entry;
+      }
+      return result;
+    }
     function optionalString(value) {
       return typeof value === "string" ? value.trim() : "";
     }
@@ -3794,7 +3964,7 @@ var require_qpmTreeProvider = __commonJS({
     }
     function contextValueForFile(file) {
       const extension = path2.extname(file.absolutePath).toLowerCase();
-      const kind = file.type === "CSource" ? "source" : extension === ".ui" ? "form" : extension === ".qrc" ? "resource" : extension === ".qml" || extension === ".js" || extension === ".mjs" ? "qml" : extension === ".ts" || extension === ".qm" ? "translation" : isPanel(file) ? "panel" : isFunctionPanel(file) ? "functionPanel" : file.type === "Include" ? "header" : file.type === "Library" ? "library" : "other";
+      const kind = file.type === "CSource" ? "source" : extension === ".ui" ? "form" : extension === ".qrc" ? "resource" : extension === ".qml" || extension === ".js" || extension === ".mjs" ? "qml" : extension === ".py" || extension === ".pyi" ? "python" : extension === ".ts" || extension === ".qm" ? "translation" : isPanel(file) ? "panel" : isFunctionPanel(file) ? "functionPanel" : file.type === "Include" ? "header" : file.type === "Library" ? "library" : "other";
       const build = file.excluded ? "excluded" : "included";
       const obj = file.type === "CSource" ? file.compileIntoObjectFile ? "objOn" : "objOff" : "objNA";
       return `qpmFile.${kind}.${build}.${obj}`;
@@ -3833,6 +4003,9 @@ var require_qpmTreeProvider = __commonJS({
           return "package";
         case ".qml":
           return "symbol-color";
+        case ".py":
+        case ".pyi":
+          return "file-code";
         case ".ts":
         case ".qm":
           return "globe";
@@ -4734,6 +4907,112 @@ var require_qpmQtModuleInference = __commonJS({
   }
 });
 
+// out/services/qpmQtDependencyModel.js
+var require_qpmQtDependencyModel = __commonJS({
+  "out/services/qpmQtDependencyModel.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.emptyDependencyIntegration = emptyDependencyIntegration;
+    exports2.dependencyIntegrationPath = dependencyIntegrationPath;
+    exports2.readDependencyIntegration = readDependencyIntegration;
+    exports2.writeDependencyIntegration = writeDependencyIntegration;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    function emptyDependencyIntegration() {
+      return {
+        includeDirectories: [],
+        libraryDirectories: [],
+        libraries: [],
+        compilerFlags: [],
+        linkerFlags: [],
+        cmakeConfigureArguments: [],
+        cmakeFindPackages: [],
+        cmakeLinkTargets: [],
+        environment: {}
+      };
+    }
+    function dependencyIntegrationPath(projectRoot, outputDirectory = ".qpm/dependencies") {
+      return path2.resolve(projectRoot, outputDirectory, "integration.json");
+    }
+    function readDependencyIntegration(projectRoot, outputDirectory = ".qpm/dependencies") {
+      const file = dependencyIntegrationPath(projectRoot, outputDirectory);
+      if (!fs.existsSync(file))
+        return emptyDependencyIntegration();
+      try {
+        const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+        return {
+          includeDirectories: strings(raw.includeDirectories),
+          libraryDirectories: strings(raw.libraryDirectories),
+          libraries: strings(raw.libraries),
+          compilerFlags: strings(raw.compilerFlags),
+          linkerFlags: strings(raw.linkerFlags),
+          cmakeConfigureArguments: strings(raw.cmakeConfigureArguments),
+          cmakeFindPackages: strings(raw.cmakeFindPackages),
+          cmakeLinkTargets: strings(raw.cmakeLinkTargets),
+          environment: objectStrings(raw.environment),
+          generatedAt: typeof raw.generatedAt === "string" ? raw.generatedAt : void 0
+        };
+      } catch {
+        return emptyDependencyIntegration();
+      }
+    }
+    function writeDependencyIntegration(file, integration) {
+      fs.mkdirSync(path2.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify({ ...integration, generatedAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)}
+`, "utf8");
+    }
+    function strings(value) {
+      return Array.isArray(value) ? value.filter((entry) => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim()) : [];
+    }
+    function objectStrings(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return {};
+      const result = {};
+      for (const [key, entry] of Object.entries(value))
+        if (typeof entry === "string")
+          result[key] = entry;
+      return result;
+    }
+  }
+});
+
 // out/services/qpmQtDirectBuildService.js
 var require_qpmQtDirectBuildService = __commonJS({
   "out/services/qpmQtDirectBuildService.js"(exports2) {
@@ -4794,6 +5073,7 @@ var require_qpmQtDirectBuildService = __commonJS({
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
+    var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
     function qtGenerationOutputDirectories(plan) {
       return unique([
         plan.generatedDirectory,
@@ -4836,6 +5116,7 @@ var require_qpmQtDirectBuildService = __commonJS({
         throw new Error(`Build mode ${mode} is 64-bit, but the selected Qt kit is x86. Select Debug x86 or Release x86.`);
       }
       const projectDirectory = path2.dirname(manifestPath);
+      const dependencyIntegration = manifest.dependencies.enabled ? (0, qpmQtDependencyModel_1.readDependencyIntegration)(projectDirectory, manifest.dependencies.outputDirectory) : void 0;
       const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest);
       const generatedDirectory = (0, qtProjectManifest_12.qtGeneratedDirectory)(manifestPath, mode, manifest);
       const objectDirectory = (0, qtProjectManifest_12.qtObjectDirectory)(manifestPath, mode, manifest);
@@ -4864,7 +5145,8 @@ var require_qpmQtDirectBuildService = __commonJS({
         generatedDirectory,
         installation.includeDir,
         ...moduleOrder.map((module3) => path2.join(installation.includeDir, `Qt${module3}`)),
-        ...resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)] : []
+        ...resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)] : [],
+        ...dependencyIntegration?.includeDirectories ?? []
       ]);
       const modeSettings = buildProfile;
       const guiApplication = manifest.kind === "widgets-application" || manifest.kind === "quick-application" || manifest.kind === "quick-test-application";
@@ -5020,13 +5302,13 @@ var require_qpmQtDirectBuildService = __commonJS({
         precompiledHeaderCopyPath,
         precompiledHeaderOutputPath,
         includeDirectories,
-        libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path2.resolve(projectDirectory, entry))]),
+        libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path2.resolve(projectDirectory, entry)), ...dependencyIntegration?.libraryDirectories ?? []]),
         defines,
-        compilerFlags: unique([...modeSettings.compilerFlags ?? []]),
-        linkerFlags: unique([...modeSettings.linkerFlags ?? []]),
+        compilerFlags: unique([...modeSettings.compilerFlags ?? [], ...dependencyIntegration?.compilerFlags ?? []]),
+        linkerFlags: unique([...modeSettings.linkerFlags ?? [], ...dependencyIntegration?.linkerFlags ?? []]),
         entryPointArguments: windowsEntryPoint.arguments,
         qtLibraries,
-        userLibraries: manifest.libraries,
+        userLibraries: unique([...manifest.libraries, ...dependencyIntegration?.libraries ?? []]),
         platformLibraries: windowsEntryPoint.platformLibraries,
         generationSteps,
         warnings,
@@ -7317,6 +7599,7 @@ var require_qpmQtBuildBackendService = __commonJS({
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
+    var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
     var QpmQtBuildBackendService = class {
       output;
       constructor(output) {
@@ -7474,6 +7757,7 @@ var require_qpmQtBuildBackendService = __commonJS({
             `-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_${cmakeConfiguration(context).toUpperCase()}=${path2.dirname(context.targetPath)}`,
             `-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_${cmakeConfiguration(context).toUpperCase()}=${path2.dirname(context.targetPath)}`,
             ...cmakeCompilerArguments(context, generator),
+            ...context.dependencyIntegration.cmakeConfigureArguments,
             ...context.profile.configureArguments
           ];
           cwd = context.root;
@@ -7532,7 +7816,8 @@ var require_qpmQtBuildBackendService = __commonJS({
         const root = path2.dirname(manifestPath);
         const modeFolder = (0, qtProjectManifest_12.isReleaseBuildMode)(mode) ? "release" : "debug";
         const buildDirectory = path2.resolve(root, profile.outputDirectory, modeFolder, profile.system);
-        const environment = createKitEnvironment(kit, installation);
+        const dependencyIntegration = manifest.dependencies.enabled ? (0, qpmQtDependencyModel_1.readDependencyIntegration)(root, manifest.dependencies.outputDirectory) : (0, qpmQtDependencyModel_1.emptyDependencyIntegration)();
+        const environment = { ...createKitEnvironment(kit, installation), ...dependencyIntegration.environment };
         return {
           manifestPath,
           manifest,
@@ -7544,7 +7829,8 @@ var require_qpmQtBuildBackendService = __commonJS({
           buildDirectory,
           targetPath: backendTargetPath(manifestPath, mode, manifest, installation),
           environment,
-          jobs: profile.parallelJobs > 0 ? profile.parallelJobs : Math.max(1, os.cpus().length)
+          jobs: profile.parallelJobs > 0 ? profile.parallelJobs : Math.max(1, os.cpus().length),
+          dependencyIntegration
         };
       }
       run(executable, args, cwd, env, label) {
@@ -7633,12 +7919,12 @@ var require_qpmQtBuildBackendService = __commonJS({
         qmakeList("RESOURCES", files.resources),
         qmakeList("TRANSLATIONS", files.translations),
         qmakeList("QML_FILES", files.qml),
-        qmakeList("INCLUDEPATH", context.manifest.includeDirectories.map((entry) => path2.resolve(context.root, entry))),
+        qmakeList("INCLUDEPATH", [...context.manifest.includeDirectories.map((entry) => path2.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories]),
         qmakeList("DEFINES", [...context.manifest.defines, ...context.profile.defines]),
-        context.manifest.libraryDirectories.length ? `LIBS += ${context.manifest.libraryDirectories.map((entry) => `-L${qmakeQuote(path2.resolve(context.root, entry))}`).join(" ")}` : "",
-        context.manifest.libraries.length ? `LIBS += ${context.manifest.libraries.map((entry) => entry.startsWith("-l") || path2.isAbsolute(entry) ? qmakeQuote(entry) : `-l${entry}`).join(" ")}` : "",
-        backendCompilerFlags(context).length ? `QMAKE_CXXFLAGS += ${backendCompilerFlags(context).join(" ")}` : "",
-        backendLinkerFlags(context).length ? `QMAKE_LFLAGS += ${backendLinkerFlags(context).join(" ")}` : "",
+        context.manifest.libraryDirectories.length || context.dependencyIntegration.libraryDirectories.length ? `LIBS += ${[...context.manifest.libraryDirectories.map((entry) => path2.resolve(context.root, entry)), ...context.dependencyIntegration.libraryDirectories].map((entry) => `-L${qmakeQuote(entry)}`).join(" ")}` : "",
+        context.manifest.libraries.length || context.dependencyIntegration.libraries.length ? `LIBS += ${[...context.manifest.libraries, ...context.dependencyIntegration.libraries].map((entry) => entry.startsWith("-l") || path2.isAbsolute(entry) ? qmakeQuote(entry) : `-l${entry}`).join(" ")}` : "",
+        [...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].length ? `QMAKE_CXXFLAGS += ${[...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].join(" ")}` : "",
+        [...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].length ? `QMAKE_LFLAGS += ${[...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].join(" ")}` : "",
         context.profile.precompiledHeader ? `PRECOMPILED_HEADER = ${qmakeQuote(path2.resolve(context.root, context.profile.precompiledHeader))}` : "",
         packagingMetadata && process.platform === "win32" ? `RC_FILE = ${qmakeQuote(packagingMetadata.windowsResource)}` : ""
       ].filter(Boolean);
@@ -7660,10 +7946,10 @@ var require_qpmQtBuildBackendService = __commonJS({
       const closeTarget = `  ${sourceList}
 )`;
       const outputDir = cmakeQuote(path2.dirname(context.targetPath));
-      const includeDirs = context.manifest.includeDirectories.map((entry) => cmakeQuote(path2.resolve(context.root, entry))).join("\n  ");
+      const includeDirs = [...context.manifest.includeDirectories.map((entry) => path2.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories].map(cmakeQuote).join("\n  ");
       const definitions = [...context.manifest.defines, ...context.profile.defines].map(cmakeQuote).join(" ");
-      const libraries = context.manifest.libraries.map(cmakeQuote).join(" ");
-      const libraryDirs = context.manifest.libraryDirectories.map((entry) => cmakeQuote(path2.resolve(context.root, entry))).join("\n  ");
+      const libraries = [...context.manifest.libraries, ...context.dependencyIntegration.libraries, ...context.dependencyIntegration.cmakeLinkTargets].map(cmakeQuote).join(" ");
+      const libraryDirs = [...context.manifest.libraryDirectories.map((entry) => path2.resolve(context.root, entry)), ...context.dependencyIntegration.libraryDirectories].map(cmakeQuote).join("\n  ");
       const lines = [
         "# Generated by Qt Project Manager",
         "cmake_minimum_required(VERSION 3.21)",
@@ -7675,6 +7961,7 @@ var require_qpmQtBuildBackendService = __commonJS({
         `set(CMAKE_AUTORCC ${context.profile.autoRcc ? "ON" : "OFF"})`,
         `set(CMAKE_UNITY_BUILD ${context.profile.unityBuild ? "ON" : "OFF"})`,
         `find_package(Qt${major} REQUIRED COMPONENTS ${modules})`,
+        ...context.dependencyIntegration.cmakeFindPackages.map((entry) => `find_package(${entry})`),
         `${addTarget}
 ${closeTarget}`,
         `target_link_libraries(${target} PRIVATE ${qtTargets}${libraries ? ` ${libraries}` : ""})`,
@@ -7685,8 +7972,8 @@ ${closeTarget}`,
   ${libraryDirs}
 )` : "",
         definitions ? `target_compile_definitions(${target} PRIVATE ${definitions})` : "",
-        backendCompilerFlags(context).length ? `target_compile_options(${target} PRIVATE ${backendCompilerFlags(context).map(cmakeQuote).join(" ")})` : "",
-        backendLinkerFlags(context).length ? `target_link_options(${target} PRIVATE ${backendLinkerFlags(context).map(cmakeQuote).join(" ")})` : "",
+        [...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].length ? `target_compile_options(${target} PRIVATE ${[...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].map(cmakeQuote).join(" ")})` : "",
+        [...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].length ? `target_link_options(${target} PRIVATE ${[...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].map(cmakeQuote).join(" ")})` : "",
         context.profile.precompiledHeader ? `target_precompile_headers(${target} PRIVATE ${cmakeQuote(path2.resolve(context.root, context.profile.precompiledHeader))})` : "",
         `set_target_properties(${target} PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${outputDir}
@@ -8190,14 +8477,18 @@ var require_qpmBuildService = __commonJS({
       qtInstallations;
       projectSettings;
       output;
+      qtPython;
+      qtDependencies;
       qtBackends;
       launchedApplications = /* @__PURE__ */ new Map();
-      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output) {
+      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
         this.projectSettings = projectSettings;
         this.output = output;
+        this.qtPython = qtPython;
+        this.qtDependencies = qtDependencies;
         this.qtBackends = new qpmQtBuildBackendService_1.QpmQtBuildBackendService(output);
       }
       get buildMode() {
@@ -8325,6 +8616,10 @@ var require_qpmBuildService = __commonJS({
           return false;
         }
         const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+        if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+          this.output.appendLine("[Qt/Python] IntelliSense preparation is handled by the Python/PySide6 toolchain.");
+          return true;
+        }
         const installation = this.resolveQtInstallation(manifest);
         if (!installation) {
           this.output.appendLine("[Qt/C++] IntelliSense preparation skipped: no valid Qt installation is selected.");
@@ -8368,6 +8663,17 @@ var require_qpmBuildService = __commonJS({
           return;
         }
         this.beginOutput(`Clean ${ref.name}`);
+        if ((0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
+          const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+          if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+            if (!this.qtPython)
+              throw new Error("Qt for Python service is not available.");
+            const ok = await this.qtPython.clean(ref.absolutePath);
+            if (ok)
+              vscode2.window.showInformationMessage(`Clean completed for ${ref.name} (Qt for Python).`);
+            return;
+          }
+        }
         const artifacts = this.resolveArtifacts(ref);
         await this.stopApplicationsForTarget(artifacts.targetPath, "clean");
         if ((0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
@@ -8492,6 +8798,15 @@ var require_qpmBuildService = __commonJS({
         if (!ref?.exists) {
           vscode2.window.showErrorMessage("No existing Qt project is available to run.");
           return;
+        }
+        if ((0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
+          const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+          if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+            if (!this.qtPython)
+              throw new Error("Qt for Python service is not available.");
+            await this.qtPython.run(ref.absolutePath, false);
+            return;
+          }
         }
         const project = this.workspaces.getProject(ref);
         if (project?.targetType !== "Executable" && project?.targetType !== "Dynamic Link Library") {
@@ -8810,6 +9125,17 @@ var require_qpmBuildService = __commonJS({
       }
       async buildOneProject(ref, rebuild) {
         if ((0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
+          const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+          if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+            if (!this.qtPython)
+              throw new Error("Qt for Python service is not available.");
+            return this.qtPython.build(ref.absolutePath, rebuild);
+          }
+          if (this.qtDependencies && manifest.dependencies.enabled) {
+            const dependenciesReady = await this.qtDependencies.prepareForBuild(ref.absolutePath, this.buildMode);
+            if (!dependenciesReady)
+              return false;
+          }
           return await this.buildNativeQtProject(ref, rebuild);
         }
         this.output.appendLine("[Qt/C++] Compatibility project detected: .prj projects use the generic C/C++ pipeline and do not run moc, uic or rcc. Create or open a .qtproject.json project to use the selected Qt kit and native Qt build engine.");
@@ -8865,6 +9191,10 @@ var require_qpmBuildService = __commonJS({
       }
       async compileNativeQtFile(ref, filePath) {
         const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+        if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+          vscode2.window.showErrorMessage("Compile File is a C/C++ action. Use Build Project for Qt for Python sources.");
+          return false;
+        }
         const installation = this.resolveQtInstallation(manifest);
         if (!installation)
           throw new Error("No valid Qt installation is selected for this project.");
@@ -37050,26 +37380,9 @@ ${className}::~${className}() = default;
       const width = isMainWindow ? 800 : 640;
       const height = isMainWindow ? 500 : 400;
       const central = isMainWindow ? `
-  <widget class="QWidget" name="centralWidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
-     <widget class="QLabel" name="titleLabel">
-      <property name="text"><string>${className}</string></property>
-      <property name="alignment"><set>Qt::AlignCenter</set></property>
-     </widget>
-    </item>
-   </layout>
-  </widget>
+  <widget class="QWidget" name="centralWidget"/>
   <widget class="QMenuBar" name="menuBar"/>
-  <widget class="QStatusBar" name="statusBar"/>` : `
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
-    <widget class="QLabel" name="titleLabel">
-     <property name="text"><string>${className}</string></property>
-     <property name="alignment"><set>Qt::AlignCenter</set></property>
-    </widget>
-   </item>
-  </layout>`;
+  <widget class="QStatusBar" name="statusBar"/>` : "";
       return `<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>${className}</class>
@@ -41562,6 +41875,21 @@ var require_qtProjectSettingsPanel = __commonJS({
       profilingCppcheckSuppressionsFile: { kind: "file", relative: true },
       qmlLanguageServerExecutable: { kind: "file" },
       qmlModuleImportRoot: { kind: "folder", relative: true },
+      pythonInterpreter: { kind: "file" },
+      pythonVirtualEnvironment: { kind: "folder", relative: true },
+      pythonProjectFile: { kind: "file", relative: true },
+      pythonEntryPoint: { kind: "file", relative: true },
+      pythonDeploySpecFile: { kind: "file", relative: true },
+      pythonToolProject: { kind: "file" },
+      pythonToolDesigner: { kind: "file" },
+      pythonToolUic: { kind: "file" },
+      pythonToolRcc: { kind: "file" },
+      pythonToolDeploy: { kind: "file" },
+      pythonToolAndroidDeploy: { kind: "file" },
+      pythonToolLinguist: { kind: "file" },
+      pythonToolLupdate: { kind: "file" },
+      pythonToolLrelease: { kind: "file" },
+      pythonToolQmllint: { kind: "file" },
       testCtestExecutable: { kind: "file" },
       testCtestBuildDirectory: { kind: "folder", relative: true }
     };
@@ -41600,9 +41928,41 @@ var require_qtProjectSettingsPanel = __commonJS({
       profilingQmlServices: ["CanvasFrameRate,EngineControl,DebugMessages", "CanvasFrameRate,EngineControl,DebugMessages,QmlProfiler", "QmlProfiler"],
       profilingCppcheckChecks: ["warning,style,performance,portability", "warning,performance,portability", "all"],
       qmlModuleUri: ["Company.Application", "Company.Controls", "Qpm.Application"],
-      qmlModuleResourcePrefix: ["/qt/qml", "/qml"]
+      qmlModuleResourcePrefix: ["/qt/qml", "/qml"],
+      pythonVirtualEnvironment: [".venv", "venv"],
+      pythonPySideVersion: ["6.11.0", "6.10.0", ""],
+      pythonProjectFile: ["pyproject.toml"],
+      pythonEntryPoint: ["main.py"],
+      pythonDeploySpecFile: ["pysidedeploy.spec"],
+      dependenciesVcpkgTriplet: ["x64-windows", "x86-windows", "arm64-windows", "x64-linux", "arm64-linux", "x64-osx", "arm64-osx"],
+      dependenciesConanProfileHost: ["default"],
+      dependenciesConanProfileBuild: ["default"]
     };
     var FIELD_HELP = {
+      dependenciesEnabled: "Enables project-scoped third-party C/C++ dependency management. QPM supports vcpkg manifest mode, Conan 2 and pkg-config.",
+      dependenciesAutoInstall: "Runs the enabled dependency managers before each build. Keep disabled when you prefer explicit, reproducible synchronization.",
+      dependenciesOutputDirectory: "Directory used for generated integration metadata and package-manager build output.",
+      dependenciesCmakeFindPackages: "CMake find_package arguments, one per line. Example: fmt CONFIG REQUIRED.",
+      dependenciesCmakeLinkTargets: "Imported CMake targets linked to the generated QPM target, one per line. Example: fmt::fmt.",
+      dependenciesVcpkgEnabled: "Uses vcpkg manifest mode with vcpkg.json and a project-local installed tree.",
+      dependenciesVcpkgRoot: "Optional vcpkg root. Leave empty to use VCPKG_ROOT or an executable found on PATH.",
+      dependenciesVcpkgTriplet: "Target triplet used by vcpkg, such as x64-windows.",
+      dependenciesConanEnabled: "Uses Conan 2 with conanfile.txt, CMakeDeps and CMakeToolchain.",
+      dependenciesPkgConfigEnabled: "Uses pkg-config/pkgconf to resolve compiler and linker flags for direct, qmake and CMake builds.",
+      pythonEnabled: "Enables the Qt for Python / PySide6 backend for this project. Python project kinds enable it automatically.",
+      pythonInterpreter: "Python interpreter used by QPM. A project-local virtual environment is recommended. Leave empty to let QPM resolve or create one.",
+      pythonVirtualEnvironment: "Project-local virtual environment directory. QPM uses .venv by default.",
+      pythonAutoCreateVirtualEnvironment: "Creates the configured virtual environment automatically when preparing a new Qt for Python project.",
+      pythonAutoInstallPySide6: "Allows QPM to install PySide6 automatically with pip when it is missing. If disabled, QPM asks before installation.",
+      pythonPySideVersion: "Optional exact PySide6 version. Leave empty to install the current version allowed by pip.",
+      pythonProjectFile: "Modern PySide6 project file. pyproject.toml is recommended since PySide6 6.9.",
+      pythonEntryPoint: "Main Python file launched by Run and Debug.",
+      pythonUiMode: "Compiled uses pyside6-uic / pyside6-project to create ui_*.py files. Runtime leaves .ui files for QUiLoader-style workflows.",
+      pythonBuildBeforeRun: "Runs pyside6-project build before launching the entry point.",
+      pythonDeployEnabled: "Enables desktop packaging through pyside6-project deploy / pyside6-deploy.",
+      pythonDeploySpecFile: "Deployment configuration shared by pyside6-deploy and pyside6-android-deploy.",
+      pythonAndroidDeployEnabled: "Enables Qt for Python Android deployment commands.",
+      pythonEnvironment: "Additional Python process environment in NAME=value form, separated by semicolons.",
       variant: "Chooses whether this page edits the Debug or Release build profile. The selected architecture is configured separately.",
       name: "Logical project name displayed by QPM. It does not rename the project directory.",
       targetName: "Base name of the generated executable or library, without a path or platform extension.",
@@ -41902,6 +42262,7 @@ var require_qtProjectSettingsPanel = __commonJS({
       debugging: "Native and QML debugger launch, attach, remote and dump settings.",
       tests: "Test discovery, execution environment and timeout settings.",
       quality: "Clang-Tidy, Clazy, sanitizers and coverage-related configuration.",
+      python: "Python interpreter, virtual environment, PySide6 tools, Designer, build and deployment settings.",
       packaging: "Product identity, executable metadata, runtime staging and portable distribution archives.",
       publication: "MSIX, App Installer, WinGet manifests, release metadata and publication destinations.",
       steps: "Commands executed before, during or after the selected build backend.",
@@ -42177,6 +42538,71 @@ var require_qtProjectSettingsPanel = __commonJS({
         manifest.profiling.tracing.followForks = payload.profilingTraceFollowForks === true;
         manifest.profiling.tracing.timestamps = payload.profilingTraceTimestamps === true;
         manifest.profiling.tracing.outputFile = String(payload.profilingTraceOutputFile ?? "${target}-trace.log").trim() || "${target}-trace.log";
+        manifest.dependencies.enabled = payload.dependenciesEnabled === true;
+        manifest.dependencies.autoInstallBeforeBuild = payload.dependenciesAutoInstall === true;
+        manifest.dependencies.outputDirectory = String(payload.dependenciesOutputDirectory ?? ".qpm/dependencies").trim() || ".qpm/dependencies";
+        manifest.dependencies.cmakeFindPackages = normalizeList(payload.dependenciesCmakeFindPackages);
+        manifest.dependencies.cmakeLinkTargets = normalizeList(payload.dependenciesCmakeLinkTargets);
+        manifest.dependencies.additionalIncludeDirectories = normalizeList(payload.dependenciesIncludeDirectories);
+        manifest.dependencies.additionalLibraryDirectories = normalizeList(payload.dependenciesLibraryDirectories);
+        manifest.dependencies.additionalLibraries = normalizeList(payload.dependenciesLibraries);
+        manifest.dependencies.vcpkg.enabled = payload.dependenciesVcpkgEnabled === true;
+        manifest.dependencies.vcpkg.executable = String(payload.dependenciesVcpkgExecutable ?? "").trim();
+        manifest.dependencies.vcpkg.root = String(payload.dependenciesVcpkgRoot ?? "").trim();
+        manifest.dependencies.vcpkg.manifestFile = String(payload.dependenciesVcpkgManifestFile ?? "vcpkg.json").trim() || "vcpkg.json";
+        manifest.dependencies.vcpkg.installRoot = String(payload.dependenciesVcpkgInstallRoot ?? ".qpm/dependencies/vcpkg_installed").trim() || ".qpm/dependencies/vcpkg_installed";
+        manifest.dependencies.vcpkg.triplet = String(payload.dependenciesVcpkgTriplet ?? "").trim();
+        manifest.dependencies.vcpkg.hostTriplet = String(payload.dependenciesVcpkgHostTriplet ?? "").trim();
+        manifest.dependencies.vcpkg.baseline = String(payload.dependenciesVcpkgBaseline ?? "").trim();
+        manifest.dependencies.vcpkg.dependencies = normalizeList(payload.dependenciesVcpkgPackages);
+        manifest.dependencies.vcpkg.overlayPorts = normalizeList(payload.dependenciesVcpkgOverlayPorts);
+        manifest.dependencies.vcpkg.overlayTriplets = normalizeList(payload.dependenciesVcpkgOverlayTriplets);
+        manifest.dependencies.vcpkg.additionalArguments = normalizeList(payload.dependenciesVcpkgArguments);
+        manifest.dependencies.conan.enabled = payload.dependenciesConanEnabled === true;
+        manifest.dependencies.conan.executable = String(payload.dependenciesConanExecutable ?? "").trim();
+        manifest.dependencies.conan.manifestFile = String(payload.dependenciesConanManifestFile ?? "conanfile.txt").trim() || "conanfile.txt";
+        manifest.dependencies.conan.outputDirectory = String(payload.dependenciesConanOutputDirectory ?? ".qpm/dependencies/conan").trim() || ".qpm/dependencies/conan";
+        manifest.dependencies.conan.requires = normalizeList(payload.dependenciesConanRequires);
+        manifest.dependencies.conan.toolRequires = normalizeList(payload.dependenciesConanToolRequires);
+        manifest.dependencies.conan.options = normalizeList(payload.dependenciesConanOptions);
+        manifest.dependencies.conan.profileHost = String(payload.dependenciesConanProfileHost ?? "default").trim() || "default";
+        manifest.dependencies.conan.profileBuild = String(payload.dependenciesConanProfileBuild ?? "default").trim() || "default";
+        manifest.dependencies.conan.buildMissing = payload.dependenciesConanBuildMissing === true;
+        manifest.dependencies.conan.lockfile = String(payload.dependenciesConanLockfile ?? "").trim();
+        manifest.dependencies.conan.additionalArguments = normalizeList(payload.dependenciesConanArguments);
+        manifest.dependencies.pkgConfig.enabled = payload.dependenciesPkgConfigEnabled === true;
+        manifest.dependencies.pkgConfig.executable = String(payload.dependenciesPkgConfigExecutable ?? "").trim();
+        manifest.dependencies.pkgConfig.packages = normalizeList(payload.dependenciesPkgConfigPackages);
+        manifest.dependencies.pkgConfig.searchPaths = normalizeList(payload.dependenciesPkgConfigSearchPaths);
+        manifest.dependencies.pkgConfig.staticLink = payload.dependenciesPkgConfigStatic === true;
+        manifest.dependencies.pkgConfig.additionalArguments = normalizeList(payload.dependenciesPkgConfigArguments);
+        manifest.python.enabled = payload.pythonEnabled === true || manifest.kind === "python-widgets-application" || manifest.kind === "python-quick-application";
+        manifest.python.binding = "pyside6";
+        manifest.python.interpreter = String(payload.pythonInterpreter ?? "").trim();
+        manifest.python.virtualEnvironment = String(payload.pythonVirtualEnvironment ?? ".venv").trim() || ".venv";
+        manifest.python.autoCreateVirtualEnvironment = payload.pythonAutoCreateVirtualEnvironment === true;
+        manifest.python.autoInstallPySide6 = payload.pythonAutoInstallPySide6 === true;
+        manifest.python.pySideVersion = String(payload.pythonPySideVersion ?? "").trim();
+        manifest.python.projectFile = String(payload.pythonProjectFile ?? "pyproject.toml").trim() || "pyproject.toml";
+        manifest.python.entryPoint = String(payload.pythonEntryPoint ?? "main.py").trim() || "main.py";
+        manifest.python.uiMode = payload.pythonUiMode === "runtime" ? "runtime" : "compiled";
+        manifest.python.buildBeforeRun = payload.pythonBuildBeforeRun === true;
+        manifest.python.deployEnabled = payload.pythonDeployEnabled === true;
+        manifest.python.deploySpecFile = String(payload.pythonDeploySpecFile ?? "pysidedeploy.spec").trim() || "pysidedeploy.spec";
+        manifest.python.androidDeployEnabled = payload.pythonAndroidDeployEnabled === true;
+        manifest.python.toolOverrides.project = String(payload.pythonToolProject ?? "").trim();
+        manifest.python.toolOverrides.designer = String(payload.pythonToolDesigner ?? "").trim();
+        manifest.python.toolOverrides.uic = String(payload.pythonToolUic ?? "").trim();
+        manifest.python.toolOverrides.rcc = String(payload.pythonToolRcc ?? "").trim();
+        manifest.python.toolOverrides.deploy = String(payload.pythonToolDeploy ?? "").trim();
+        manifest.python.toolOverrides.androidDeploy = String(payload.pythonToolAndroidDeploy ?? "").trim();
+        manifest.python.toolOverrides.linguist = String(payload.pythonToolLinguist ?? "").trim();
+        manifest.python.toolOverrides.lupdate = String(payload.pythonToolLupdate ?? "").trim();
+        manifest.python.toolOverrides.lrelease = String(payload.pythonToolLrelease ?? "").trim();
+        manifest.python.toolOverrides.qmllint = String(payload.pythonToolQmllint ?? "").trim();
+        manifest.python.additionalProjectArguments = normalizeList(payload.pythonProjectArguments);
+        manifest.python.additionalDeployArguments = normalizeList(payload.pythonDeployArguments);
+        manifest.python.environment = parseEnvironmentProfile(String(payload.pythonEnvironment ?? ""));
         manifest.qml.languageServer.enabled = payload.qmlLanguageServerEnabled === true;
         manifest.qml.languageServer.autoStart = payload.qmlLanguageServerAutoStart === true;
         manifest.qml.languageServer.executable = String(payload.qmlLanguageServerExecutable ?? "").trim();
@@ -42627,7 +43053,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   </div>
   <div id="settingsNavigation" class="settings-nav">
     <input id="settingsFilter" type="search" placeholder="Filter settings, fields or tools\u2026" aria-label="Filter project settings">
-    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section\u2026</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
+    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section\u2026</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-dependencies">Dependencies / package managers</option><option value="section-python">Qt for Python / PySide6</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
     <span id="dirtyState" class="dirty">Saved state</span>
   </div>
 </div>
@@ -42864,6 +43290,74 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${field("Clazy checks", "clazyChecks", manifest.quality.clazyChecks, true)}
   ${field("Header filter regular expression", "qualityHeaderFilter", manifest.quality.headerFilter, true)}
 </div><p class="muted">Use the Qt Tests & Quality view to run analyzers and create sanitizer or coverage profiles.</p></section>
+<section id="section-dependencies" data-settings-section class="card wide"><h2>${sectionHeading("dependencies", "Dependencies and package managers")}</h2>
+<p class="muted">Project-scoped C/C++ dependencies with vcpkg manifest mode, Conan 2 and pkg-config. Generated integration is shared by the direct, qmake and CMake backends.</p>
+<div class="fields">
+  ${field("Dependency output directory", "dependenciesOutputDirectory", manifest.dependencies.outputDirectory)}
+  ${area("CMake find_package entries", "dependenciesCmakeFindPackages", manifest.dependencies.cmakeFindPackages, true)}
+  ${area("CMake link targets", "dependenciesCmakeLinkTargets", manifest.dependencies.cmakeLinkTargets, true)}
+  ${area("Additional include directories", "dependenciesIncludeDirectories", manifest.dependencies.additionalIncludeDirectories, true)}
+  ${area("Additional library directories", "dependenciesLibraryDirectories", manifest.dependencies.additionalLibraryDirectories, true)}
+  ${area("Additional libraries", "dependenciesLibraries", manifest.dependencies.additionalLibraries, true)}
+</div><div class="checks">${check("dependenciesEnabled", "Enable dependency management", manifest.dependencies.enabled)}${check("dependenciesAutoInstall", "Install / synchronize before each build", manifest.dependencies.autoInstallBeforeBuild)}</div>
+<h3 style="margin-top:18px">vcpkg</h3><div class="fields">
+  ${field("vcpkg executable", "dependenciesVcpkgExecutable", manifest.dependencies.vcpkg.executable, true)}
+  ${field("VCPKG_ROOT", "dependenciesVcpkgRoot", manifest.dependencies.vcpkg.root, true)}
+  ${field("Manifest file", "dependenciesVcpkgManifestFile", manifest.dependencies.vcpkg.manifestFile)}
+  ${field("Installed tree", "dependenciesVcpkgInstallRoot", manifest.dependencies.vcpkg.installRoot)}
+  ${field("Target triplet", "dependenciesVcpkgTriplet", manifest.dependencies.vcpkg.triplet, true)}
+  ${field("Host triplet", "dependenciesVcpkgHostTriplet", manifest.dependencies.vcpkg.hostTriplet)}
+  ${field("Builtin baseline", "dependenciesVcpkgBaseline", manifest.dependencies.vcpkg.baseline)}
+  ${area("vcpkg dependencies", "dependenciesVcpkgPackages", manifest.dependencies.vcpkg.dependencies, true)}
+  ${area("Overlay ports", "dependenciesVcpkgOverlayPorts", manifest.dependencies.vcpkg.overlayPorts)}
+  ${area("Overlay triplets", "dependenciesVcpkgOverlayTriplets", manifest.dependencies.vcpkg.overlayTriplets)}
+  ${area("Additional vcpkg arguments", "dependenciesVcpkgArguments", manifest.dependencies.vcpkg.additionalArguments, true)}
+</div><div class="checks">${check("dependenciesVcpkgEnabled", "Enable vcpkg", manifest.dependencies.vcpkg.enabled)}</div>
+<h3 style="margin-top:18px">Conan 2</h3><div class="fields">
+  ${field("Conan executable", "dependenciesConanExecutable", manifest.dependencies.conan.executable, true)}
+  ${field("Conan manifest", "dependenciesConanManifestFile", manifest.dependencies.conan.manifestFile)}
+  ${field("Conan output directory", "dependenciesConanOutputDirectory", manifest.dependencies.conan.outputDirectory)}
+  ${field("Host profile", "dependenciesConanProfileHost", manifest.dependencies.conan.profileHost, true)}
+  ${field("Build profile", "dependenciesConanProfileBuild", manifest.dependencies.conan.profileBuild, true)}
+  ${field("Lockfile", "dependenciesConanLockfile", manifest.dependencies.conan.lockfile)}
+  ${area("Conan requires", "dependenciesConanRequires", manifest.dependencies.conan.requires, true)}
+  ${area("Conan tool_requires", "dependenciesConanToolRequires", manifest.dependencies.conan.toolRequires)}
+  ${area("Conan options", "dependenciesConanOptions", manifest.dependencies.conan.options, true)}
+  ${area("Additional Conan arguments", "dependenciesConanArguments", manifest.dependencies.conan.additionalArguments, true)}
+</div><div class="checks">${check("dependenciesConanEnabled", "Enable Conan 2", manifest.dependencies.conan.enabled)}${check("dependenciesConanBuildMissing", "Build missing packages", manifest.dependencies.conan.buildMissing)}</div>
+<h3 style="margin-top:18px">pkg-config / pkgconf</h3><div class="fields">
+  ${field("pkg-config executable", "dependenciesPkgConfigExecutable", manifest.dependencies.pkgConfig.executable, true)}
+  ${area("pkg-config packages", "dependenciesPkgConfigPackages", manifest.dependencies.pkgConfig.packages, true)}
+  ${area("PKG_CONFIG_PATH additions", "dependenciesPkgConfigSearchPaths", manifest.dependencies.pkgConfig.searchPaths)}
+  ${area("Additional pkg-config arguments", "dependenciesPkgConfigArguments", manifest.dependencies.pkgConfig.additionalArguments, true)}
+</div><div class="checks">${check("dependenciesPkgConfigEnabled", "Enable pkg-config", manifest.dependencies.pkgConfig.enabled)}${check("dependenciesPkgConfigStatic", "Request static pkg-config flags", manifest.dependencies.pkgConfig.staticLink)}</div>
+<div class="actions"><button class="secondary" data-command="qpm.dependencies.detectTools">Detect tools</button><button class="secondary" data-command="qpm.dependencies.generateManifests">Generate manifests</button><button class="secondary" data-command="qpm.dependencies.install">Install / synchronize</button><button class="secondary" data-command="qpm.dependencies.openReport">Open report</button><button class="secondary" data-command="qpm.dependencies.revealOutput">Reveal output</button></div></section>
+<section id="section-python" data-settings-section class="card wide"><h2>${sectionHeading("python", "Qt for Python / PySide6")}</h2>
+<p class="muted">Official Qt for Python workflow using PySide6, a project-local Python environment, pyside6-project, Designer and deployment tools.</p>
+<h3>Python environment</h3><div class="fields">
+  ${field("Python interpreter", "pythonInterpreter", manifest.python.interpreter, true)}
+  ${field("Virtual environment", "pythonVirtualEnvironment", manifest.python.virtualEnvironment)}
+  ${field("PySide6 version (optional exact version)", "pythonPySideVersion", manifest.python.pySideVersion)}
+  ${field("Python project file", "pythonProjectFile", manifest.python.projectFile)}
+  ${field("Entry point", "pythonEntryPoint", manifest.python.entryPoint)}
+  ${selectField("Qt Designer UI mode", "pythonUiMode", pythonUiModeOptions(manifest.python.uiMode))}
+  ${field("Environment (NAME=value;OTHER=value)", "pythonEnvironment", Object.entries(manifest.python.environment).map(([key, value]) => `${key}=${value}`).join(";"), true)}
+</div><div class="checks">${check("pythonEnabled", "Enable Qt for Python backend", manifest.python.enabled)}${check("pythonAutoCreateVirtualEnvironment", "Automatically create project virtual environment", manifest.python.autoCreateVirtualEnvironment)}${check("pythonAutoInstallPySide6", "Automatically install PySide6 when missing", manifest.python.autoInstallPySide6)}${check("pythonBuildBeforeRun", "Build before run", manifest.python.buildBeforeRun)}${check("pythonDeployEnabled", "Enable desktop deployment", manifest.python.deployEnabled)}${check("pythonAndroidDeployEnabled", "Enable Android deployment", manifest.python.androidDeployEnabled)}</div>
+<h3 style="margin-top:18px">PySide6 tool overrides</h3><div class="fields">
+  ${field("pyside6-project", "pythonToolProject", manifest.python.toolOverrides.project, true)}
+  ${field("pyside6-designer", "pythonToolDesigner", manifest.python.toolOverrides.designer, true)}
+  ${field("pyside6-uic", "pythonToolUic", manifest.python.toolOverrides.uic, true)}
+  ${field("pyside6-rcc", "pythonToolRcc", manifest.python.toolOverrides.rcc, true)}
+  ${field("pyside6-deploy", "pythonToolDeploy", manifest.python.toolOverrides.deploy, true)}
+  ${field("pyside6-android-deploy", "pythonToolAndroidDeploy", manifest.python.toolOverrides.androidDeploy, true)}
+  ${field("pyside6-linguist", "pythonToolLinguist", manifest.python.toolOverrides.linguist, true)}
+  ${field("pyside6-lupdate", "pythonToolLupdate", manifest.python.toolOverrides.lupdate, true)}
+  ${field("pyside6-lrelease", "pythonToolLrelease", manifest.python.toolOverrides.lrelease, true)}
+  ${field("pyside6-qmllint", "pythonToolQmllint", manifest.python.toolOverrides.qmllint, true)}
+  ${field("Deployment specification", "pythonDeploySpecFile", manifest.python.deploySpecFile)}
+  ${area("Additional pyside6-project arguments", "pythonProjectArguments", manifest.python.additionalProjectArguments, true)}
+  ${area("Additional deployment arguments", "pythonDeployArguments", manifest.python.additionalDeployArguments, true)}
+</div><div class="actions"><button class="secondary" data-command="qpm.python.bootstrap">Prepare environment</button><button class="secondary" data-command="qpm.python.selectInterpreter">Select interpreter</button><button class="secondary" data-command="qpm.python.createVirtualEnvironment">Create venv</button><button class="secondary" data-command="qpm.python.installPySide6">Install PySide6</button><button class="secondary" data-command="qpm.python.build">Build</button><button class="secondary" data-command="qpm.python.run">Run</button><button class="secondary" data-command="qpm.python.debug">Debug</button><button class="secondary" data-command="qpm.python.openDesigner">Designer</button><button class="secondary" data-command="qpm.python.deploy">Deploy</button><button class="secondary" data-command="qpm.python.openReport">Open report</button></div></section>
 <section id="section-qml-language" data-settings-section class="card wide"><h2>${sectionHeading("qml-language", "QML language and modules")}</h2>
 <p class="muted">Project-scoped QML code intelligence powered by qmlls, with explicit build/import directories and duplicate-server protection.</p>
 <h3>QML Language Server</h3><div class="fields">
@@ -43190,6 +43684,11 @@ on('save', 'click', () => {
     clangTidyChecks:value('clangTidyChecks'), clazyChecks:value('clazyChecks'), qualityHeaderFilter:value('qualityHeaderFilter'),
     profilingOutputDirectory:value('profilingOutputDirectory'), profilingBuildBeforeRun:checked('profilingBuildBeforeRun'), profilingTimeoutMs:value('profilingTimeoutMs'), profilingArguments:value('profilingArguments'), profilingEnvironment:value('profilingEnvironment'), profilingQmlEnabled:checked('profilingQmlEnabled'), profilingQmlHost:value('profilingQmlHost'), profilingQmlPort:value('profilingQmlPort'), profilingQmlServices:value('profilingQmlServices'), profilingQmlOutputFile:value('profilingQmlOutputFile'), profilingQmlProfilerPath:value('profilingQmlProfilerPath'), profilingCpuTool:value('profilingCpuTool'), profilingCpuFrequency:value('profilingCpuFrequency'), profilingCpuOutputFile:value('profilingCpuOutputFile'), profilingCallgrindCache:checked('profilingCallgrindCache'), profilingCallgrindBranch:checked('profilingCallgrindBranch'), profilingMemoryTool:value('profilingMemoryTool'), profilingLeakCheck:value('profilingLeakCheck'), profilingMemoryOutputFile:value('profilingMemoryOutputFile'), profilingTrackOrigins:checked('profilingTrackOrigins'), profilingShowReachable:checked('profilingShowReachable'), profilingCppcheckEnabled:checked('profilingCppcheckEnabled'), profilingCppcheckChecks:value('profilingCppcheckChecks'), profilingCppcheckInconclusive:checked('profilingCppcheckInconclusive'), profilingCppcheckSuppressionsFile:value('profilingCppcheckSuppressionsFile'), profilingCppcheckArguments:value('profilingCppcheckArguments'), profilingTraceTool:value('profilingTraceTool'), profilingTraceFollowForks:checked('profilingTraceFollowForks'), profilingTraceTimestamps:checked('profilingTraceTimestamps'), profilingTraceOutputFile:value('profilingTraceOutputFile'),
 
+    dependenciesEnabled:checked('dependenciesEnabled'), dependenciesAutoInstall:checked('dependenciesAutoInstall'), dependenciesOutputDirectory:value('dependenciesOutputDirectory'), dependenciesCmakeFindPackages:value('dependenciesCmakeFindPackages'), dependenciesCmakeLinkTargets:value('dependenciesCmakeLinkTargets'), dependenciesIncludeDirectories:value('dependenciesIncludeDirectories'), dependenciesLibraryDirectories:value('dependenciesLibraryDirectories'), dependenciesLibraries:value('dependenciesLibraries'),
+    dependenciesVcpkgEnabled:checked('dependenciesVcpkgEnabled'), dependenciesVcpkgExecutable:value('dependenciesVcpkgExecutable'), dependenciesVcpkgRoot:value('dependenciesVcpkgRoot'), dependenciesVcpkgManifestFile:value('dependenciesVcpkgManifestFile'), dependenciesVcpkgInstallRoot:value('dependenciesVcpkgInstallRoot'), dependenciesVcpkgTriplet:value('dependenciesVcpkgTriplet'), dependenciesVcpkgHostTriplet:value('dependenciesVcpkgHostTriplet'), dependenciesVcpkgBaseline:value('dependenciesVcpkgBaseline'), dependenciesVcpkgPackages:value('dependenciesVcpkgPackages'), dependenciesVcpkgOverlayPorts:value('dependenciesVcpkgOverlayPorts'), dependenciesVcpkgOverlayTriplets:value('dependenciesVcpkgOverlayTriplets'), dependenciesVcpkgArguments:value('dependenciesVcpkgArguments'),
+    dependenciesConanEnabled:checked('dependenciesConanEnabled'), dependenciesConanExecutable:value('dependenciesConanExecutable'), dependenciesConanManifestFile:value('dependenciesConanManifestFile'), dependenciesConanOutputDirectory:value('dependenciesConanOutputDirectory'), dependenciesConanProfileHost:value('dependenciesConanProfileHost'), dependenciesConanProfileBuild:value('dependenciesConanProfileBuild'), dependenciesConanLockfile:value('dependenciesConanLockfile'), dependenciesConanRequires:value('dependenciesConanRequires'), dependenciesConanToolRequires:value('dependenciesConanToolRequires'), dependenciesConanOptions:value('dependenciesConanOptions'), dependenciesConanArguments:value('dependenciesConanArguments'), dependenciesConanBuildMissing:checked('dependenciesConanBuildMissing'),
+    dependenciesPkgConfigEnabled:checked('dependenciesPkgConfigEnabled'), dependenciesPkgConfigExecutable:value('dependenciesPkgConfigExecutable'), dependenciesPkgConfigPackages:value('dependenciesPkgConfigPackages'), dependenciesPkgConfigSearchPaths:value('dependenciesPkgConfigSearchPaths'), dependenciesPkgConfigArguments:value('dependenciesPkgConfigArguments'), dependenciesPkgConfigStatic:checked('dependenciesPkgConfigStatic'),
+    pythonEnabled:checked('pythonEnabled'), pythonInterpreter:value('pythonInterpreter'), pythonVirtualEnvironment:value('pythonVirtualEnvironment'), pythonAutoCreateVirtualEnvironment:checked('pythonAutoCreateVirtualEnvironment'), pythonAutoInstallPySide6:checked('pythonAutoInstallPySide6'), pythonPySideVersion:value('pythonPySideVersion'), pythonProjectFile:value('pythonProjectFile'), pythonEntryPoint:value('pythonEntryPoint'), pythonUiMode:value('pythonUiMode'), pythonBuildBeforeRun:checked('pythonBuildBeforeRun'), pythonDeployEnabled:checked('pythonDeployEnabled'), pythonDeploySpecFile:value('pythonDeploySpecFile'), pythonAndroidDeployEnabled:checked('pythonAndroidDeployEnabled'), pythonToolProject:value('pythonToolProject'), pythonToolDesigner:value('pythonToolDesigner'), pythonToolUic:value('pythonToolUic'), pythonToolRcc:value('pythonToolRcc'), pythonToolDeploy:value('pythonToolDeploy'), pythonToolAndroidDeploy:value('pythonToolAndroidDeploy'), pythonToolLinguist:value('pythonToolLinguist'), pythonToolLupdate:value('pythonToolLupdate'), pythonToolLrelease:value('pythonToolLrelease'), pythonToolQmllint:value('pythonToolQmllint'), pythonProjectArguments:value('pythonProjectArguments'), pythonDeployArguments:value('pythonDeployArguments'), pythonEnvironment:value('pythonEnvironment'),
     qmlLanguageServerEnabled:checked('qmlLanguageServerEnabled'), qmlLanguageServerAutoStart:checked('qmlLanguageServerAutoStart'), qmlLanguageServerExecutable:value('qmlLanguageServerExecutable'), qmlLanguageServerBuildDirectories:value('qmlLanguageServerBuildDirectories'), qmlLanguageServerImportPaths:value('qmlLanguageServerImportPaths'), qmlLanguageServerUseEnvironment:checked('qmlLanguageServerUseEnvironment'), qmlLanguageServerNoCmakeCalls:checked('qmlLanguageServerNoCmakeCalls'), qmlLanguageServerCmakeJobs:value('qmlLanguageServerCmakeJobs'), qmlLanguageServerMaxFiles:value('qmlLanguageServerMaxFiles'), qmlLanguageServerTrace:value('qmlLanguageServerTrace'), qmlLanguageServerVerbose:checked('qmlLanguageServerVerbose'), qmlLanguageServerConflictPolicy:value('qmlLanguageServerConflictPolicy'), qmlLanguageServerGenerateConfig:checked('qmlLanguageServerGenerateConfig'), qmlLanguageServerArguments:value('qmlLanguageServerArguments'), qmlModuleUri:value('qmlModuleUri'), qmlModuleVersion:value('qmlModuleVersion'), qmlModuleImportRoot:value('qmlModuleImportRoot'), qmlModuleResourcePrefix:value('qmlModuleResourcePrefix'),
 
     packagingEnabled:checked('packagingEnabled'), packagingProductName:value('packagingProductName'), packagingProductVersion:value('packagingProductVersion'), packagingCompanyName:value('packagingCompanyName'), packagingDescription:value('packagingDescription'), packagingCopyright:value('packagingCopyright'), packagingIdentifier:value('packagingIdentifier'), packagingIcon:value('packagingIcon'), packagingLicenseFile:value('packagingLicenseFile'), packagingReadmeFile:value('packagingReadmeFile'), packagingOutputDirectory:value('packagingOutputDirectory'), packagingNamePattern:value('packagingNamePattern'), packagingArchiveFormat:value('packagingArchiveFormat'), packagingExtraFiles:value('packagingExtraFiles'), packagingCleanOutput:checked('packagingCleanOutput'), packagingBuildBefore:checked('packagingBuildBefore'), packagingQtRuntime:checked('packagingQtRuntime'), packagingTranslations:checked('packagingTranslations'), packagingDebugSymbols:checked('packagingDebugSymbols'), packagingEmbedVersion:checked('packagingEmbedVersion'), packagingFileDescription:value('packagingFileDescription'), packagingInternalName:value('packagingInternalName'), packagingOriginalFilename:value('packagingOriginalFilename'), packagingExecutionLevel:value('packagingExecutionLevel'), packagingDpiAwareness:value('packagingDpiAwareness'), packagingWindowsManifestFile:value('packagingWindowsManifestFile'), packagingResourceCompilerPath:value('packagingResourceCompilerPath'), packagingLinuxDesktop:checked('packagingLinuxDesktop'), packagingLinuxAppId:value('packagingLinuxAppId'), packagingCategories:value('packagingCategories'), packagingLinuxComment:value('packagingLinuxComment'), packagingInstallPrefix:value('packagingInstallPrefix'),
@@ -43209,8 +43708,10 @@ on('save', 'click', () => {
     function requiredModulesForKind(kind) {
       switch (kind) {
         case "widgets-application":
+        case "python-widgets-application":
           return ["Core", "Gui", "Widgets"];
         case "quick-application":
+        case "python-quick-application":
           return ["Core", "Gui", "Qml", "Quick"];
         case "test-application":
           return ["Core", "Test"];
@@ -43254,7 +43755,7 @@ on('save', 'click', () => {
       return ["confirm", "short", "detailed", "no"].map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${value}</option>`).join("");
     }
     function normalizeKind(value, fallback) {
-      const allowed = ["widgets-application", "console-application", "quick-application", "test-application", "quick-test-application", "shared-library", "static-library"];
+      const allowed = ["widgets-application", "console-application", "quick-application", "test-application", "quick-test-application", "shared-library", "static-library", "python-widgets-application", "python-quick-application"];
       return typeof value === "string" && allowed.includes(value) ? value : fallback;
     }
     function normalizeBuildSystem(value) {
@@ -43462,6 +43963,9 @@ on('save', 'click', () => {
     function traceToolOptions(selected) {
       return `<option value="auto" ${selected === "auto" ? "selected" : ""}>Automatic</option><option value="strace" ${selected === "strace" ? "selected" : ""}>strace</option><option value="none" ${selected === "none" ? "selected" : ""}>Disabled</option>`;
     }
+    function pythonUiModeOptions(selected) {
+      return [["compiled", "Compile .ui to ui_*.py"], ["runtime", "Runtime .ui loading / manual workflow"]].map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+    }
     function qmlLanguageTraceOptions(selected) {
       return [["off", "Off"], ["messages", "Messages"], ["verbose", "Verbose"]].map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
     }
@@ -43535,6 +44039,8 @@ on('save', 'click', () => {
         ["widgets-application", "Qt Widgets application"],
         ["console-application", "Qt Console application"],
         ["quick-application", "Qt Quick application"],
+        ["python-widgets-application", "Qt for Python \u2014 Widgets (PySide6)"],
+        ["python-quick-application", "Qt for Python \u2014 Quick (PySide6)"],
         ["test-application", "Qt Test application"],
         ["quick-test-application", "Qt Quick Test application"],
         ["shared-library", "Qt shared library"],
@@ -46835,11 +47341,6 @@ var require_qpmQtProjectService = __commonJS({
       }
       async createProjectWizard(parentDirectory) {
         let installation = this.installations.getActive();
-        if (!installation) {
-          installation = await this.installations.select();
-          if (!installation)
-            return void 0;
-        }
         const selectedParent = parentDirectory ? vscode2.Uri.file(parentDirectory) : (await vscode2.window.showOpenDialog({
           title: "Select the parent directory for the Qt project",
           canSelectFolders: true,
@@ -46855,20 +47356,28 @@ var require_qpmQtProjectService = __commonJS({
           { label: "Qt Test application", description: "Qt Test executable integrated with the VS Code Test Explorer", projectKind: "test-application" },
           { label: "Qt Quick Test application", description: "Qt Quick Test runner with a QML TestCase", projectKind: "quick-test-application" },
           { label: "Qt shared library", description: "C++ shared library using Qt Core", projectKind: "shared-library" },
-          { label: "Qt static library", description: "C++ static library using Qt Core", projectKind: "static-library" }
+          { label: "Qt static library", description: "C++ static library using Qt Core", projectKind: "static-library" },
+          { label: "Qt for Python \u2014 Widgets (PySide6)", description: "Python Qt Widgets application using PySide6, Designer and pyproject.toml", projectKind: "python-widgets-application" },
+          { label: "Qt for Python \u2014 Quick (PySide6)", description: "Python Qt Quick/QML application using PySide6 and pyproject.toml", projectKind: "python-quick-application" }
         ], { title: "Qt project template" });
         if (!template)
           return void 0;
+        const pythonProject = template.projectKind === "python-widgets-application" || template.projectKind === "python-quick-application";
+        if (!pythonProject && !installation) {
+          installation = await this.installations.select();
+          if (!installation)
+            return void 0;
+        }
         const name = await vscode2.window.showInputBox({
           title: "Qt project name",
           prompt: "Directory, manifest and target name",
-          value: template.projectKind === "widgets-application" ? "QtWidgetsApp" : template.projectKind === "quick-application" ? "QtQuickApp" : template.projectKind === "test-application" ? "QtTestApp" : template.projectKind === "quick-test-application" ? "QtQuickTestApp" : "QtApp",
+          value: template.projectKind === "widgets-application" ? "QtWidgetsApp" : template.projectKind === "quick-application" ? "QtQuickApp" : template.projectKind === "python-widgets-application" ? "PySideWidgetsApp" : template.projectKind === "python-quick-application" ? "PySideQuickApp" : template.projectKind === "test-application" ? "QtTestApp" : template.projectKind === "quick-test-application" ? "QtQuickTestApp" : "QtApp",
           validateInput: validateProjectName
         });
         if (!name)
           return void 0;
         const defaultModules = (0, qtProjectManifest_12.createDefaultQtProjectManifest)(name, template.projectKind).qt.modules;
-        const selectedModules = await vscode2.window.showQuickPick(MODULE_CHOICES.map((module3) => ({
+        const selectedModules = pythonProject ? defaultModules.map((label) => ({ label })) : await vscode2.window.showQuickPick(MODULE_CHOICES.map((module3) => ({
           label: module3,
           picked: defaultModules.includes(module3),
           description: moduleAvailabilityDescription(installation.includeDir, module3)
@@ -46883,7 +47392,7 @@ var require_qpmQtProjectService = __commonJS({
         if (fs.existsSync(projectDirectory) && fs.readdirSync(projectDirectory).length > 0) {
           throw new Error(`The target directory is not empty: ${projectDirectory}`);
         }
-        const manifestPath = this.createProject(projectDirectory, name, template.projectKind, selectedModules.map((entry) => entry.label), installation.root);
+        const manifestPath = this.createProject(projectDirectory, name, template.projectKind, selectedModules.map((entry) => entry.label), pythonProject ? void 0 : installation?.root);
         this.output.appendLine(`[Qt] Created ${template.label}: ${manifestPath}`);
         vscode2.window.showInformationMessage(`Created Qt project ${name}.`);
         return manifestPath;
@@ -46903,6 +47412,8 @@ var require_qpmQtProjectService = __commonJS({
           const extension = path2.extname(filePath).toLowerCase();
           if ([".c", ".cc", ".cpp", ".cxx"].includes(extension))
             manifest.files.sources.push(relative);
+          else if ([".py", ".pyi"].includes(extension))
+            manifest.files.python.push(relative);
           else if ([".h", ".hh", ".hpp", ".hxx"].includes(extension))
             manifest.files.headers.push(relative);
           else if (extension === ".ui")
@@ -47178,7 +47689,11 @@ var require_qpmQtProjectService = __commonJS({
     }
     function writeStarterProject(projectDirectory, name, kind) {
       const files = [];
-      if (kind === "widgets-application") {
+      if (kind === "python-widgets-application") {
+        files.push(["main.py", pythonWidgetsMainSource(name)], ["mainwindow.ui", widgetsMainWindowUi(name)], ["pyproject.toml", pythonPyProjectToml(name, ["main.py", "mainwindow.ui"])]);
+      } else if (kind === "python-quick-application") {
+        files.push(["main.py", pythonQuickMainSource()], ["qml/Main.qml", quickMainQml(name)], ["pyproject.toml", pythonPyProjectToml(name, ["main.py", "qml/Main.qml"])]);
+      } else if (kind === "widgets-application") {
         files.push(["src/main.cpp", widgetsMainSource()], ["src/mainwindow.cpp", widgetsMainWindowSource()], ["include/mainwindow.h", widgetsMainWindowHeader()], ["forms/mainwindow.ui", widgetsMainWindowUi(name)], ["resources/resources.qrc", emptyResourceFile()]);
       } else if (kind === "quick-application") {
         files.push(["src/main.cpp", quickMainSource()], ["qml/Main.qml", quickMainQml(name)], ["resources/qml.qrc", quickResourceFile()]);
@@ -47201,18 +47716,85 @@ var require_qpmQtProjectService = __commonJS({
       return paths;
     }
     function writeProjectSupportFiles(projectDirectory, manifestPath, manifest) {
-      fs.writeFileSync(path2.join(projectDirectory, ".gitignore"), "build/\n.vscode/*.log\n", "utf8");
+      const pythonProject = (0, qtProjectManifest_12.isQtPythonProject)(manifest);
+      fs.writeFileSync(path2.join(projectDirectory, ".gitignore"), pythonProject ? ".venv/\n__pycache__/\n*.pyc\nbuild/\ndist/\n.vscode/*.log\n" : "build/\n.vscode/*.log\n", "utf8");
+      const details = pythonProject ? `- Runtime: Qt for Python / PySide6
+- Python project: \`${manifest.python.projectFile}\`
+- Entry point: \`${manifest.python.entryPoint}\`
+- Virtual environment: \`${manifest.python.virtualEnvironment}\`` : `- Build system: direct Qt build (no CMake required)
+- Qt modules: ${manifest.qt.modules.join(", ")}
+- Generated files: \`${manifest.build.outputDirectory}/<mode>/${manifest.build.generatedDirectory}\``;
+      const usage = pythonProject ? "Use **Qt Project Manager: Prepare Python Environment**, **Build**, **Run**, **Debug**, **Open PySide6 Designer**, or **Deploy Qt for Python** from VS Code." : "Use **Qt Project Manager: Build**, **Run**, **Open in Qt Designer**, or **Deploy Qt Runtime** from VS Code.";
       fs.writeFileSync(path2.join(projectDirectory, "README_QPM.md"), normalizeNewlines(`# ${manifest.name}
 
 Native Qt Project Manager project.
 
 - Project manifest: \`${path2.basename(manifestPath)}\`
-- Build system: direct Qt build (no CMake required)
-- Qt modules: ${manifest.qt.modules.join(", ")}
-- Generated files: \`${manifest.build.outputDirectory}/<mode>/${manifest.build.generatedDirectory}\`
+${details}
 
-Use **Qt Project Manager: Build**, **Run**, **Open in Qt Designer**, or **Deploy Qt Runtime** from VS Code.
+${usage}
 `), "utf8");
+    }
+    function pythonWidgetsMainSource(name) {
+      return `import sys
+
+from PySide6.QtWidgets import QApplication, QMainWindow
+from ui_mainwindow import Ui_MainWindow
+
+
+class MainWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+
+
+def main() -> int:
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.setWindowTitle(${JSON.stringify(name)})
+    window.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+`;
+    }
+    function pythonQuickMainSource() {
+      return `import sys
+from pathlib import Path
+
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QQmlApplicationEngine
+
+
+def main() -> int:
+    app = QGuiApplication(sys.argv)
+    engine = QQmlApplicationEngine()
+    qml_file = Path(__file__).resolve().parent / "qml" / "Main.qml"
+    engine.load(QUrl.fromLocalFile(str(qml_file)))
+    if not engine.rootObjects():
+        return -1
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+`;
+    }
+    function pythonPyProjectToml(name, files) {
+      const encoded = files.map((entry) => JSON.stringify(entry)).join(", ");
+      return `[project]
+name = ${JSON.stringify(name)}
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.9"]
+
+[tool.pyside6-project]
+files = [${encoded}]
+`;
     }
     function widgetsMainSource() {
       return `#include <QApplication>
@@ -47273,16 +47855,7 @@ MainWindow::~MainWindow() = default;
    <rect><x>0</x><y>0</y><width>800</width><height>500</height></rect>
   </property>
   <property name="windowTitle"><string>${escapeXml(name)}</string></property>
-  <widget class="QWidget" name="centralWidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
-     <widget class="QLabel" name="titleLabel">
-      <property name="text"><string>${escapeXml(name)} \u2014 Qt Project Manager</string></property>
-      <property name="alignment"><set>Qt::AlignCenter</set></property>
-     </widget>
-    </item>
-   </layout>
-  </widget>
+  <widget class="QWidget" name="centralWidget"/>
   <widget class="QMenuBar" name="menuBar"/>
   <widget class="QStatusBar" name="statusBar"/>
  </widget>
@@ -47545,7 +48118,7 @@ QString ${className}::version()
         const child = (0, child_process_1.spawn)(executable, [target], {
           cwd: path2.dirname(target),
           detached: true,
-          windowsHide: false,
+          windowsHide: process.platform === "win32",
           stdio: "ignore",
           shell: false,
           env: designerEnvironment(installation)
@@ -76539,6 +77112,1585 @@ ${description}`;
   }
 });
 
+// out/services/qpmQtPythonService.js
+var require_qpmQtPythonService = __commonJS({
+  "out/services/qpmQtPythonService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.QpmQtPythonService = void 0;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var child_process_1 = require("child_process");
+    var vscode2 = __importStar2(require("vscode"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
+    var QpmQtPythonService = class {
+      workspaces;
+      output;
+      changeEmitter = new vscode2.EventEmitter();
+      onDidChange = this.changeEmitter.event;
+      launchedApplications = /* @__PURE__ */ new Map();
+      cachedStatus;
+      constructor(workspaces, output) {
+        this.workspaces = workspaces;
+        this.output = output;
+        this.workspaces.onDidChange(() => {
+          this.cachedStatus = void 0;
+          this.changeEmitter.fire();
+        });
+      }
+      dispose() {
+        for (const processes of this.launchedApplications.values()) {
+          for (const child of processes) {
+            try {
+              child.kill();
+            } catch {
+            }
+          }
+        }
+        this.launchedApplications.clear();
+        this.changeEmitter.dispose();
+      }
+      get activeManifestPath() {
+        const ref = this.workspaces.activeProjectRef;
+        if (!ref?.exists || !(0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath))
+          return void 0;
+        try {
+          return (0, qtProjectManifest_12.isQtPythonProject)((0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath)) ? ref.absolutePath : void 0;
+        } catch {
+          return void 0;
+        }
+      }
+      get status() {
+        return this.cachedStatus;
+      }
+      async refresh() {
+        const manifestPath = this.activeManifestPath;
+        if (!manifestPath) {
+          this.cachedStatus = void 0;
+          this.changeEmitter.fire();
+          return void 0;
+        }
+        const status = this.inspect(manifestPath);
+        this.cachedStatus = status;
+        this.changeEmitter.fire();
+        return status;
+      }
+      inspect(manifestPath) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        if (!(0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+          return { projectName: manifest.name, manifestPath, state: "disabled", tools: {}, message: "Qt for Python is disabled for this project." };
+        }
+        const interpreter = this.resolveInterpreter(manifestPath, manifest);
+        const virtualEnvironment = resolveProjectPath(root, manifest.python.virtualEnvironment);
+        const projectFile = resolveProjectPath(root, manifest.python.projectFile);
+        const entryPoint = resolveProjectPath(root, manifest.python.entryPoint);
+        if (!interpreter) {
+          return {
+            projectName: manifest.name,
+            manifestPath,
+            state: "missing-python",
+            virtualEnvironment,
+            projectFile,
+            entryPoint,
+            tools: {},
+            message: "No usable Python interpreter was found."
+          };
+        }
+        const probe = probePython(interpreter, this.createEnvironment(manifestPath, manifest, interpreter));
+        const tools = this.resolveTools(manifestPath, manifest, interpreter);
+        if (!probe.ok) {
+          return {
+            projectName: manifest.name,
+            manifestPath,
+            state: "error",
+            interpreter,
+            virtualEnvironment,
+            projectFile,
+            entryPoint,
+            tools,
+            message: probe.error || "Unable to query the selected Python interpreter."
+          };
+        }
+        const state = probe.pySideVersion ? "ready" : "missing-pyside6";
+        return {
+          projectName: manifest.name,
+          manifestPath,
+          state,
+          interpreter,
+          pythonVersion: probe.pythonVersion,
+          pySideVersion: probe.pySideVersion,
+          virtualEnvironment,
+          projectFile,
+          entryPoint,
+          tools,
+          message: probe.pySideVersion ? `Python ${probe.pythonVersion} with PySide6 ${probe.pySideVersion}.` : `Python ${probe.pythonVersion} is available, but PySide6 is not installed.`
+        };
+      }
+      async bootstrapActiveProject(interactive = true) {
+        const manifestPath = this.activeManifestPath;
+        if (!manifestPath)
+          return false;
+        return this.bootstrap(manifestPath, interactive);
+      }
+      async bootstrap(manifestPath, interactive = true) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!(0, qtProjectManifest_12.isQtPythonProject)(manifest))
+          return false;
+        const root = path2.dirname(manifestPath);
+        const venv = resolveProjectPath(root, manifest.python.virtualEnvironment);
+        const venvInterpreter = pythonInVirtualEnvironment(venv);
+        let interpreter = this.resolveInterpreter(manifestPath, manifest);
+        if (manifest.python.autoCreateVirtualEnvironment && !manifest.python.interpreter.trim() && (!venvInterpreter || !fs.existsSync(venvInterpreter))) {
+          if (!await this.createVirtualEnvironment(manifestPath, interactive))
+            return false;
+          interpreter = this.resolveInterpreter(manifestPath, (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath));
+        } else if (!interpreter && manifest.python.autoCreateVirtualEnvironment) {
+          if (!await this.createVirtualEnvironment(manifestPath, interactive))
+            return false;
+          interpreter = this.resolveInterpreter(manifestPath, (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath));
+        }
+        if (!interpreter) {
+          if (interactive)
+            vscode2.window.showErrorMessage("Qt for Python: no Python interpreter is available. Configure an interpreter or create the project virtual environment.");
+          return false;
+        }
+        const probe = probePython(interpreter, this.createEnvironment(manifestPath, manifest, interpreter));
+        if (!probe.pySideVersion) {
+          if (manifest.python.autoInstallPySide6)
+            return this.installPySide6(manifestPath);
+          if (interactive) {
+            const choice = await vscode2.window.showWarningMessage(`PySide6 is not installed in ${venv && interpreter.startsWith(venv) ? manifest.python.virtualEnvironment : interpreter}.`, "Install PySide6", "Later");
+            if (choice === "Install PySide6")
+              return this.installPySide6(manifestPath);
+          }
+          await this.refresh();
+          return false;
+        }
+        await this.refresh();
+        return true;
+      }
+      async createVirtualEnvironment(manifestPath = this.requireActiveManifest(), interactive = true) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const venvPath = resolveProjectPath(root, manifest.python.virtualEnvironment || ".venv");
+        const existing = pythonInVirtualEnvironment(venvPath);
+        if (existing && fs.existsSync(existing)) {
+          manifest.python.interpreter = relativeOrAbsolute(root, existing);
+          (0, qtProjectManifest_12.writeQtProjectManifest)(manifestPath, manifest);
+          await this.configureVsCodeInterpreter(manifestPath, existing);
+          await this.refresh();
+          if (interactive)
+            vscode2.window.showInformationMessage(`Qt for Python virtual environment already exists: ${venvPath}`);
+          return true;
+        }
+        const basePython = this.resolveBaseInterpreter(manifestPath, manifest);
+        if (!basePython) {
+          if (interactive)
+            vscode2.window.showErrorMessage("Qt for Python: no base Python 3.10+ interpreter was found to create the virtual environment.");
+          return false;
+        }
+        this.output.show(true);
+        this.output.appendLine(`[Qt/Python] Create virtual environment: ${venvPath}`);
+        const result = await runTool(basePython, ["-m", "venv", venvPath], root, process.env, this.output, "python -m venv");
+        if (!result)
+          return false;
+        const interpreter = pythonInVirtualEnvironment(venvPath);
+        if (!interpreter || !fs.existsSync(interpreter)) {
+          vscode2.window.showErrorMessage(`Qt for Python: virtual environment was created but its Python interpreter was not found: ${venvPath}`);
+          return false;
+        }
+        manifest.python.interpreter = relativeOrAbsolute(root, interpreter);
+        (0, qtProjectManifest_12.writeQtProjectManifest)(manifestPath, manifest);
+        await this.configureVsCodeInterpreter(manifestPath, interpreter);
+        await this.refresh();
+        if (interactive)
+          vscode2.window.showInformationMessage(`Created Qt for Python virtual environment: ${manifest.python.virtualEnvironment}`);
+        return true;
+      }
+      async selectInterpreter(manifestPath = this.requireActiveManifest()) {
+        const selected = await vscode2.window.showOpenDialog({
+          title: "Select Python interpreter for Qt for Python",
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          filters: process.platform === "win32" ? { Python: ["exe"] } : void 0
+        });
+        const interpreter = selected?.[0]?.fsPath;
+        if (!interpreter)
+          return false;
+        const probe = probePython(interpreter, process.env);
+        if (!probe.ok) {
+          vscode2.window.showErrorMessage(`The selected file is not a usable Python interpreter: ${probe.error ?? interpreter}`);
+          return false;
+        }
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        manifest.python.interpreter = relativeOrAbsolute(root, interpreter);
+        (0, qtProjectManifest_12.writeQtProjectManifest)(manifestPath, manifest);
+        await this.configureVsCodeInterpreter(manifestPath, interpreter);
+        await this.refresh();
+        vscode2.window.showInformationMessage(`Qt for Python interpreter: Python ${probe.pythonVersion}.`);
+        return true;
+      }
+      async installPySide6(manifestPath = this.requireActiveManifest()) {
+        let manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        let interpreter = this.resolveInterpreter(manifestPath, manifest);
+        if (!interpreter && manifest.python.autoCreateVirtualEnvironment) {
+          if (!await this.createVirtualEnvironment(manifestPath, false))
+            return false;
+          manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+          interpreter = this.resolveInterpreter(manifestPath, manifest);
+        }
+        if (!interpreter) {
+          vscode2.window.showErrorMessage("Qt for Python: configure a Python interpreter before installing PySide6.");
+          return false;
+        }
+        const requested = manifest.python.pySideVersion.trim();
+        const packageName = requested ? `PySide6==${requested}` : "PySide6";
+        this.output.show(true);
+        this.output.appendLine(`[Qt/Python] Install ${packageName} with ${interpreter}`);
+        const ok = await runTool(interpreter, ["-m", "pip", "install", packageName], path2.dirname(manifestPath), this.createEnvironment(manifestPath, manifest, interpreter), this.output, `Install ${packageName}`);
+        await this.refresh();
+        if (ok)
+          vscode2.window.showInformationMessage(`${packageName} installed for ${manifest.name}.`);
+        return ok;
+      }
+      async build(manifestPath = this.requireActiveManifest(), rebuild = false) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const projectTool = status.tools.project;
+        if (!projectTool) {
+          vscode2.window.showErrorMessage("Qt for Python: pyside6-project was not found in the selected Python environment.");
+          return false;
+        }
+        if (rebuild && !await this.clean(manifestPath))
+          return false;
+        this.ensurePyProjectFile(manifestPath, manifest);
+        const args = ["build", resolveProjectPath(path2.dirname(manifestPath), manifest.python.projectFile), ...manifest.python.additionalProjectArguments];
+        this.output.show(true);
+        this.output.appendLine(`[Qt/Python] Build ${manifest.name}`);
+        this.output.appendLine(`[Qt/Python] Tool: ${projectTool}`);
+        this.output.appendLine(`[Qt/Python] Arguments: ${args.join(" ")}`);
+        return runTool(projectTool, args, path2.dirname(manifestPath), this.createEnvironment(manifestPath, manifest, status.interpreter), this.output, `pyside6-project build ${manifest.name}`);
+      }
+      async clean(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        await this.stopLaunchedApplications(manifestPath);
+        const status = this.inspect(manifestPath);
+        if (status.interpreter && status.tools.project) {
+          const projectFile = resolveProjectPath(path2.dirname(manifestPath), manifest.python.projectFile);
+          const ok = await runTool(status.tools.project, ["clean", projectFile], path2.dirname(manifestPath), this.createEnvironment(manifestPath, manifest, status.interpreter), this.output, `pyside6-project clean ${manifest.name}`);
+          if (ok)
+            return true;
+        }
+        const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest);
+        let removed = 0;
+        for (const source of [...files.forms, ...files.resources]) {
+          const stem = path2.parse(source).name;
+          const generated = path2.join(path2.dirname(source), `${path2.extname(source).toLowerCase() === ".ui" ? "ui_" : "rc_"}${stem}.py`);
+          if (fs.existsSync(generated)) {
+            try {
+              fs.rmSync(generated, { force: true });
+              removed += 1;
+            } catch {
+            }
+          }
+        }
+        this.output.appendLine(`[Qt/Python] Clean fallback removed ${removed} generated Python file(s).`);
+        return true;
+      }
+      async run(manifestPath = this.requireActiveManifest(), buildFirst) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const shouldBuild = buildFirst ?? manifest.python.buildBeforeRun;
+        if (shouldBuild && !await this.build(manifestPath, false))
+          return false;
+        const status = this.inspect(manifestPath);
+        const interpreter = status.interpreter;
+        if (!interpreter)
+          return false;
+        const entryPoint = resolveProjectPath(path2.dirname(manifestPath), manifest.python.entryPoint);
+        if (!fs.existsSync(entryPoint)) {
+          vscode2.window.showErrorMessage(`Qt for Python entry point not found: ${entryPoint}`);
+          return false;
+        }
+        const runProfile = manifest.profiles.runs.find((entry) => entry.id === manifest.profiles.active.runProfileId) ?? manifest.profiles.runs[0];
+        const args = splitArguments(runProfile?.arguments ?? "");
+        const cwd = runProfile?.workingDirectory ? resolveProjectPath(path2.dirname(manifestPath), runProfile.workingDirectory) : path2.dirname(manifestPath);
+        const env = { ...this.createEnvironment(manifestPath, manifest, interpreter), ...runProfile?.environment ?? {} };
+        const child = (0, child_process_1.spawn)(interpreter, [entryPoint, ...args], { cwd, env, detached: false, stdio: "ignore", windowsHide: false });
+        this.trackApplication(manifestPath, child);
+        child.unref?.();
+        this.output.appendLine(`[Qt/Python] Started ${interpreter} ${entryPoint}${args.length ? ` ${args.join(" ")}` : ""}${child.pid ? ` (PID ${child.pid})` : ""}`);
+        vscode2.window.showInformationMessage(`Started Qt for Python application ${manifest.name}.`);
+        return true;
+      }
+      async debug(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const interpreter = status.interpreter;
+        if (!interpreter)
+          return false;
+        const entryPoint = resolveProjectPath(path2.dirname(manifestPath), manifest.python.entryPoint);
+        const runProfile = manifest.profiles.runs.find((entry) => entry.id === manifest.profiles.active.runProfileId) ?? manifest.profiles.runs[0];
+        const env = { ...manifest.python.environment, ...runProfile?.environment ?? {} };
+        const config = {
+          name: `Qt for Python \u2014 ${manifest.name}`,
+          type: "debugpy",
+          request: "launch",
+          program: entryPoint,
+          python: interpreter,
+          cwd: runProfile?.workingDirectory ? resolveProjectPath(path2.dirname(manifestPath), runProfile.workingDirectory) : path2.dirname(manifestPath),
+          args: splitArguments(runProfile?.arguments ?? ""),
+          env,
+          console: "integratedTerminal",
+          justMyCode: true
+        };
+        const started = await vscode2.debug.startDebugging(void 0, config);
+        if (!started)
+          vscode2.window.showWarningMessage("Qt for Python debugging could not be started. Install/enable the Microsoft Python Debugger extension (debugpy) if necessary.");
+        return started;
+      }
+      async deploy(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!manifest.python.deployEnabled) {
+          vscode2.window.showWarningMessage("Qt for Python deployment is disabled in the project settings.");
+          return false;
+        }
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const env = this.createEnvironment(manifestPath, manifest, status.interpreter);
+        const root = path2.dirname(manifestPath);
+        const projectFile = resolveProjectPath(root, manifest.python.projectFile);
+        if (status.tools.project) {
+          return runTool(status.tools.project, ["deploy", projectFile, ...manifest.python.additionalDeployArguments], root, env, this.output, `pyside6-project deploy ${manifest.name}`);
+        }
+        if (status.tools.deploy) {
+          const entryPoint = resolveProjectPath(root, manifest.python.entryPoint);
+          return runTool(status.tools.deploy, [entryPoint, ...manifest.python.additionalDeployArguments], root, env, this.output, `pyside6-deploy ${manifest.name}`);
+        }
+        vscode2.window.showErrorMessage("Qt for Python: neither pyside6-project nor pyside6-deploy was found.");
+        return false;
+      }
+      async deployAndroid(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!manifest.python.androidDeployEnabled) {
+          vscode2.window.showWarningMessage("Qt for Python Android deployment is disabled in the project settings.");
+          return false;
+        }
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const tool = status.tools.androidDeploy;
+        if (!tool) {
+          vscode2.window.showErrorMessage("Qt for Python: pyside6-android-deploy was not found.");
+          return false;
+        }
+        const root = path2.dirname(manifestPath);
+        const spec = resolveProjectPath(root, manifest.python.deploySpecFile);
+        const args = fs.existsSync(spec) ? ["--config-file", spec, ...manifest.python.additionalDeployArguments] : [...manifest.python.additionalDeployArguments];
+        return runTool(tool, args, root, this.createEnvironment(manifestPath, manifest, status.interpreter), this.output, `pyside6-android-deploy ${manifest.name}`);
+      }
+      async openDesigner(manifestPath = this.requireActiveManifest(), input) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const designer = status.tools.designer;
+        if (!designer) {
+          vscode2.window.showErrorMessage("Qt for Python: pyside6-designer was not found in the selected environment.");
+          return false;
+        }
+        const candidate = pathFromCommandInput(input) ?? vscode2.window.activeTextEditor?.document.uri.fsPath;
+        const uiPath = candidate && path2.extname(candidate).toLowerCase() === ".ui" ? candidate : void 0;
+        const args = uiPath ? [uiPath] : [];
+        const child = (0, child_process_1.spawn)(designer, args, {
+          cwd: path2.dirname(manifestPath),
+          env: this.createEnvironment(manifestPath, manifest, status.interpreter),
+          // pyside6-designer is a console-subsystem launcher on Windows. Creating it as a
+          // detached process without windowsHide causes a transient console window before
+          // the actual Qt Designer GUI appears. Keep the launcher hidden on Windows and
+          // avoid CREATE_NEW_CONSOLE there; unref() is still enough to avoid blocking QPM.
+          detached: process.platform !== "win32",
+          windowsHide: process.platform === "win32",
+          stdio: "ignore",
+          shell: false
+        });
+        child.once("error", (error) => {
+          this.output.appendLine(`[Qt/Python] Designer launch failed: ${error.message}`);
+          void vscode2.window.showErrorMessage(`Qt for Python Designer could not be started: ${error.message}`);
+        });
+        child.unref();
+        this.output.appendLine(`[Qt/Python] Started Designer without console window: ${designer}${uiPath ? ` ${uiPath}` : ""}`);
+        return true;
+      }
+      async compileUiFiles(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const tool = status.tools.uic;
+        if (!tool) {
+          vscode2.window.showErrorMessage("Qt for Python: pyside6-uic was not found.");
+          return false;
+        }
+        const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest).forms.filter((entry) => fs.existsSync(entry));
+        for (const file of files) {
+          const outputPath = path2.join(path2.dirname(file), `ui_${path2.parse(file).name}.py`);
+          if (!await runTool(tool, [file, "-o", outputPath], path2.dirname(manifestPath), this.createEnvironment(manifestPath, manifest, status.interpreter), this.output, `pyside6-uic ${path2.basename(file)}`))
+            return false;
+        }
+        vscode2.window.showInformationMessage(`Generated ${files.length} Python UI file(s).`);
+        return true;
+      }
+      async compileResourceFiles(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!await this.ensureReady(manifestPath))
+          return false;
+        const status = this.inspect(manifestPath);
+        const tool = status.tools.rcc;
+        if (!tool) {
+          vscode2.window.showErrorMessage("Qt for Python: pyside6-rcc was not found.");
+          return false;
+        }
+        const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest).resources.filter((entry) => fs.existsSync(entry));
+        for (const file of files) {
+          const outputPath = path2.join(path2.dirname(file), `rc_${path2.parse(file).name}.py`);
+          if (!await runTool(tool, [file, "-o", outputPath], path2.dirname(manifestPath), this.createEnvironment(manifestPath, manifest, status.interpreter), this.output, `pyside6-rcc ${path2.basename(file)}`))
+            return false;
+        }
+        vscode2.window.showInformationMessage(`Generated ${files.length} Python resource file(s).`);
+        return true;
+      }
+      async configureVsCodeInterpreter(manifestPath = this.requireActiveManifest(), explicitInterpreter) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const interpreter = explicitInterpreter ?? this.resolveInterpreter(manifestPath, manifest);
+        if (!interpreter)
+          return false;
+        const folder = vscode2.workspace.getWorkspaceFolder(vscode2.Uri.file(path2.dirname(manifestPath)));
+        const config = vscode2.workspace.getConfiguration("python", folder?.uri);
+        await config.update("defaultInterpreterPath", interpreter, vscode2.ConfigurationTarget.WorkspaceFolder);
+        this.output.appendLine(`[Qt/Python] VS Code python.defaultInterpreterPath = ${interpreter}`);
+        return true;
+      }
+      async openReport(manifestPath = this.requireActiveManifest()) {
+        const status = this.inspect(manifestPath);
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const reportDirectory = path2.join(root, ".qpm", "python");
+        fs.mkdirSync(reportDirectory, { recursive: true });
+        const reportPath = path2.join(reportDirectory, "QT_FOR_PYTHON_REPORT.md");
+        const toolLines = Object.entries(status.tools).map(([key, value]) => `- ${key}: ${value || "not found"}`);
+        const text = [
+          `# Qt for Python \u2014 ${manifest.name}`,
+          "",
+          `- State: ${status.state}`,
+          `- Binding: PySide6`,
+          `- Python: ${status.pythonVersion ?? "not detected"}`,
+          `- PySide6: ${status.pySideVersion ?? "not installed"}`,
+          `- Interpreter: ${status.interpreter ?? "not resolved"}`,
+          `- Virtual environment: ${status.virtualEnvironment ?? "not configured"}`,
+          `- Project file: ${status.projectFile ?? "not configured"}`,
+          `- Entry point: ${status.entryPoint ?? "not configured"}`,
+          "",
+          "## Tools",
+          "",
+          ...toolLines,
+          "",
+          "## Configuration",
+          "",
+          `- Auto-create virtual environment: ${manifest.python.autoCreateVirtualEnvironment}`,
+          `- Auto-install PySide6: ${manifest.python.autoInstallPySide6}`,
+          `- UI mode: ${manifest.python.uiMode}`,
+          `- Build before run: ${manifest.python.buildBeforeRun}`,
+          `- Desktop deploy: ${manifest.python.deployEnabled}`,
+          `- Android deploy: ${manifest.python.androidDeployEnabled}`,
+          ""
+        ].join("\n");
+        fs.writeFileSync(reportPath, text, "utf8");
+        const doc = await vscode2.workspace.openTextDocument(vscode2.Uri.file(reportPath));
+        await vscode2.window.showTextDocument(doc, { preview: false });
+      }
+      async revealEnvironment(manifestPath = this.requireActiveManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const venv = resolveProjectPath(root, manifest.python.virtualEnvironment);
+        const target = fs.existsSync(venv) ? venv : root;
+        await vscode2.commands.executeCommand("revealFileInOS", vscode2.Uri.file(target));
+      }
+      requireActiveManifest() {
+        const manifestPath = this.activeManifestPath;
+        if (!manifestPath)
+          throw new Error("The active project is not a Qt for Python project.");
+        return manifestPath;
+      }
+      async ensureReady(manifestPath) {
+        const status = this.inspect(manifestPath);
+        if (status.state === "ready")
+          return true;
+        return this.bootstrap(manifestPath, true);
+      }
+      resolveInterpreter(manifestPath, manifest) {
+        const root = path2.dirname(manifestPath);
+        const configured = manifest.python.interpreter.trim();
+        if (configured) {
+          const candidate = resolveProjectPath(root, configured);
+          if (isExecutableFile(candidate))
+            return candidate;
+        }
+        const venv = resolveProjectPath(root, manifest.python.virtualEnvironment);
+        const venvPython = pythonInVirtualEnvironment(venv);
+        if (venvPython && isExecutableFile(venvPython))
+          return venvPython;
+        const workspacePython = vscode2.workspace.getConfiguration("python", vscode2.Uri.file(root)).get("defaultInterpreterPath", "").trim();
+        if (workspacePython) {
+          const candidate = expandWorkspaceVariables(workspacePython, root);
+          if (isExecutableFile(candidate))
+            return candidate;
+        }
+        return this.resolveBaseInterpreter(manifestPath, manifest);
+      }
+      resolveBaseInterpreter(manifestPath, manifest) {
+        const root = path2.dirname(manifestPath);
+        const configured = manifest.python.interpreter.trim();
+        if (configured) {
+          const candidate = resolveProjectPath(root, configured);
+          if (isExecutableFile(candidate) && !pathInside(resolveProjectPath(root, manifest.python.virtualEnvironment), candidate))
+            return candidate;
+        }
+        const workspacePython = vscode2.workspace.getConfiguration("python", vscode2.Uri.file(root)).get("defaultInterpreterPath", "").trim();
+        if (workspacePython) {
+          const candidate = expandWorkspaceVariables(workspacePython, root);
+          if (isExecutableFile(candidate) && !pathInside(resolveProjectPath(root, manifest.python.virtualEnvironment), candidate))
+            return candidate;
+        }
+        for (const candidate of pythonCommandCandidates()) {
+          const check = (0, child_process_1.spawnSync)(candidate.command, [...candidate.prefix, "-c", "import sys; print(sys.executable)"], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 5e3 });
+          if (check.status === 0) {
+            const executable = String(check.stdout || "").trim().split(/\r?\n/).pop()?.trim();
+            if (executable && isExecutableFile(executable))
+              return executable;
+          }
+        }
+        return void 0;
+      }
+      resolveTools(manifestPath, manifest, interpreter) {
+        const env = this.createEnvironment(manifestPath, manifest, interpreter);
+        const scripts = pythonScriptsDirectory(interpreter, env);
+        const overrides = manifest.python.toolOverrides;
+        const resolve = (override, name) => {
+          const root = path2.dirname(manifestPath);
+          if (override.trim()) {
+            const candidate = resolveProjectPath(root, override);
+            if (isExecutableFile(candidate))
+              return candidate;
+          }
+          const extensions = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
+          for (const dir of [scripts, path2.dirname(interpreter)].filter(Boolean)) {
+            for (const extension of extensions) {
+              const candidate = path2.join(dir, `${name}${extension}`);
+              if (isExecutableFile(candidate))
+                return candidate;
+            }
+          }
+          return findOnPath(name, env);
+        };
+        return {
+          project: resolve(overrides.project, "pyside6-project"),
+          designer: resolve(overrides.designer, "pyside6-designer"),
+          uic: resolve(overrides.uic, "pyside6-uic"),
+          rcc: resolve(overrides.rcc, "pyside6-rcc"),
+          deploy: resolve(overrides.deploy, "pyside6-deploy"),
+          androidDeploy: resolve(overrides.androidDeploy, "pyside6-android-deploy"),
+          linguist: resolve(overrides.linguist, "pyside6-linguist"),
+          lupdate: resolve(overrides.lupdate, "pyside6-lupdate"),
+          lrelease: resolve(overrides.lrelease, "pyside6-lrelease"),
+          qmllint: resolve(overrides.qmllint, "pyside6-qmllint")
+        };
+      }
+      createEnvironment(manifestPath, manifest, interpreter) {
+        const root = path2.dirname(manifestPath);
+        const env = { ...process.env, ...manifest.python.environment };
+        if (interpreter) {
+          const scripts = pythonScriptsDirectory(interpreter, env);
+          const parts = [scripts, path2.dirname(interpreter), env.PATH].filter(Boolean);
+          env.PATH = parts.join(path2.delimiter);
+          env.VIRTUAL_ENV = virtualEnvironmentForInterpreter(interpreter) ?? env.VIRTUAL_ENV;
+        }
+        env.PYTHONPATH = [root, env.PYTHONPATH].filter(Boolean).join(path2.delimiter);
+        env.PYTHONUTF8 = env.PYTHONUTF8 || "1";
+        return env;
+      }
+      ensurePyProjectFile(manifestPath, manifest) {
+        const root = path2.dirname(manifestPath);
+        const projectFile = resolveProjectPath(root, manifest.python.projectFile);
+        if (fs.existsSync(projectFile))
+          return;
+        if (path2.basename(projectFile).toLowerCase() !== "pyproject.toml")
+          return;
+        const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(manifestPath, manifest);
+        const entries = [...files.python, ...files.forms, ...files.resources, ...files.qml, ...files.translations].filter((entry) => fs.existsSync(entry)).map((entry) => path2.relative(root, entry).replace(/\\/g, "/"));
+        const content = [
+          "[project]",
+          `name = ${tomlString(manifest.name)}`,
+          `version = ${tomlString(manifest.packaging.productVersion || "1.0.0")}`,
+          "",
+          "[tool.pyside6-project]",
+          `files = [${entries.map(tomlString).join(", ")}]`,
+          ""
+        ].join("\n");
+        fs.writeFileSync(projectFile, content, "utf8");
+        this.output.appendLine(`[Qt/Python] Generated ${projectFile}`);
+      }
+      trackApplication(manifestPath, child) {
+        const key = path2.resolve(manifestPath).toLowerCase();
+        const set = this.launchedApplications.get(key) ?? /* @__PURE__ */ new Set();
+        set.add(child);
+        this.launchedApplications.set(key, set);
+        child.once("exit", () => {
+          set.delete(child);
+          if (set.size === 0)
+            this.launchedApplications.delete(key);
+        });
+      }
+      async stopLaunchedApplications(manifestPath) {
+        const key = path2.resolve(manifestPath).toLowerCase();
+        const processes = this.launchedApplications.get(key);
+        if (!processes)
+          return;
+        for (const child of [...processes]) {
+          try {
+            child.kill();
+          } catch {
+          }
+        }
+        this.launchedApplications.delete(key);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    };
+    exports2.QpmQtPythonService = QpmQtPythonService;
+    function probePython(interpreter, env) {
+      const code = [
+        "import sys",
+        'print("PY=" + ".".join(map(str, sys.version_info[:3])))',
+        "try:",
+        " import PySide6",
+        ' print("PYSIDE=" + str(PySide6.__version__))',
+        "except Exception:",
+        ' print("PYSIDE=")'
+      ].join("\n");
+      const result = (0, child_process_1.spawnSync)(interpreter, ["-c", code], { encoding: "utf8", env, windowsHide: true, timeout: 8e3 });
+      if (result.error || result.status !== 0)
+        return { ok: false, error: result.error?.message || String(result.stderr || "").trim() || `exit code ${String(result.status)}` };
+      const lines = String(result.stdout || "").split(/\r?\n/);
+      const pythonVersion = lines.find((line) => line.startsWith("PY="))?.slice(3).trim();
+      const pySideVersion = lines.find((line) => line.startsWith("PYSIDE="))?.slice(7).trim();
+      return { ok: true, pythonVersion, pySideVersion: pySideVersion || void 0 };
+    }
+    async function runTool(tool, args, cwd, env, output, label) {
+      output.appendLine(`[Qt/Python] ${label}`);
+      output.appendLine(`[Qt/Python] Tool: ${tool}`);
+      output.appendLine(`[Qt/Python] Arguments: ${args.join(" ")}`);
+      return new Promise((resolve) => {
+        const child = (0, child_process_1.spawn)(tool, args, { cwd, env, windowsHide: true, shell: false });
+        child.stdout?.on("data", (chunk) => output.append(String(chunk)));
+        child.stderr?.on("data", (chunk) => output.append(String(chunk)));
+        child.on("error", (error) => {
+          output.appendLine(`[Qt/Python] ${label} failed to start: ${error.message}`);
+          vscode2.window.showErrorMessage(`${label} failed to start. Open the Qt Project Manager output channel for details.`);
+          resolve(false);
+        });
+        child.on("close", (code) => {
+          output.appendLine(`[Qt/Python] ${path2.basename(tool)} exited with code ${String(code ?? -1)}.`);
+          if (code !== 0)
+            vscode2.window.showErrorMessage(`${label} failed. Open the Qt Project Manager output channel for details.`);
+          resolve(code === 0);
+        });
+      });
+    }
+    function resolveProjectPath(root, value) {
+      const text = value.trim();
+      if (!text)
+        return root;
+      return path2.isAbsolute(text) ? path2.normalize(text) : path2.resolve(root, text);
+    }
+    function relativeOrAbsolute(root, value) {
+      const relative = path2.relative(root, value);
+      return relative && relative !== ".." && !relative.startsWith(`..${path2.sep}`) && !path2.isAbsolute(relative) ? relative.replace(/\\/g, "/") : value;
+    }
+    function pythonInVirtualEnvironment(venvPath) {
+      return process.platform === "win32" ? path2.join(venvPath, "Scripts", "python.exe") : path2.join(venvPath, "bin", "python");
+    }
+    function virtualEnvironmentForInterpreter(interpreter) {
+      const parent = path2.dirname(interpreter);
+      const leaf = path2.basename(parent).toLowerCase();
+      if (leaf === "scripts" || leaf === "bin")
+        return path2.dirname(parent);
+      return void 0;
+    }
+    function pythonScriptsDirectory(interpreter, env) {
+      const venv = virtualEnvironmentForInterpreter(interpreter);
+      if (venv)
+        return process.platform === "win32" ? path2.join(venv, "Scripts") : path2.join(venv, "bin");
+      const result = (0, child_process_1.spawnSync)(interpreter, ["-c", 'import sysconfig; print(sysconfig.get_path("scripts") or "")'], { encoding: "utf8", env, windowsHide: true, timeout: 5e3 });
+      const candidate = String(result.stdout || "").trim().split(/\r?\n/).pop()?.trim();
+      return candidate || path2.dirname(interpreter);
+    }
+    function pythonCommandCandidates() {
+      return process.platform === "win32" ? [{ command: "py", prefix: ["-3"] }, { command: "python", prefix: [] }, { command: "python3", prefix: [] }] : [{ command: "python3", prefix: [] }, { command: "python", prefix: [] }];
+    }
+    function isExecutableFile(candidate) {
+      try {
+        return fs.statSync(candidate).isFile();
+      } catch {
+        return false;
+      }
+    }
+    function findOnPath(name, env) {
+      const pathValue = env.PATH || env.Path || env.path || "";
+      const names = process.platform === "win32" ? [`${name}.exe`, `${name}.cmd`, `${name}.bat`, name] : [name];
+      for (const directory of pathValue.split(path2.delimiter).filter(Boolean)) {
+        for (const executable of names) {
+          const candidate = path2.join(directory.replace(/^"|"$/g, ""), executable);
+          if (isExecutableFile(candidate))
+            return candidate;
+        }
+      }
+      return void 0;
+    }
+    function pathInside(parent, child) {
+      const relative = path2.relative(parent, child);
+      return relative === "" || !!relative && relative !== ".." && !relative.startsWith(`..${path2.sep}`) && !path2.isAbsolute(relative);
+    }
+    function expandWorkspaceVariables(value, root) {
+      return value.replace(/\$\{workspaceFolder\}/g, root).replace(/\$\{workspaceRoot\}/g, root);
+    }
+    function splitArguments(value) {
+      const args = [];
+      const pattern = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|([^\s]+)/g;
+      let match;
+      while ((match = pattern.exec(value)) !== null)
+        args.push((match[1] ?? match[2] ?? match[3] ?? "").replace(/\\([\\"'])/g, "$1"));
+      return args;
+    }
+    function tomlString(value) {
+      return JSON.stringify(value);
+    }
+    function pathFromCommandInput(input) {
+      if (!input)
+        return void 0;
+      if (input instanceof vscode2.Uri)
+        return input.fsPath;
+      if (typeof input === "string")
+        return input;
+      if (typeof input === "object") {
+        const value = input;
+        if (typeof value.fsPath === "string")
+          return value.fsPath;
+        if (typeof value.file?.absolutePath === "string")
+          return value.file.absolutePath;
+        if (typeof value.absolutePath === "string")
+          return value.absolutePath;
+        if (typeof value.resourceUri?.fsPath === "string")
+          return value.resourceUri.fsPath;
+      }
+      return void 0;
+    }
+  }
+});
+
+// out/providers/qpmQtPythonProvider.js
+var require_qpmQtPythonProvider = __commonJS({
+  "out/providers/qpmQtPythonProvider.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.QpmQtPythonProvider = void 0;
+    var vscode2 = __importStar2(require("vscode"));
+    var QpmQtPythonProvider = class {
+      python;
+      changeEmitter = new vscode2.EventEmitter();
+      onDidChangeTreeData = this.changeEmitter.event;
+      disposables = [];
+      constructor(python) {
+        this.python = python;
+        this.disposables.push(this.python.onDidChange(() => this.refresh()));
+      }
+      attachView(view) {
+        this.disposables.push(view.onDidChangeVisibility((event) => {
+          if (event.visible)
+            void this.python.refresh();
+        }));
+        if (view.visible)
+          void this.python.refresh();
+      }
+      dispose() {
+        for (const disposable of this.disposables)
+          disposable.dispose();
+        this.changeEmitter.dispose();
+      }
+      refresh() {
+        this.changeEmitter.fire();
+      }
+      getTreeItem(element) {
+        const item = new vscode2.TreeItem(element.label, vscode2.TreeItemCollapsibleState.None);
+        item.id = element.id;
+        item.description = element.description;
+        item.tooltip = element.tooltip ?? [element.label, element.description].filter(Boolean).join(" \u2014 ");
+        item.iconPath = new vscode2.ThemeIcon(element.icon);
+        if (element.command)
+          item.command = { command: element.command, title: element.label };
+        return item;
+      }
+      getChildren() {
+        const manifestPath = this.python.activeManifestPath;
+        if (!manifestPath) {
+          return [{ id: "empty", label: "Active project is C++ Qt", description: "Select or create a Qt for Python project", icon: "info" }];
+        }
+        const status = this.python.status;
+        if (!status) {
+          void this.python.refresh();
+          return [{ id: "loading", label: "Inspecting Qt for Python environment\u2026", icon: "sync~spin" }];
+        }
+        return nodesForStatus(status);
+      }
+    };
+    exports2.QpmQtPythonProvider = QpmQtPythonProvider;
+    function nodesForStatus(status) {
+      const stateIcon = status.state === "ready" ? "pass-filled" : status.state === "missing-pyside6" || status.state === "missing-python" ? "warning" : status.state === "disabled" ? "circle-slash" : "error";
+      return [
+        { id: "project", label: status.projectName, description: "Qt for Python \xB7 PySide6", icon: "symbol-class", tooltip: status.manifestPath },
+        { id: "state", label: "State", description: status.state, icon: stateIcon, tooltip: status.message },
+        { id: "python", label: "Python", description: status.pythonVersion ? `${status.pythonVersion} \xB7 ${status.interpreter}` : status.interpreter || "not resolved", icon: "terminal-python" },
+        { id: "pyside", label: "PySide6", description: status.pySideVersion || "not installed", icon: status.pySideVersion ? "versions" : "warning" },
+        { id: "venv", label: "Virtual environment", description: status.virtualEnvironment || "not configured", icon: "folder-library" },
+        { id: "projectFile", label: "PySide project", description: status.projectFile || "pyproject.toml", icon: "json" },
+        { id: "projectTool", label: "pyside6-project", description: status.tools.project || "not found", icon: status.tools.project ? "tools" : "warning" },
+        { id: "designer", label: "Designer", description: status.tools.designer || "not found", icon: status.tools.designer ? "layout" : "warning" },
+        { id: "bootstrap", label: "Prepare Python environment", description: "Create venv / verify PySide6", icon: "rocket", command: "qpm.python.bootstrap" },
+        { id: "selectPython", label: "Select Python interpreter", description: "Choose Python 3.10+", icon: "folder-opened", command: "qpm.python.selectInterpreter" },
+        { id: "venvCreate", label: "Create virtual environment", description: "python -m venv", icon: "new-folder", command: "qpm.python.createVirtualEnvironment" },
+        { id: "install", label: "Install / update PySide6", description: "Install in selected environment", icon: "cloud-download", command: "qpm.python.installPySide6" },
+        { id: "build", label: "Build Python project", description: "pyside6-project build", icon: "tools", command: "qpm.python.build" },
+        { id: "run", label: "Run Python project", description: "Build if needed and launch main.py", icon: "play", command: "qpm.python.run" },
+        { id: "debug", label: "Debug Python project", description: "VS Code debugpy", icon: "debug-alt", command: "qpm.python.debug" },
+        { id: "clean", label: "Clean Python project", description: "pyside6-project clean", icon: "trash", command: "qpm.python.clean" },
+        { id: "uic", label: "Generate Python UI files", description: "pyside6-uic", icon: "layout", command: "qpm.python.compileUi" },
+        { id: "rcc", label: "Generate Python resources", description: "pyside6-rcc", icon: "package", command: "qpm.python.compileResources" },
+        { id: "designerOpen", label: "Open PySide6 Designer", description: "pyside6-designer", icon: "preview", command: "qpm.python.openDesigner" },
+        { id: "deploy", label: "Deploy desktop application", description: "pyside6-project deploy", icon: "package", command: "qpm.python.deploy" },
+        { id: "androidDeploy", label: "Deploy Android application", description: "pyside6-android-deploy", icon: "device-mobile", command: "qpm.python.deployAndroid" },
+        { id: "report", label: "Open Qt for Python report", description: "Environment and tools", icon: "report", command: "qpm.python.openReport" },
+        { id: "reveal", label: "Reveal Python environment", description: "Open venv / project directory", icon: "folder-opened", command: "qpm.python.revealEnvironment" }
+      ];
+    }
+  }
+});
+
+// out/services/qpmQtDependencyService.js
+var require_qpmQtDependencyService = __commonJS({
+  "out/services/qpmQtDependencyService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.QpmQtDependencyService = void 0;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var child_process_1 = require("child_process");
+    var vscode2 = __importStar2(require("vscode"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
+    var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
+    var QpmQtDependencyService = class {
+      workspaces;
+      output;
+      changeEmitter = new vscode2.EventEmitter();
+      onDidChange = this.changeEmitter.event;
+      currentStatus;
+      disposables = [];
+      constructor(workspaces, output) {
+        this.workspaces = workspaces;
+        this.output = output;
+        this.disposables.push(this.workspaces.onDidChange(() => void this.refresh()));
+      }
+      dispose() {
+        for (const d of this.disposables)
+          d.dispose();
+        this.changeEmitter.dispose();
+      }
+      get status() {
+        return this.currentStatus;
+      }
+      get activeManifestPath() {
+        const ref = this.workspaces.activeProjectRef;
+        return ref?.exists && (0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath) ? ref.absolutePath : void 0;
+      }
+      async refresh() {
+        const manifestPath = this.activeManifestPath;
+        if (!manifestPath) {
+          this.currentStatus = void 0;
+          this.changeEmitter.fire();
+          return void 0;
+        }
+        try {
+          const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+          if ((0, qtProjectManifest_12.isQtPythonProject)(manifest)) {
+            this.currentStatus = void 0;
+            this.changeEmitter.fire();
+            return void 0;
+          }
+          const root = path2.dirname(manifestPath);
+          const cfg = manifest.dependencies;
+          const vcpkgPath = resolveTool(cfg.vcpkg.executable, ["vcpkg", "vcpkg.exe"], cfg.vcpkg.root ? [cfg.vcpkg.root, path2.join(cfg.vcpkg.root, process.platform === "win32" ? "vcpkg.exe" : "vcpkg")] : []);
+          const conanPath = resolveTool(cfg.conan.executable, ["conan", "conan.exe"]);
+          const pkgConfigPath = resolveTool(cfg.pkgConfig.executable, ["pkg-config", "pkgconf", "pkg-config.exe", "pkgconf.exe"]);
+          const managers = [cfg.vcpkg.enabled ? "vcpkg" : "", cfg.conan.enabled ? "Conan 2" : "", cfg.pkgConfig.enabled ? "pkg-config" : ""].filter(Boolean);
+          const missing = [cfg.vcpkg.enabled && !vcpkgPath ? "vcpkg" : "", cfg.conan.enabled && !conanPath ? "Conan" : "", cfg.pkgConfig.enabled && !pkgConfigPath ? "pkg-config" : ""].filter(Boolean);
+          const integrationFile = (0, qpmQtDependencyModel_1.dependencyIntegrationPath)(root, cfg.outputDirectory);
+          const lastSync = fs.existsSync(integrationFile) ? fs.statSync(integrationFile).mtime.toISOString() : void 0;
+          const configuredPackages = cfg.vcpkg.dependencies.length + cfg.conan.requires.length + cfg.pkgConfig.packages.length;
+          let state = !cfg.enabled ? "disabled" : missing.length ? "missing-tool" : fs.existsSync(integrationFile) ? "ready" : "needs-sync";
+          let message = !cfg.enabled ? "Dependency management is disabled for this project." : missing.length ? `Missing tools: ${missing.join(", ")}.` : fs.existsSync(integrationFile) ? "Dependency integration is synchronized." : "Generate/install dependencies to create build integration.";
+          this.currentStatus = { projectName: manifest.name, manifestPath, enabled: cfg.enabled, state, message, vcpkgPath, conanPath, pkgConfigPath, managers, configuredPackages, outputDirectory: path2.resolve(root, cfg.outputDirectory), integrationFile, lastSync };
+        } catch (error) {
+          this.currentStatus = { projectName: path2.basename(manifestPath), manifestPath, enabled: true, state: "error", message: error instanceof Error ? error.message : String(error), vcpkgPath: "", conanPath: "", pkgConfigPath: "", managers: [], configuredPackages: 0, outputDirectory: "", integrationFile: "" };
+        }
+        this.changeEmitter.fire();
+        return this.currentStatus;
+      }
+      async configure() {
+        const manifestPath = this.requireManifest();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const enabled = await vscode2.window.showQuickPick([{ label: "Enable dependency management", value: true }, { label: "Disable dependency management", value: false }], { title: "Qt dependency management" });
+        if (!enabled)
+          return;
+        manifest.dependencies.enabled = enabled.value;
+        if (enabled.value) {
+          const managers = await vscode2.window.showQuickPick([
+            { label: "vcpkg", value: "vcpkg", picked: manifest.dependencies.vcpkg.enabled },
+            { label: "Conan 2", value: "conan", picked: manifest.dependencies.conan.enabled },
+            { label: "pkg-config", value: "pkg", picked: manifest.dependencies.pkgConfig.enabled }
+          ], { title: "Dependency managers", canPickMany: true });
+          if (managers) {
+            manifest.dependencies.vcpkg.enabled = managers.some((x) => x.value === "vcpkg");
+            manifest.dependencies.conan.enabled = managers.some((x) => x.value === "conan");
+            manifest.dependencies.pkgConfig.enabled = managers.some((x) => x.value === "pkg");
+          }
+        }
+        (0, qtProjectManifest_12.writeQtProjectManifest)(manifestPath, manifest);
+        await this.refresh();
+      }
+      async detectTools() {
+        const status = await this.refresh();
+        if (!status)
+          return void 0;
+        this.output.appendLine("[Qt Dependencies] Tool detection");
+        this.output.appendLine(`[Qt Dependencies] vcpkg: ${status.vcpkgPath || "not found"}`);
+        this.output.appendLine(`[Qt Dependencies] Conan: ${status.conanPath || "not found"}`);
+        this.output.appendLine(`[Qt Dependencies] pkg-config: ${status.pkgConfigPath || "not found"}`);
+        vscode2.window.showInformationMessage(status.message);
+        return status;
+      }
+      async generateManifests() {
+        const manifestPath = this.requireManifest();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const cfg = manifest.dependencies;
+        if (!cfg.enabled)
+          throw new Error("Dependency management is disabled. Enable it in Qt Project Settings first.");
+        if (cfg.vcpkg.enabled)
+          this.generateVcpkgManifest(root, manifest.name, cfg);
+        if (cfg.conan.enabled)
+          this.generateConanManifest(root, cfg);
+        await this.generateIntegration(manifestPath);
+        await this.writeReport(manifestPath);
+        this.output.appendLine(`[Qt Dependencies] Dependency manifests generated for ${manifest.name}.`);
+        await this.refresh();
+        return true;
+      }
+      async install() {
+        const manifestPath = this.requireManifest();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const cfg = manifest.dependencies;
+        if (!cfg.enabled)
+          throw new Error("Dependency management is disabled.");
+        await this.generateManifests();
+        const status = await this.refresh();
+        if (!status)
+          return false;
+        if (cfg.vcpkg.enabled) {
+          if (!status.vcpkgPath)
+            throw new Error("vcpkg was not found. Configure the executable or VCPKG_ROOT.");
+          const args = ["install", "--x-manifest-root", root, "--x-install-root", path2.resolve(root, cfg.vcpkg.installRoot)];
+          if (cfg.vcpkg.triplet)
+            args.push("--triplet", cfg.vcpkg.triplet);
+          if (cfg.vcpkg.hostTriplet)
+            args.push("--host-triplet", cfg.vcpkg.hostTriplet);
+          for (const entry of cfg.vcpkg.overlayPorts)
+            args.push("--overlay-ports", path2.resolve(root, entry));
+          for (const entry of cfg.vcpkg.overlayTriplets)
+            args.push("--overlay-triplets", path2.resolve(root, entry));
+          args.push(...cfg.vcpkg.additionalArguments);
+          if (!await this.run(status.vcpkgPath, args, root, "vcpkg install"))
+            return false;
+        }
+        if (cfg.conan.enabled) {
+          if (!status.conanPath)
+            throw new Error("Conan was not found. Configure the executable or install Conan 2.");
+          const conanfile = path2.resolve(root, cfg.conan.manifestFile);
+          const args = ["install", conanfile, "--output-folder", path2.resolve(root, cfg.conan.outputDirectory)];
+          if (cfg.conan.buildMissing)
+            args.push("--build=missing");
+          if (cfg.conan.profileHost)
+            args.push("-pr:h", cfg.conan.profileHost);
+          if (cfg.conan.profileBuild)
+            args.push("-pr:b", cfg.conan.profileBuild);
+          if (cfg.conan.lockfile)
+            args.push("--lockfile", path2.resolve(root, cfg.conan.lockfile));
+          args.push(...cfg.conan.additionalArguments);
+          if (!await this.run(status.conanPath, args, root, "Conan install"))
+            return false;
+        }
+        await this.generateIntegration(manifestPath);
+        await this.writeReport(manifestPath);
+        await this.refresh();
+        vscode2.window.showInformationMessage(`Dependencies synchronized for ${manifest.name}.`);
+        return true;
+      }
+      async prepareForBuild(manifestPath, _mode) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        if (!manifest.dependencies.enabled)
+          return true;
+        if (manifest.dependencies.autoInstallBeforeBuild)
+          return this.installForManifest(manifestPath);
+        const integration = (0, qpmQtDependencyModel_1.dependencyIntegrationPath)(path2.dirname(manifestPath), manifest.dependencies.outputDirectory);
+        if (!fs.existsSync(integration))
+          await this.generateIntegration(manifestPath);
+        return true;
+      }
+      async installForManifest(manifestPath) {
+        const previous = this.workspaces.activeProjectRef;
+        if (previous?.absolutePath === manifestPath)
+          return this.install();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const cfg = manifest.dependencies;
+        if (!cfg.enabled)
+          return true;
+        this.generateVcpkgManifest(root, manifest.name, cfg);
+        this.generateConanManifest(root, cfg);
+        const vcpkg = resolveTool(cfg.vcpkg.executable, ["vcpkg", "vcpkg.exe"], cfg.vcpkg.root ? [cfg.vcpkg.root, path2.join(cfg.vcpkg.root, process.platform === "win32" ? "vcpkg.exe" : "vcpkg")] : []);
+        const conan = resolveTool(cfg.conan.executable, ["conan", "conan.exe"]);
+        if (cfg.vcpkg.enabled) {
+          if (!vcpkg)
+            throw new Error(`vcpkg is enabled for ${manifest.name} but was not found.`);
+          const args = ["install", "--x-manifest-root", root, "--x-install-root", path2.resolve(root, cfg.vcpkg.installRoot)];
+          if (cfg.vcpkg.triplet)
+            args.push("--triplet", cfg.vcpkg.triplet);
+          if (cfg.vcpkg.hostTriplet)
+            args.push("--host-triplet", cfg.vcpkg.hostTriplet);
+          for (const entry of cfg.vcpkg.overlayPorts)
+            args.push("--overlay-ports", path2.resolve(root, entry));
+          for (const entry of cfg.vcpkg.overlayTriplets)
+            args.push("--overlay-triplets", path2.resolve(root, entry));
+          args.push(...cfg.vcpkg.additionalArguments);
+          if (!await this.run(vcpkg, args, root, `vcpkg install \u2014 ${manifest.name}`))
+            return false;
+        }
+        if (cfg.conan.enabled) {
+          if (!conan)
+            throw new Error(`Conan is enabled for ${manifest.name} but was not found.`);
+          const args = ["install", path2.resolve(root, cfg.conan.manifestFile), "--output-folder", path2.resolve(root, cfg.conan.outputDirectory)];
+          if (cfg.conan.buildMissing)
+            args.push("--build=missing");
+          if (cfg.conan.profileHost)
+            args.push("-pr:h", cfg.conan.profileHost);
+          if (cfg.conan.profileBuild)
+            args.push("-pr:b", cfg.conan.profileBuild);
+          if (cfg.conan.lockfile)
+            args.push("--lockfile", path2.resolve(root, cfg.conan.lockfile));
+          args.push(...cfg.conan.additionalArguments);
+          if (!await this.run(conan, args, root, `Conan install \u2014 ${manifest.name}`))
+            return false;
+        }
+        await this.generateIntegration(manifestPath);
+        return true;
+      }
+      async generateIntegration(manifestPath = this.requireManifest()) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const cfg = manifest.dependencies;
+        const integration = (0, qpmQtDependencyModel_1.emptyDependencyIntegration)();
+        integration.cmakeFindPackages = [...cfg.cmakeFindPackages];
+        integration.cmakeLinkTargets = [...cfg.cmakeLinkTargets];
+        integration.includeDirectories.push(...cfg.additionalIncludeDirectories.map((x) => path2.resolve(root, x)));
+        integration.libraryDirectories.push(...cfg.additionalLibraryDirectories.map((x) => path2.resolve(root, x)));
+        integration.libraries.push(...cfg.additionalLibraries);
+        if (cfg.vcpkg.enabled) {
+          const installRoot = path2.resolve(root, cfg.vcpkg.installRoot);
+          const triplet = cfg.vcpkg.triplet || inferVcpkgTriplet();
+          const tripletRoot = path2.join(installRoot, triplet);
+          const include = path2.join(tripletRoot, "include");
+          const lib = path2.join(tripletRoot, "lib");
+          if (fs.existsSync(include))
+            integration.includeDirectories.push(include);
+          if (fs.existsSync(lib))
+            integration.libraryDirectories.push(lib);
+          const vcpkgRoot = cfg.vcpkg.root || process.env.VCPKG_ROOT || "";
+          const toolchain = vcpkgRoot ? path2.join(vcpkgRoot, "scripts", "buildsystems", "vcpkg.cmake") : "";
+          if (toolchain && fs.existsSync(toolchain))
+            integration.cmakeConfigureArguments.push(`-DCMAKE_TOOLCHAIN_FILE=${toolchain}`);
+          if (cfg.vcpkg.triplet)
+            integration.cmakeConfigureArguments.push(`-DVCPKG_TARGET_TRIPLET=${cfg.vcpkg.triplet}`);
+        }
+        if (cfg.conan.enabled) {
+          const out = path2.resolve(root, cfg.conan.outputDirectory);
+          const candidates = [path2.join(out, "conan_toolchain.cmake"), path2.join(out, "build", "generators", "conan_toolchain.cmake"), path2.join(out, "generators", "conan_toolchain.cmake")];
+          const toolchain = candidates.find((x) => fs.existsSync(x));
+          if (toolchain)
+            integration.cmakeConfigureArguments.push(`-DCMAKE_TOOLCHAIN_FILE=${toolchain}`);
+          const pkgPaths = [out, path2.join(out, "generators")].filter((x) => fs.existsSync(x));
+          if (pkgPaths.length)
+            integration.environment.PKG_CONFIG_PATH = pkgPaths.join(path2.delimiter);
+        }
+        if (cfg.pkgConfig.enabled && cfg.pkgConfig.packages.length) {
+          const exe = resolveTool(cfg.pkgConfig.executable, ["pkg-config", "pkgconf", "pkg-config.exe", "pkgconf.exe"]);
+          if (!exe)
+            throw new Error("pkg-config is enabled but no pkg-config/pkgconf executable was found.");
+          const env = { ...process.env };
+          const configuredPath = cfg.pkgConfig.searchPaths.map((x) => path2.resolve(root, x)).join(path2.delimiter);
+          if (configuredPath)
+            env.PKG_CONFIG_PATH = [configuredPath, env.PKG_CONFIG_PATH].filter(Boolean).join(path2.delimiter);
+          const flags = await runCapture(exe, [...cfg.pkgConfig.staticLink ? ["--static"] : [], "--cflags", "--libs", ...cfg.pkgConfig.additionalArguments, ...cfg.pkgConfig.packages], root, env);
+          parsePkgConfigFlags(flags, integration);
+          if (configuredPath)
+            integration.environment.PKG_CONFIG_PATH = configuredPath;
+        }
+        dedupeIntegration(integration);
+        (0, qpmQtDependencyModel_1.writeDependencyIntegration)((0, qpmQtDependencyModel_1.dependencyIntegrationPath)(root, cfg.outputDirectory), integration);
+        this.output.appendLine(`[Qt Dependencies] Build integration: ${(0, qpmQtDependencyModel_1.dependencyIntegrationPath)(root, cfg.outputDirectory)}`);
+        return integration;
+      }
+      async openReport() {
+        const manifestPath = this.requireManifest();
+        const report = await this.writeReport(manifestPath);
+        await vscode2.window.showTextDocument(await vscode2.workspace.openTextDocument(report), { preview: true });
+      }
+      async revealOutput() {
+        const manifestPath = this.requireManifest();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const dir = path2.resolve(path2.dirname(manifestPath), manifest.dependencies.outputDirectory);
+        fs.mkdirSync(dir, { recursive: true });
+        await vscode2.commands.executeCommand("revealFileInOS", vscode2.Uri.file(dir));
+      }
+      async clean() {
+        const manifestPath = this.requireManifest();
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const dir = path2.resolve(path2.dirname(manifestPath), manifest.dependencies.outputDirectory);
+        if (fs.existsSync(dir))
+          fs.rmSync(dir, { recursive: true, force: true });
+        this.output.appendLine(`[Qt Dependencies] Cleaned ${dir}`);
+        await this.refresh();
+      }
+      generateVcpkgManifest(root, projectName, cfg) {
+        if (!cfg.vcpkg.enabled)
+          return;
+        const target = path2.resolve(root, cfg.vcpkg.manifestFile);
+        const deps = cfg.vcpkg.dependencies.map(parseVcpkgDependency);
+        const json = { name: normalizeVcpkgName(projectName), "version-string": "0.0.0", dependencies: deps };
+        if (cfg.vcpkg.baseline)
+          json["builtin-baseline"] = cfg.vcpkg.baseline;
+        fs.mkdirSync(path2.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `${JSON.stringify(json, null, 2)}
+`, "utf8");
+        this.output.appendLine(`[Qt Dependencies] Generated ${target}`);
+      }
+      generateConanManifest(root, cfg) {
+        if (!cfg.conan.enabled)
+          return;
+        const target = path2.resolve(root, cfg.conan.manifestFile);
+        const lines = [];
+        if (cfg.conan.requires.length)
+          lines.push("[requires]", ...cfg.conan.requires, "");
+        if (cfg.conan.toolRequires.length)
+          lines.push("[tool_requires]", ...cfg.conan.toolRequires, "");
+        lines.push("[generators]", "CMakeDeps", "CMakeToolchain", "PkgConfigDeps", "");
+        if (cfg.conan.options.length)
+          lines.push("[options]", ...cfg.conan.options, "");
+        lines.push("[layout]", "cmake_layout", "");
+        fs.mkdirSync(path2.dirname(target), { recursive: true });
+        fs.writeFileSync(target, `${lines.join("\n")}
+`, "utf8");
+        this.output.appendLine(`[Qt Dependencies] Generated ${target}`);
+      }
+      async writeReport(manifestPath) {
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(manifestPath);
+        const root = path2.dirname(manifestPath);
+        const cfg = manifest.dependencies;
+        const status = await this.refresh();
+        const report = path2.resolve(root, cfg.outputDirectory, "QPM_DEPENDENCIES.md");
+        fs.mkdirSync(path2.dirname(report), { recursive: true });
+        const text = `# Qt Dependencies \u2014 ${manifest.name}
+
+- Enabled: ${cfg.enabled ? "yes" : "no"}
+- Auto install before build: ${cfg.autoInstallBeforeBuild ? "yes" : "no"}
+- vcpkg: ${cfg.vcpkg.enabled ? status?.vcpkgPath || "missing" : "disabled"}
+- Conan 2: ${cfg.conan.enabled ? status?.conanPath || "missing" : "disabled"}
+- pkg-config: ${cfg.pkgConfig.enabled ? status?.pkgConfigPath || "missing" : "disabled"}
+- Integration: ${(0, qpmQtDependencyModel_1.dependencyIntegrationPath)(root, cfg.outputDirectory)}
+
+## vcpkg dependencies
+
+${cfg.vcpkg.dependencies.map((x) => `- ${x}`).join("\n") || "- none"}
+
+## Conan requires
+
+${cfg.conan.requires.map((x) => `- ${x}`).join("\n") || "- none"}
+
+## pkg-config packages
+
+${cfg.pkgConfig.packages.map((x) => `- ${x}`).join("\n") || "- none"}
+
+## CMake packages / targets
+
+Find packages:
+${cfg.cmakeFindPackages.map((x) => `- ${x}`).join("\n") || "- none"}
+
+Link targets:
+${cfg.cmakeLinkTargets.map((x) => `- ${x}`).join("\n") || "- none"}
+`;
+        fs.writeFileSync(report, text, "utf8");
+        return report;
+      }
+      requireManifest() {
+        const file = this.activeManifestPath;
+        if (!file)
+          throw new Error("Open a native Qt C++ project first.");
+        const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(file);
+        if ((0, qtProjectManifest_12.isQtPythonProject)(manifest))
+          throw new Error("C++ dependency managers are not used by Qt for Python projects. Use pip/pyproject.toml for PySide6 dependencies.");
+        return file;
+      }
+      run(executable, args, cwd, label) {
+        this.output.appendLine(`[Qt Dependencies] ${label}`);
+        this.output.appendLine(`[Qt Dependencies] Tool: ${executable}`);
+        this.output.appendLine(`[Qt Dependencies] Arguments: ${args.map(renderArg).join(" ")}`);
+        return new Promise((resolve) => {
+          const child = (0, child_process_1.spawn)(executable, args, { cwd, env: process.env, shell: false });
+          child.stdout.on("data", (data) => this.output.append(String(data)));
+          child.stderr.on("data", (data) => this.output.append(String(data)));
+          child.on("error", (error) => {
+            this.output.appendLine(`[Qt Dependencies] ${error.message}`);
+            resolve(false);
+          });
+          child.on("close", (code) => {
+            this.output.appendLine(`[Qt Dependencies] ${path2.basename(executable)} exited with code ${String(code)}.`);
+            resolve(code === 0);
+          });
+        });
+      }
+    };
+    exports2.QpmQtDependencyService = QpmQtDependencyService;
+    function resolveTool(configured, names, extra = []) {
+      for (const candidate of [configured, ...extra]) {
+        if (!candidate)
+          continue;
+        const resolved = path2.resolve(candidate);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile())
+          return resolved;
+      }
+      const pathValue = process.env.PATH || "";
+      for (const dir of pathValue.split(path2.delimiter))
+        for (const name of names) {
+          const candidate = path2.join(dir, name);
+          if (fs.existsSync(candidate))
+            return candidate;
+        }
+      return "";
+    }
+    function normalizeVcpkgName(value) {
+      return value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "qpm-project";
+    }
+    function parseVcpkgDependency(value) {
+      const match = /^([^\[]+)\[([^\]]+)\]$/.exec(value.trim());
+      return match ? { name: match[1].trim(), features: match[2].split(",").map((x) => x.trim()).filter(Boolean) } : value.trim();
+    }
+    function inferVcpkgTriplet() {
+      return process.platform === "win32" ? process.arch === "arm64" ? "arm64-windows" : "x64-windows" : process.platform === "darwin" ? process.arch === "arm64" ? "arm64-osx" : "x64-osx" : process.arch === "arm64" ? "arm64-linux" : "x64-linux";
+    }
+    function renderArg(value) {
+      return /\s/.test(value) ? JSON.stringify(value) : value;
+    }
+    function runCapture(executable, args, cwd, env) {
+      return new Promise((resolve, reject) => {
+        const child = (0, child_process_1.spawn)(executable, args, { cwd, env, shell: false });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (d) => stdout += String(d));
+        child.stderr.on("data", (d) => stderr += String(d));
+        child.on("error", reject);
+        child.on("close", (code) => code === 0 ? resolve(stdout.trim()) : reject(new Error(`${path2.basename(executable)} exited with code ${String(code)}: ${stderr.trim()}`)));
+      });
+    }
+    function parsePkgConfigFlags(text, integration) {
+      const tokens = splitShell(text);
+      for (const token of tokens) {
+        if (token.startsWith("-I") && token.length > 2)
+          integration.includeDirectories.push(token.slice(2));
+        else if (token.startsWith("-L") && token.length > 2)
+          integration.libraryDirectories.push(token.slice(2));
+        else if (token.startsWith("-l") && token.length > 2)
+          integration.libraries.push(token.slice(2));
+        else if (token.startsWith("-D") || token.startsWith("-f") || token.startsWith("-pthread"))
+          integration.compilerFlags.push(token);
+        else
+          integration.linkerFlags.push(token);
+      }
+    }
+    function splitShell(value) {
+      const result = [];
+      const re = /"([^"]*)"|'([^']*)'|([^\s]+)/g;
+      let m;
+      while (m = re.exec(value))
+        result.push(m[1] ?? m[2] ?? m[3]);
+      return result;
+    }
+    function dedupeIntegration(value) {
+      for (const key of ["includeDirectories", "libraryDirectories", "libraries", "compilerFlags", "linkerFlags", "cmakeConfigureArguments", "cmakeFindPackages", "cmakeLinkTargets"])
+        value[key] = [...new Set(value[key])];
+    }
+  }
+});
+
+// out/providers/qpmQtDependencyProvider.js
+var require_qpmQtDependencyProvider = __commonJS({
+  "out/providers/qpmQtDependencyProvider.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.QpmQtDependencyProvider = void 0;
+    var vscode2 = __importStar2(require("vscode"));
+    var QpmQtDependencyProvider = class {
+      dependencies;
+      emitter = new vscode2.EventEmitter();
+      onDidChangeTreeData = this.emitter.event;
+      disposables = [];
+      constructor(dependencies) {
+        this.dependencies = dependencies;
+        this.disposables.push(dependencies.onDidChange(() => this.emitter.fire()));
+      }
+      attachView(view) {
+        this.disposables.push(view.onDidChangeVisibility((e) => {
+          if (e.visible)
+            void this.dependencies.refresh();
+        }));
+        if (view.visible)
+          void this.dependencies.refresh();
+      }
+      dispose() {
+        for (const d of this.disposables)
+          d.dispose();
+        this.emitter.dispose();
+      }
+      refresh() {
+        this.emitter.fire();
+      }
+      getTreeItem(node) {
+        const item = new vscode2.TreeItem(node.label);
+        item.id = node.id;
+        item.description = node.description;
+        item.tooltip = node.tooltip ?? [node.label, node.description].filter(Boolean).join(" \u2014 ");
+        item.iconPath = new vscode2.ThemeIcon(node.icon);
+        if (node.command)
+          item.command = { command: node.command, title: node.label };
+        return item;
+      }
+      getChildren() {
+        const manifest = this.dependencies.activeManifestPath;
+        if (!manifest)
+          return [{ id: "none", label: "Active project has no C++ dependency configuration", description: "Open a native Qt C++ project", icon: "info" }];
+        const s = this.dependencies.status;
+        if (!s) {
+          void this.dependencies.refresh();
+          return [{ id: "loading", label: "Inspecting dependency managers\u2026", icon: "sync~spin" }];
+        }
+        return nodes(s);
+      }
+    };
+    exports2.QpmQtDependencyProvider = QpmQtDependencyProvider;
+    function nodes(s) {
+      const icon = s.state === "ready" ? "pass-filled" : s.state === "disabled" ? "circle-slash" : s.state === "error" ? "error" : "warning";
+      return [
+        { id: "project", label: s.projectName, description: `${s.configuredPackages} package declaration(s)`, icon: "package", tooltip: s.manifestPath },
+        { id: "state", label: "State", description: s.state, icon, tooltip: s.message },
+        { id: "managers", label: "Managers", description: s.managers.join(" + ") || "none", icon: "extensions" },
+        { id: "vcpkg", label: "vcpkg", description: s.vcpkgPath || "not found", icon: s.vcpkgPath ? "pass" : "warning" },
+        { id: "conan", label: "Conan 2", description: s.conanPath || "not found", icon: s.conanPath ? "pass" : "warning" },
+        { id: "pkg", label: "pkg-config", description: s.pkgConfigPath || "not found", icon: s.pkgConfigPath ? "pass" : "warning" },
+        { id: "configure", label: "Configure dependency managers", description: "Enable vcpkg, Conan 2 or pkg-config", icon: "settings-gear", command: "qpm.dependencies.configure" },
+        { id: "detect", label: "Detect dependency tools", description: "Refresh executable readiness", icon: "search", command: "qpm.dependencies.detectTools" },
+        { id: "generate", label: "Generate dependency manifests", description: "vcpkg.json, conanfile.txt and integration metadata", icon: "file-code", command: "qpm.dependencies.generateManifests" },
+        { id: "install", label: "Install / synchronize dependencies", description: "Run enabled package managers", icon: "cloud-download", command: "qpm.dependencies.install" },
+        { id: "report", label: "Open dependency report", description: s.lastSync ? `Last sync ${s.lastSync}` : "No integration generated yet", icon: "preview", command: "qpm.dependencies.openReport" },
+        { id: "reveal", label: "Reveal dependency output", description: s.outputDirectory, icon: "folder-opened", command: "qpm.dependencies.revealOutput" },
+        { id: "clean", label: "Clean dependency output", description: "Remove generated integration and package-manager output", icon: "trash", command: "qpm.dependencies.clean" }
+      ];
+    }
+  }
+});
+
 // out/extension.js
 var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
   if (k2 === void 0) k2 = k;
@@ -76630,6 +78782,10 @@ var qpmQtPublicationService_1 = require_qpmQtPublicationService();
 var qpmQtPublicationProvider_1 = require_qpmQtPublicationProvider();
 var qpmQmlLanguageService_1 = require_qpmQmlLanguageService();
 var qpmQmlLanguageProvider_1 = require_qpmQmlLanguageProvider();
+var qpmQtPythonService_1 = require_qpmQtPythonService();
+var qpmQtPythonProvider_1 = require_qpmQtPythonProvider();
+var qpmQtDependencyService_1 = require_qpmQtDependencyService();
+var qpmQtDependencyProvider_1 = require_qpmQtDependencyProvider();
 var qtProjectManifest_1 = require_qtProjectManifest();
 async function activate(context) {
   const output = vscode.window.createOutputChannel("Qt Project Manager");
@@ -76646,7 +78802,9 @@ async function activate(context) {
   const projectSettings = new qpmProjectSettingsService_1.QpmProjectSettingsService(workspaces, parser, output);
   const qtTools = new qpmQtToolsService_1.QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new qpmQmlLanguageService_1.QpmQmlLanguageService(workspaces, qtInstallations, output);
-  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output);
+  const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output);
+  const qtDependencies = new qpmQtDependencyService_1.QpmQtDependencyService(workspaces, output);
+  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output, qtPython, qtDependencies);
   const debugging = new qpmQtDebugService_1.QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new qpmQtAndroidService_1.QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new qpmQtAppleService_1.QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -76698,6 +78856,12 @@ async function activate(context) {
   const qtPublicationProvider = new qpmQtPublicationProvider_1.QpmQtPublicationProvider(publication);
   const qtPublicationView = vscode.window.createTreeView("qpm.publication", { treeDataProvider: qtPublicationProvider, showCollapseAll: false });
   qtPublicationProvider.attachView(qtPublicationView);
+  const qtPythonProvider = new qpmQtPythonProvider_1.QpmQtPythonProvider(qtPython);
+  const qtPythonView = vscode.window.createTreeView("qpm.python", { treeDataProvider: qtPythonProvider, showCollapseAll: false });
+  qtPythonProvider.attachView(qtPythonView);
+  const qtDependencyProvider = new qpmQtDependencyProvider_1.QpmQtDependencyProvider(qtDependencies);
+  const qtDependencyView = vscode.window.createTreeView("qpm.dependencies", { treeDataProvider: qtDependencyProvider, showCollapseAll: false });
+  qtDependencyProvider.attachView(qtDependencyView);
   const completionProvider = new qpmSymbolService_1.QpmCompletionProvider(symbols);
   const functionPanels = new qpmFunctionPanelService_1.QpmFunctionPanelService();
   const colorValues = new qpmColorValueService_1.QpmColorValueService();
@@ -76724,9 +78888,19 @@ async function activate(context) {
     const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : void 0;
     const targetKey = targetType === "Dynamic Link Library" ? "dll" : targetType === "Static Library" ? "lib" : targetType === "Executable" ? "exe" : "none";
     const nativeQtProjectActive = !!activeRef?.exists && (0, qtProjectManifest_1.isQtProjectManifestPath)(activeRef.absolutePath);
+    let qtPythonProjectActive = false;
+    if (nativeQtProjectActive && activeRef?.exists) {
+      try {
+        qtPythonProjectActive = (0, qtProjectManifest_1.isQtPythonProject)((0, qtProjectManifest_1.readQtProjectManifest)(activeRef.absolutePath));
+      } catch {
+        qtPythonProjectActive = false;
+      }
+    }
     void vscode.commands.executeCommand("setContext", "qpm.buildMode", builds.buildMode);
     void vscode.commands.executeCommand("setContext", "qpm.targetType", targetKey);
     void vscode.commands.executeCommand("setContext", "qpm.nativeQtProjectActive", nativeQtProjectActive);
+    void vscode.commands.executeCommand("setContext", "qpm.qtPythonProjectActive", qtPythonProjectActive);
+    void vscode.commands.executeCommand("setContext", "qpm.qtCppProjectActive", nativeQtProjectActive && !qtPythonProjectActive);
   };
   const updateStatusBar = () => {
     const targetType = workspaces.activeProject?.targetType;
@@ -76741,14 +78915,27 @@ async function activate(context) {
       } catch {
       }
     }
-    statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : "$(versions) Select Qt";
-    statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : "Select the Qt installation used by Qt Project Manager.";
-    statusBarItems[6].text = "$(debug-alt-small) Debug";
-    statusBarItems[6].tooltip = "Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).";
-    statusBarItems[7].text = modeText;
-    statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
-    statusBarItems[8].text = targetText;
-    statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+    const pythonProject = isQtPythonActive();
+    if (pythonProject) {
+      const pythonStatus = qtPython.status;
+      statusBarItems[0].text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : "$(symbol-class) PySide6";
+      statusBarItems[0].tooltip = pythonStatus?.message ?? "Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.";
+      statusBarItems[6].text = "$(debug-alt-small) Python Debug";
+      statusBarItems[6].tooltip = "Build and debug the active PySide6 application with the VS Code Python debugger.";
+      statusBarItems[7].text = "PY";
+      statusBarItems[7].tooltip = "Qt for Python project. Build variants are managed by Python deployment tooling.";
+      statusBarItems[8].text = "APP";
+      statusBarItems[8].tooltip = "Qt for Python application target.";
+    } else {
+      statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : "$(versions) Select Qt";
+      statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : "Select the Qt installation used by Qt Project Manager.";
+      statusBarItems[6].text = "$(debug-alt-small) Debug";
+      statusBarItems[6].tooltip = "Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).";
+      statusBarItems[7].text = modeText;
+      statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
+      statusBarItems[8].text = targetText;
+      statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+    }
     const show = vscode.workspace.getConfiguration("qpm").get("showPersistentStatusBarActions", true);
     for (const item of statusBarItems) {
       if (show)
@@ -76774,7 +78961,17 @@ async function activate(context) {
   };
   const isAndroidPlatformActive = () => android.activeProfile?.type === "android";
   const isApplePlatformActive = () => !!apple.activeProfile && (0, qpmQtAppleService_1.isApplePlatform)(apple.activeProfile.type);
-  const runGdbDebug = async () => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
+  const isQtPythonActive = () => {
+    const ref = workspaces.activeProjectRef;
+    if (!ref?.exists || !(0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath))
+      return false;
+    try {
+      return (0, qtProjectManifest_1.isQtPythonProject)((0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath));
+    } catch {
+      return false;
+    }
+  };
+  const runGdbDebug = async () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
   context.subscriptions.push(
     output,
     workspaces,
@@ -76811,6 +79008,12 @@ async function activate(context) {
     qmlLanguage,
     qmlLanguageProvider,
     qmlLanguageView,
+    qtPython,
+    qtPythonProvider,
+    qtPythonView,
+    qtDependencies,
+    qtDependencyProvider,
+    qtDependencyView,
     qtAndroidProvider,
     qtAndroidView,
     qtAppleProvider,
@@ -76857,6 +79060,8 @@ async function activate(context) {
       qtAndroidProvider.refresh();
       qtAppleProvider.refresh();
       qmlLanguageProvider.refresh();
+      qtPythonProvider.refresh();
+      void qtPython.refresh().then(() => updateStatusBar());
       void qmlLanguage.autoStartIfNeeded();
       void testing.refresh();
       void builds.restoreBuildModeFromActiveProject().then(() => {
@@ -76889,8 +79094,14 @@ async function activate(context) {
       const manifestPath = await qtProjects.createProjectWizard();
       if (manifestPath) {
         await workspaces.load(manifestPath);
-        await builds.prepareNativeQtGeneratedFiles();
-        await cppTools.synchronizeNativeProject(workspaces.currentWorkspace, { force: true, ensureWorkspaceFolder: true, reason: "native Qt project created" });
+        const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(manifestPath);
+        if ((0, qtProjectManifest_1.isQtPythonProject)(manifest)) {
+          await qtPython.bootstrap(manifestPath, true);
+          qtPythonProvider.refresh();
+        } else {
+          await builds.prepareNativeQtGeneratedFiles();
+          await cppTools.synchronizeNativeProject(workspaces.currentWorkspace, { force: true, ensureWorkspaceFolder: true, reason: "native Qt project created" });
+        }
       }
     }),
     register("qpm.createSdlWorkspaceProject", () => workspaces.createSdlWorkspaceProject()),
@@ -77130,8 +79341,8 @@ async function activate(context) {
     register("qpm.chooseRunAction", () => builds.chooseRunAction()),
     register("qpm.runWithoutBuild", () => isAndroidPlatformActive() ? android.runApplication() : isApplePlatformActive() ? platforms.runActive() : builds.runWithoutBuild()),
     register("qpm.debugWithGdb", () => runGdbDebug()),
-    register("qpm.startQtDebugProfile", () => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()),
-    register("qpm.startQtDebugProfileWithoutBuild", () => isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })),
+    register("qpm.startQtDebugProfile", () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()),
+    register("qpm.startQtDebugProfileWithoutBuild", () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })),
     register("qpm.attachQtProcess", () => debugging.attachToLocalProcess()),
     register("qpm.debugQtCoreDump", () => debugging.debugCoreDump()),
     register("qpm.attachQmlDebugger", () => debugging.attachQmlDebugger()),
@@ -77403,6 +79614,79 @@ async function activate(context) {
       await profiling.cleanOutput();
       qtProfilingProvider.refresh();
     }),
+    register("qpm.python.bootstrap", async () => {
+      await qtPython.bootstrapActiveProject(true);
+      qtPythonProvider.refresh();
+      updateStatusBar();
+    }),
+    register("qpm.python.selectInterpreter", async () => {
+      await qtPython.selectInterpreter();
+      qtPythonProvider.refresh();
+      updateStatusBar();
+    }),
+    register("qpm.python.createVirtualEnvironment", async () => {
+      await qtPython.createVirtualEnvironment();
+      qtPythonProvider.refresh();
+      updateStatusBar();
+    }),
+    register("qpm.python.installPySide6", async () => {
+      await qtPython.installPySide6();
+      qtPythonProvider.refresh();
+      updateStatusBar();
+    }),
+    register("qpm.python.build", async () => {
+      await qtPython.build();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.run", async () => {
+      await qtPython.run();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.debug", async () => {
+      await qtPython.debug();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.clean", async () => {
+      await qtPython.clean();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.compileUi", async () => {
+      await qtPython.compileUiFiles();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.compileResources", async () => {
+      await qtPython.compileResourceFiles();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.openDesigner", (target) => qtPython.openDesigner(void 0, target)),
+    register("qpm.python.deploy", async () => {
+      await qtPython.deploy();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.deployAndroid", async () => {
+      await qtPython.deployAndroid();
+      qtPythonProvider.refresh();
+    }),
+    register("qpm.python.openReport", () => qtPython.openReport()),
+    register("qpm.python.revealEnvironment", () => qtPython.revealEnvironment()),
+    register("qpm.dependencies.configure", async () => {
+      await qtDependencies.configure();
+      qtDependencyProvider.refresh?.();
+    }),
+    register("qpm.dependencies.detectTools", async () => {
+      await qtDependencies.detectTools();
+    }),
+    register("qpm.dependencies.generateManifests", async () => {
+      await qtDependencies.generateManifests();
+    }),
+    register("qpm.dependencies.install", async () => {
+      await qtDependencies.install();
+    }),
+    register("qpm.dependencies.openReport", () => qtDependencies.openReport()),
+    register("qpm.dependencies.revealOutput", () => qtDependencies.revealOutput()),
+    register("qpm.dependencies.clean", async () => {
+      await qtDependencies.clean();
+    }),
     register("qpm.openWorkspaceFile", () => builds.openWorkspaceFile()),
     register("qpm.setActiveProject", (node) => workspaces.setActiveProject(node?.ref)),
     register("qpm.buildProject", (node) => node ? builds.build(false, node.ref) : void 0),
@@ -77469,7 +79753,7 @@ async function activate(context) {
     register("qpm.revealFileSymbol", (symbol) => symbol ? fileSymbolsProvider.reveal(symbol) : void 0),
     register("qpm.saveFile", (node) => node ? workspaces.saveFile(node.file.absolutePath) : void 0),
     register("qpm.openPanelFile", (node) => node ? builds.openPanelFile(node.file.absolutePath) : void 0),
-    register("qpm.openQtDesigner", (target) => qtProjects.openDesigner(target)),
+    register("qpm.openQtDesigner", (target) => isQtPythonActive() ? qtPython.openDesigner(void 0, target) : qtProjects.openDesigner(target)),
     register("qpm.openPanelPathFile", (filePath) => filePath ? builds.openPanelFile(filePath) : void 0),
     register("qpm.openFunctionPanel", (node) => node ? functionPanels.open(node.file.absolutePath) : void 0),
     register("qpm.insertSnippet", () => templates.insertSnippet()),
@@ -77523,6 +79807,7 @@ async function activate(context) {
   await builds.restoreBuildModeFromActiveProject();
   await testing.refresh();
   qtQualityProvider.refresh();
+  await qtPython.refresh();
   void qmlLanguage.autoStartIfNeeded();
   void runPostActivationSetup(cppTools, workspaces, output);
   const activeEditor = vscode.window.activeTextEditor;

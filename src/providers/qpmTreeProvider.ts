@@ -183,6 +183,7 @@ function contextValueForFile(file: QpmProjectFile): string {
     : extension === '.ui' ? 'form'
       : extension === '.qrc' ? 'resource'
         : extension === '.qml' || extension === '.js' || extension === '.mjs' ? 'qml'
+          : extension === '.py' || extension === '.pyi' ? 'python'
           : extension === '.ts' || extension === '.qm' ? 'translation'
             : isPanel(file) ? 'panel'
               : isFunctionPanel(file) ? 'functionPanel'
@@ -224,6 +225,8 @@ function iconForFile(file: QpmProjectFile): string {
     case '.ui': return 'layout';
     case '.qrc': return 'package';
     case '.qml': return 'symbol-color';
+    case '.py':
+    case '.pyi': return 'file-code';
     case '.ts':
     case '.qm': return 'globe';
     case '.uir': return 'preview';

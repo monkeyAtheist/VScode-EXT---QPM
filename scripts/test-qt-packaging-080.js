@@ -9,7 +9,7 @@ const packaging = require('../out/services/qpmQtPackagingModel.js');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-packaging-080-'));
 const manifestPath = path.join(root, 'ProductApp.qtproject.json');
 const manifest = manifestApi.createDefaultQtProjectManifest('ProductApp', 'widgets-application');
-assert.strictEqual(manifest.schemaVersion, 15);
+assert.strictEqual(manifest.schemaVersion, 17);
 assert.strictEqual(manifest.packaging.productName, 'ProductApp');
 assert.strictEqual(manifest.packaging.productVersion, '1.0.0');
 assert.strictEqual(manifest.packaging.archiveFormat, 'zip');
@@ -45,7 +45,7 @@ delete legacy.packaging;
 fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
 assert.strictEqual(manifestApi.migrateQtProjectManifestFile(legacyPath), true);
 const migrated = manifestApi.readQtProjectManifest(legacyPath);
-assert.strictEqual(migrated.schemaVersion, 15);
+assert.strictEqual(migrated.schemaVersion, 17);
 assert.strictEqual(migrated.packaging.productName, 'ProductApp');
 assert.ok(fs.existsSync(`${legacyPath}.schema-v7.backup`));
 

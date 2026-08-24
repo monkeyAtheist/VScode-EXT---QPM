@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const settingsSource = fs.readFileSync(path.join(root, 'src', 'views', 'qtProjectSettingsPanel.ts'), 'utf8');
 
-assert.strictEqual(pkg.version, '0.15.2');
+assert.strictEqual(pkg.version, '0.17.2');
 
 const commands = pkg.contributes.commands || [];
 const commandIds = commands.map((entry) => entry.command);

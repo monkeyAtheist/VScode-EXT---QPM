@@ -1,3 +1,73 @@
+# Changelog
+
+## 0.17.2
+
+- Fixes the transient Windows console that still appeared when opening a `.ui` file from a Qt for Python / PySide6 project.
+- `pyside6-designer` is now launched with `windowsHide: true`, `shell: false`, and without a detached Windows console.
+- Adds explicit launch-error diagnostics to the Qt Project Manager output channel.
+- The C++ Designer/Qt Creator launcher behavior from 0.17.1 is unchanged.
+
+## 0.17.1
+
+- Hides the transient Windows console when QPM launches Qt Widgets Designer or Qt Creator for a `.ui` file.
+- New Qt Widgets and PySide6 Widgets starter forms no longer receive a top-level `QVBoxLayout` automatically, matching the free-positioning behavior of a blank Qt Creator form.
+- Existing `.ui` files are never rewritten; use **Break Layout** (`Ctrl+0`) in Qt Widgets Designer when a layout already controls widget geometry.
+- Documents how to select `qtcreator.exe` as the QPM Designer launcher when the integrated Qt Creator Design mode is preferred.
+
+# 0.17.0
+
+### Added
+
+- Added first-class native C/C++ dependency-manager integration for **vcpkg**, **Conan 2** and **pkg-config/pkgconf**.
+- Added schema-v17 `dependencies` persistence with manager-specific tool paths, manifests, package requirements, triplets/profiles, overlays, search paths and build-integration settings.
+- Added a dedicated **Qt Dependencies** tree view with configuration, tool detection, manifest generation, synchronization, reporting, output reveal and clean actions.
+- Added project-local `vcpkg.json` generation and manifest-mode installation with target/host triplets and overlay support.
+- Added Conan 2 `conanfile.txt` generation using `CMakeDeps`, `CMakeToolchain`, `PkgConfigDeps` and `cmake_layout`.
+- Added pkg-config flag resolution and normalized dependency integration under `.qpm/dependencies/integration.json`.
+- Added dependency include paths, library paths, libraries and compiler/linker flags to the direct and qmake backends.
+- Added generated CMake toolchain arguments, `find_package(...)` entries and imported link targets to the CMake backend.
+- Added optional automatic dependency synchronization before native builds.
+- Added dependency-manager controls and contextual help to Qt Project Settings and editor/Explorer QPM menus.
+
+### Changed
+
+- Native project manifests now use schema version 17. Existing projects migrate with dependency management disabled by default.
+- Qt for Python projects remain isolated from the C/C++ dependency managers and continue using Python package/environment tooling.
+
+### Validation
+
+- Added schema/default/migration coverage from schema 16 to schema 17.
+- Added vcpkg, Conan 2, pkg-config, direct/qmake/CMake integration and command/view/settings source coverage.
+- Full historical regression through QPM 0.17.0 passes.
+
+# 0.16.0
+
+### Added
+
+- Added first-class **Qt for Python / PySide6** project support alongside the existing Qt/C++ workflow.
+- Added native `python-widgets-application` and `python-quick-application` project kinds with schema-v16 persistence.
+- Added project-local Python interpreter and virtual-environment management, including automatic `.venv` creation and VS Code interpreter synchronization.
+- Added optional PySide6 installation through the selected interpreter with version detection and environment reporting.
+- Added `pyside6-project`, `pyside6-designer`, `pyside6-uic`, `pyside6-rcc`, `pyside6-deploy`, `pyside6-android-deploy`, Linguist and QML-tool discovery.
+- Added a dedicated **Qt for Python** QPM tree view with environment, build, run, debug, clean, Designer, UI/resource generation, deployment and report actions.
+- Added PySide6 project scaffolding with `main.py`, `pyproject.toml`, Qt Widgets `.ui` files or Qt Quick/QML starters.
+- Added Qt for Python settings to the central Qt Project Settings page, including tool overrides, environment variables, entry point, UI mode and deployment arguments.
+- Routed generic QPM Build, Run, Debug and Clean commands through the Python backend when the active native project is a Qt for Python project.
+- Added `debugpy` launch configuration generation for PySide6 applications.
+
+### Changed
+
+- Native project manifests now use schema version 16 and include a `python` configuration block plus registered Python source files.
+- Existing C++/Qt projects migrate with `python.enabled = false`, preserving their current behavior.
+- Qt Quick Python projects enable the existing QML language-server configuration by default.
+- Status-bar and project-view state now distinguish C++ targets from Qt for Python targets.
+
+### Validation
+
+- Added schema/default/migration coverage from schema 15 to schema 16.
+- Added command, view, menu, settings, project-template and Python backend source coverage.
+- Full regression from QPM 0.2.0 through QPM 0.16.0 passes.
+
 # 0.15.2
 
 ### Fixed

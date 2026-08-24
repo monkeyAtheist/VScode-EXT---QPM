@@ -3243,8 +3243,8 @@ function qtDesignerUi(className: string, widgetClass: string): string {
   const width = isMainWindow ? 800 : 640;
   const height = isMainWindow ? 500 : 400;
   const central = isMainWindow
-    ? `\n  <widget class="QWidget" name="centralWidget">\n   <layout class="QVBoxLayout" name="verticalLayout">\n    <item>\n     <widget class="QLabel" name="titleLabel">\n      <property name="text"><string>${className}</string></property>\n      <property name="alignment"><set>Qt::AlignCenter</set></property>\n     </widget>\n    </item>\n   </layout>\n  </widget>\n  <widget class="QMenuBar" name="menuBar"/>\n  <widget class="QStatusBar" name="statusBar"/>`
-    : `\n  <layout class="QVBoxLayout" name="verticalLayout">\n   <item>\n    <widget class="QLabel" name="titleLabel">\n     <property name="text"><string>${className}</string></property>\n     <property name="alignment"><set>Qt::AlignCenter</set></property>\n    </widget>\n   </item>\n  </layout>`;
+    ? `\n  <widget class="QWidget" name="centralWidget"/>\n  <widget class="QMenuBar" name="menuBar"/>\n  <widget class="QStatusBar" name="statusBar"/>`
+    : '';
   return `<?xml version="1.0" encoding="UTF-8"?>\n<ui version="4.0">\n <class>${className}</class>\n <widget class="${widgetClass}" name="${className}">\n  <property name="geometry">\n   <rect><x>0</x><y>0</y><width>${width}</width><height>${height}</height></rect>\n  </property>\n  <property name="windowTitle"><string>${className}</string></property>${central}\n </widget>\n <resources/>\n <connections/>\n</ui>\n`;
 }
 

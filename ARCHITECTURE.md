@@ -1,13 +1,13 @@
 # QPM architecture
 
-## Schema v15 persistence
+## Schema v17 persistence
 
 Native project manifests persist `profiles.active.buildMode`. The manifest is authoritative for native Qt projects; the VS Code `qpm.buildMode` setting is a UI/cache mirror restored whenever the active workspace changes. Debug profiles derive their variant from the selected build profile and their architecture from the persisted project mode plus resolved kit evidence.
 
 
 ## Project formats
 
-`*.qtproject.json` is the native Qt project format. Schema version 15 is implemented in `src/model/qtProjectManifest.ts` and remains independent from CMake.
+`*.qtproject.json` is the native Qt project format. Schema version 17 is implemented in `src/model/qtProjectManifest.ts` and remains independent from CMake.
 
 A native manifest contains:
 
@@ -26,8 +26,10 @@ A native manifest contains:
 - Android SDK/NDK/JDK, ABI, package, device, emulator and signing settings.
 - Apple platform, Xcode, simulator, signing and notarization settings.
 - MSIX, App Installer, WinGet, release metadata and publication-target settings.
+- Qt for Python / PySide6 interpreter, virtual-environment, project-file, tooling and deployment settings.
+- vcpkg, Conan 2 and pkg-config dependency-manager settings.
 
-Schema-version-1 through schema-version-14 manifests are normalized and migrated automatically. A sibling backup is written before persistence. Legacy top-level `qt` and `build` values are maintained as compatibility mirrors.
+Schema-version-1 through schema-version-16 manifests are normalized and migrated automatically. A sibling backup is written before persistence. Legacy top-level `qt` and `build` values are maintained as compatibility mirrors.
 
 Legacy `.cws/.prj` documents remain supported through `QpmParser` as generic C/C++ compatibility projects.
 
@@ -59,6 +61,10 @@ Legacy `.cws/.prj` documents remain supported through `QpmParser` as generic C/C
 - `QpmQtInstallerService`: generates Qt Installer Framework, Inno Setup and NSIS projects, compiles installers, builds Qt IFW repositories and signs distribution artifacts.
 - `QpmQtPublicationService`: generates MSIX/App Installer and WinGet metadata, assembles self-contained release bundles, writes checksums/update manifests and publishes through local, SSH or GitHub backends.
 - `QpmQtPublicationProvider`: exposes publication readiness, source/package generation, release assembly, upload, reporting and cleanup actions in the Qt Publication & Updates tree.
+- `QpmQtPythonService`: owns Qt for Python / PySide6 interpreter discovery, virtual environments, PySide6 installation, build/run/debug, Designer, UI/resource compilation and deployment workflows.
+- `QpmQtPythonProvider`: exposes Python/PySide6 readiness and environment/build/run/debug/deployment actions in the Qt for Python tree.
+- `QpmQtDependencyService`: owns native C/C++ vcpkg, Conan 2 and pkg-config discovery, manifest generation, synchronization and normalized build integration.
+- `QpmQtDependencyProvider`: exposes dependency-manager state, tool discovery, synchronization, reports and cleanup in the Qt Dependencies tree.
 - `QpmQtProfilingService`: resolves profiler tools, launches QML/CPU/memory/system-trace workflows, parses Cppcheck and Valgrind XML, publishes diagnostics and manages generated reports.
 - `QpmQtProfilingProvider`: exposes profiler readiness, run/stop/open/reveal/clean actions in the Qt Profiling & Diagnostics tree.
 - `QpmQtAndroidService`: resolves Android SDK/NDK/JDK and Qt Android tools, generates isolated CMake package projects, builds APK/AAB/AAR outputs and drives ADB device, emulator, install, run, debug-wait and logcat workflows.
@@ -78,6 +84,22 @@ Debug command -> active debug profile -> referenced build/run profiles and kit
 
 The selected build profile determines the direct/qmake/CMake backend, C++ standard, configure/build/clean arguments, presets, parallelism, output directories, unity/PCH/response-file options and variant flags. Direct GNU response files are emitted only near the platform command-line limit and normalize drive-qualified Windows paths to forward slashes before GCC/MinGW parses them. The referenced kit profile determines the Qt installation, compiler, debugger, environment script, qmake/CMake executables, build tool and generator. Run and deployment settings no longer need to be global to the workspace.
 
+
+
+## Dependency-manager integration
+
+Native C++ projects can enable vcpkg, Conan 2 and/or pkg-config in the schema-v17 `dependencies` block. `QpmQtDependencyService` writes a normalized `.qpm/dependencies/integration.json` file containing include/library directories, libraries, compiler/linker flags, CMake configure arguments, CMake package/target metadata and environment additions.
+
+The build dispatch consumes that file before planning a native build:
+
+```text
+vcpkg / Conan / pkg-config
+        -> QpmQtDependencyService
+        -> .qpm/dependencies/integration.json
+        -> direct | qmake | CMake backend
+```
+
+Automatic installation is opt-in. When `autoInstallBeforeBuild` is disabled, QPM only generates/resolves integration data and never executes a package-manager installation as a side effect of Build. Qt for Python projects bypass this layer and use the Python environment manager instead.
 
 ## Backend dispatch
 
@@ -266,3 +288,15 @@ The Apple provider is read-only apart from command dispatch. Durable configurati
 `QpmBuildCleanup` handles direct-build cleaning independently from code generation. The preferred strategy renames the complete mode directory to a unique pending path and removes that pending tree with bounded retries. It intentionally does not recreate `generated` or `obj` during the clean command: directory creation is owned by the next build and its retry-aware `ensureDirectory()` path. If Windows refuses the rename, QPM falls back to in-place removal while preserving the `generated` and `obj` roots and deleting only their contents.
 
 `QpmBuildService` retains process handles for applications it launches. Clean, rebuild and relink operations stop the tracked process, stop a matching active VS Code debug session, and on Windows query processes by exact executable path before modifying the target directory. This avoids both executable locks and the delete/recreate race with IntelliSense.
+
+## Qt for Python backend
+
+Native Qt for Python projects use the same workspace, manifest and project-selection infrastructure as C++ projects but dispatch generic build/run/debug/clean actions to `QpmQtPythonService`. The project-local `python` configuration resolves an explicit interpreter first, then the configured virtual environment, the VS Code Python interpreter and finally a host Python candidate.
+
+The default workflow is:
+
+```text
+project creation -> .venv -> PySide6 readiness -> pyside6-project -> run/debug/deploy
+```
+
+Widgets projects can keep Designer `.ui` files and generate `ui_*.py` through `pyside6-uic`; resource files use `pyside6-rcc`. Quick projects keep QML sources in the normal manifest file lists and can reuse QPM's `qmlls` lifecycle. Desktop deployment is delegated to the PySide6 deployment tools rather than the C++ packaging backend.

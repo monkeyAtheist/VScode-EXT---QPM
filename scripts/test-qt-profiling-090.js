@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.15.2');
+assert.strictEqual(pkg.version, '0.17.2');
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of [
   'qpm.profileQmlApplication', 'qpm.profileCpu', 'qpm.profileMemory', 'qpm.runCppcheck',
@@ -38,7 +38,7 @@ Module._load = function patched(request, parent, isMain) {
     const model = require('../out/model/qtProjectManifest');
     const profiling = require('../out/services/qpmQtProfilingService');
     const manifest = model.createDefaultQtProjectManifest('ProfileApp', 'quick-application');
-    assert.strictEqual(manifest.schemaVersion, 15);
+    assert.strictEqual(manifest.schemaVersion, 17);
     assert.strictEqual(manifest.profiling.outputDirectory, '.qpm/profiling');
     assert.strictEqual(manifest.profiling.qml.port, 3769);
     assert.strictEqual(manifest.profiling.cpu.tool, 'auto');
@@ -54,7 +54,7 @@ Module._load = function patched(request, parent, isMain) {
     fs.writeFileSync(manifestPath, JSON.stringify(legacy, null, 2));
     assert.strictEqual(model.migrateQtProjectManifestFile(manifestPath), true);
     const migrated = model.readQtProjectManifest(manifestPath);
-    assert.strictEqual(migrated.schemaVersion, 15);
+    assert.strictEqual(migrated.schemaVersion, 17);
     assert(migrated.profiling);
     assert(fs.existsSync(`${manifestPath}.schema-v8.backup`));
 
@@ -86,7 +86,7 @@ Module._load = function patched(request, parent, isMain) {
     assert(extensionSource.includes('new QpmQtProfilingService'));
     assert(extensionSource.includes('new QpmQtProfilingProvider'));
     const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-    assert.strictEqual(schema.properties.schemaVersion.const, 15);
+    assert.strictEqual(schema.properties.schemaVersion.const, 17);
     assert(schema.properties.profiling);
     console.log('QPM 0.9.0 profiling and diagnostics tests: PASS');
   } finally {

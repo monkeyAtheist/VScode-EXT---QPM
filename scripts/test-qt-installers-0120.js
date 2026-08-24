@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.15.2');
+assert.strictEqual(pkg.version, '0.17.2');
 
 const commandIds = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of [
@@ -51,7 +51,7 @@ try {
 
   const manifestPath = path.join(temp, 'InstallerApp.qtproject.json');
   const manifest = manifestApi.createDefaultQtProjectManifest('InstallerApp', 'widgets-application');
-  assert.strictEqual(manifest.schemaVersion, 15);
+  assert.strictEqual(manifest.schemaVersion, 17);
   assert.strictEqual(manifest.packaging.installer.enabled, true);
   assert.strictEqual(manifest.packaging.installer.backend, 'qt-ifw');
   assert.strictEqual(manifest.packaging.installer.qtIfw.mode, 'offline');
@@ -131,12 +131,12 @@ try {
   fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
   assert.strictEqual(manifestApi.migrateQtProjectManifestFile(legacyPath), true);
   const migrated = manifestApi.readQtProjectManifest(legacyPath);
-  assert.strictEqual(migrated.schemaVersion, 15);
+  assert.strictEqual(migrated.schemaVersion, 17);
   assert.strictEqual(migrated.packaging.installer.backend, 'qt-ifw');
   assert(fs.existsSync(`${legacyPath}.schema-v11.backup`));
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 15);
+  assert.strictEqual(schema.properties.schemaVersion.const, 17);
   assert(schema.properties.packaging.required.includes('installer'));
   const installerSchema = schema.properties.packaging.properties.installer;
   assert.deepStrictEqual(installerSchema.properties.backend.enum, ['qt-ifw', 'inno-setup', 'nsis']);

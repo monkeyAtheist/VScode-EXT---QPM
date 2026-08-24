@@ -17,6 +17,7 @@ import {
 import { QpmQtInstallation } from './qpmQtInstallationService';
 import { writeQtPackagingMetadata } from './qpmQtPackagingModel';
 import { describeAutoDetectedQtModules, effectiveQtModules } from './qpmQtModuleInference';
+import { readDependencyIntegration } from './qpmQtDependencyModel';
 
 export interface QtCodeGenerationStep {
   kind: 'moc-header' | 'moc-source' | 'uic' | 'rcc' | 'windres';
@@ -112,6 +113,7 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
   }
 
   const projectDirectory = path.dirname(manifestPath);
+  const dependencyIntegration = manifest.dependencies.enabled ? readDependencyIntegration(projectDirectory, manifest.dependencies.outputDirectory) : undefined;
   const files = resolveQtProjectFiles(manifestPath, manifest);
   const generatedDirectory = qtGeneratedDirectory(manifestPath, mode, manifest);
   const objectDirectory = qtObjectDirectory(manifestPath, mode, manifest);
@@ -141,7 +143,8 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     generatedDirectory,
     installation.includeDir,
     ...moduleOrder.map((module) => path.join(installation.includeDir, `Qt${module}`)),
-    ...(resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)!] : [])
+    ...(resolveQtMkspecDirectory(installation) ? [resolveQtMkspecDirectory(installation)!] : []),
+    ...(dependencyIntegration?.includeDirectories ?? [])
   ]);
   const modeSettings = buildProfile;
   const guiApplication = manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
@@ -282,13 +285,13 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     precompiledHeaderCopyPath,
     precompiledHeaderOutputPath,
     includeDirectories,
-    libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry))]),
+    libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry)), ...(dependencyIntegration?.libraryDirectories ?? [])]),
     defines,
-    compilerFlags: unique([...(modeSettings.compilerFlags ?? [])]),
-    linkerFlags: unique([...(modeSettings.linkerFlags ?? [])]),
+    compilerFlags: unique([...(modeSettings.compilerFlags ?? []), ...(dependencyIntegration?.compilerFlags ?? [])]),
+    linkerFlags: unique([...(modeSettings.linkerFlags ?? []), ...(dependencyIntegration?.linkerFlags ?? [])]),
     entryPointArguments: windowsEntryPoint.arguments,
     qtLibraries,
-    userLibraries: manifest.libraries,
+    userLibraries: unique([...manifest.libraries, ...(dependencyIntegration?.libraries ?? [])]),
     platformLibraries: windowsEntryPoint.platformLibraries,
     generationSteps,
     warnings,

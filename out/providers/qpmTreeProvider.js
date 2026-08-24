@@ -192,12 +192,13 @@ function contextValueForFile(file) {
         : extension === '.ui' ? 'form'
             : extension === '.qrc' ? 'resource'
                 : extension === '.qml' || extension === '.js' || extension === '.mjs' ? 'qml'
-                    : extension === '.ts' || extension === '.qm' ? 'translation'
-                        : isPanel(file) ? 'panel'
-                            : isFunctionPanel(file) ? 'functionPanel'
-                                : file.type === 'Include' ? 'header'
-                                    : file.type === 'Library' ? 'library'
-                                        : 'other';
+                    : extension === '.py' || extension === '.pyi' ? 'python'
+                        : extension === '.ts' || extension === '.qm' ? 'translation'
+                            : isPanel(file) ? 'panel'
+                                : isFunctionPanel(file) ? 'functionPanel'
+                                    : file.type === 'Include' ? 'header'
+                                        : file.type === 'Library' ? 'library'
+                                            : 'other';
     const build = file.excluded ? 'excluded' : 'included';
     const obj = file.type === 'CSource' ? (file.compileIntoObjectFile ? 'objOn' : 'objOff') : 'objNA';
     return `qpmFile.${kind}.${build}.${obj}`;
@@ -231,6 +232,8 @@ function iconForFile(file) {
         case '.ui': return 'layout';
         case '.qrc': return 'package';
         case '.qml': return 'symbol-color';
+        case '.py':
+        case '.pyi': return 'file-code';
         case '.ts':
         case '.qm': return 'globe';
         case '.uir': return 'preview';

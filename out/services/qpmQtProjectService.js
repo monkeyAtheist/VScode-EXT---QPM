@@ -56,11 +56,6 @@ class QpmQtProjectService {
     }
     async createProjectWizard(parentDirectory) {
         let installation = this.installations.getActive();
-        if (!installation) {
-            installation = await this.installations.select();
-            if (!installation)
-                return undefined;
-        }
         const selectedParent = parentDirectory
             ? vscode.Uri.file(parentDirectory)
             : (await vscode.window.showOpenDialog({
@@ -78,35 +73,45 @@ class QpmQtProjectService {
             { label: 'Qt Test application', description: 'Qt Test executable integrated with the VS Code Test Explorer', projectKind: 'test-application' },
             { label: 'Qt Quick Test application', description: 'Qt Quick Test runner with a QML TestCase', projectKind: 'quick-test-application' },
             { label: 'Qt shared library', description: 'C++ shared library using Qt Core', projectKind: 'shared-library' },
-            { label: 'Qt static library', description: 'C++ static library using Qt Core', projectKind: 'static-library' }
+            { label: 'Qt static library', description: 'C++ static library using Qt Core', projectKind: 'static-library' },
+            { label: 'Qt for Python — Widgets (PySide6)', description: 'Python Qt Widgets application using PySide6, Designer and pyproject.toml', projectKind: 'python-widgets-application' },
+            { label: 'Qt for Python — Quick (PySide6)', description: 'Python Qt Quick/QML application using PySide6 and pyproject.toml', projectKind: 'python-quick-application' }
         ], { title: 'Qt project template' });
         if (!template)
             return undefined;
+        const pythonProject = template.projectKind === 'python-widgets-application' || template.projectKind === 'python-quick-application';
+        if (!pythonProject && !installation) {
+            installation = await this.installations.select();
+            if (!installation)
+                return undefined;
+        }
         const name = await vscode.window.showInputBox({
             title: 'Qt project name',
             prompt: 'Directory, manifest and target name',
-            value: template.projectKind === 'widgets-application' ? 'QtWidgetsApp' : template.projectKind === 'quick-application' ? 'QtQuickApp' : template.projectKind === 'test-application' ? 'QtTestApp' : template.projectKind === 'quick-test-application' ? 'QtQuickTestApp' : 'QtApp',
+            value: template.projectKind === 'widgets-application' ? 'QtWidgetsApp' : template.projectKind === 'quick-application' ? 'QtQuickApp' : template.projectKind === 'python-widgets-application' ? 'PySideWidgetsApp' : template.projectKind === 'python-quick-application' ? 'PySideQuickApp' : template.projectKind === 'test-application' ? 'QtTestApp' : template.projectKind === 'quick-test-application' ? 'QtQuickTestApp' : 'QtApp',
             validateInput: validateProjectName
         });
         if (!name)
             return undefined;
         const defaultModules = (0, qtProjectManifest_1.createDefaultQtProjectManifest)(name, template.projectKind).qt.modules;
-        const selectedModules = await vscode.window.showQuickPick(MODULE_CHOICES.map((module) => ({
-            label: module,
-            picked: defaultModules.includes(module),
-            description: moduleAvailabilityDescription(installation.includeDir, module)
-        })), {
-            title: 'Qt modules',
-            placeHolder: 'Select modules linked by the direct build engine',
-            canPickMany: true
-        });
+        const selectedModules = pythonProject
+            ? defaultModules.map((label) => ({ label }))
+            : await vscode.window.showQuickPick(MODULE_CHOICES.map((module) => ({
+                label: module,
+                picked: defaultModules.includes(module),
+                description: moduleAvailabilityDescription(installation.includeDir, module)
+            })), {
+                title: 'Qt modules',
+                placeHolder: 'Select modules linked by the direct build engine',
+                canPickMany: true
+            });
         if (!selectedModules?.length)
             return undefined;
         const projectDirectory = path.join(selectedParent.fsPath, name);
         if (fs.existsSync(projectDirectory) && fs.readdirSync(projectDirectory).length > 0) {
             throw new Error(`The target directory is not empty: ${projectDirectory}`);
         }
-        const manifestPath = this.createProject(projectDirectory, name, template.projectKind, selectedModules.map((entry) => entry.label), installation.root);
+        const manifestPath = this.createProject(projectDirectory, name, template.projectKind, selectedModules.map((entry) => entry.label), pythonProject ? undefined : installation?.root);
         this.output.appendLine(`[Qt] Created ${template.label}: ${manifestPath}`);
         vscode.window.showInformationMessage(`Created Qt project ${name}.`);
         return manifestPath;
@@ -126,6 +131,8 @@ class QpmQtProjectService {
             const extension = path.extname(filePath).toLowerCase();
             if (['.c', '.cc', '.cpp', '.cxx'].includes(extension))
                 manifest.files.sources.push(relative);
+            else if (['.py', '.pyi'].includes(extension))
+                manifest.files.python.push(relative);
             else if (['.h', '.hh', '.hpp', '.hxx'].includes(extension))
                 manifest.files.headers.push(relative);
             else if (extension === '.ui')
@@ -408,7 +415,13 @@ async function askProfileIdentity(defaultName, defaultId) {
 }
 function writeStarterProject(projectDirectory, name, kind) {
     const files = [];
-    if (kind === 'widgets-application') {
+    if (kind === 'python-widgets-application') {
+        files.push(['main.py', pythonWidgetsMainSource(name)], ['mainwindow.ui', widgetsMainWindowUi(name)], ['pyproject.toml', pythonPyProjectToml(name, ['main.py', 'mainwindow.ui'])]);
+    }
+    else if (kind === 'python-quick-application') {
+        files.push(['main.py', pythonQuickMainSource()], ['qml/Main.qml', quickMainQml(name)], ['pyproject.toml', pythonPyProjectToml(name, ['main.py', 'qml/Main.qml'])]);
+    }
+    else if (kind === 'widgets-application') {
         files.push(['src/main.cpp', widgetsMainSource()], ['src/mainwindow.cpp', widgetsMainWindowSource()], ['include/mainwindow.h', widgetsMainWindowHeader()], ['forms/mainwindow.ui', widgetsMainWindowUi(name)], ['resources/resources.qrc', emptyResourceFile()]);
     }
     else if (kind === 'quick-application') {
@@ -436,18 +449,33 @@ function writeStarterProject(projectDirectory, name, kind) {
     return paths;
 }
 function writeProjectSupportFiles(projectDirectory, manifestPath, manifest) {
-    fs.writeFileSync(path.join(projectDirectory, '.gitignore'), 'build/\n.vscode/*.log\n', 'utf8');
+    const pythonProject = (0, qtProjectManifest_1.isQtPythonProject)(manifest);
+    fs.writeFileSync(path.join(projectDirectory, '.gitignore'), pythonProject ? '.venv/\n__pycache__/\n*.pyc\nbuild/\ndist/\n.vscode/*.log\n' : 'build/\n.vscode/*.log\n', 'utf8');
+    const details = pythonProject
+        ? `- Runtime: Qt for Python / PySide6\n- Python project: \`${manifest.python.projectFile}\`\n- Entry point: \`${manifest.python.entryPoint}\`\n- Virtual environment: \`${manifest.python.virtualEnvironment}\``
+        : `- Build system: direct Qt build (no CMake required)\n- Qt modules: ${manifest.qt.modules.join(', ')}\n- Generated files: \`${manifest.build.outputDirectory}/<mode>/${manifest.build.generatedDirectory}\``;
+    const usage = pythonProject
+        ? 'Use **Qt Project Manager: Prepare Python Environment**, **Build**, **Run**, **Debug**, **Open PySide6 Designer**, or **Deploy Qt for Python** from VS Code.'
+        : 'Use **Qt Project Manager: Build**, **Run**, **Open in Qt Designer**, or **Deploy Qt Runtime** from VS Code.';
     fs.writeFileSync(path.join(projectDirectory, 'README_QPM.md'), normalizeNewlines(`# ${manifest.name}
 
 Native Qt Project Manager project.
 
 - Project manifest: \`${path.basename(manifestPath)}\`
-- Build system: direct Qt build (no CMake required)
-- Qt modules: ${manifest.qt.modules.join(', ')}
-- Generated files: \`${manifest.build.outputDirectory}/<mode>/${manifest.build.generatedDirectory}\`
+${details}
 
-Use **Qt Project Manager: Build**, **Run**, **Open in Qt Designer**, or **Deploy Qt Runtime** from VS Code.
+${usage}
 `), 'utf8');
+}
+function pythonWidgetsMainSource(name) {
+    return `import sys\n\nfrom PySide6.QtWidgets import QApplication, QMainWindow\nfrom ui_mainwindow import Ui_MainWindow\n\n\nclass MainWindow(QMainWindow):\n    def __init__(self) -> None:\n        super().__init__()\n        self.ui = Ui_MainWindow()\n        self.ui.setupUi(self)\n\n\ndef main() -> int:\n    app = QApplication(sys.argv)\n    window = MainWindow()\n    window.setWindowTitle(${JSON.stringify(name)})\n    window.show()\n    return app.exec()\n\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n`;
+}
+function pythonQuickMainSource() {
+    return `import sys\nfrom pathlib import Path\n\nfrom PySide6.QtCore import QUrl\nfrom PySide6.QtGui import QGuiApplication\nfrom PySide6.QtQml import QQmlApplicationEngine\n\n\ndef main() -> int:\n    app = QGuiApplication(sys.argv)\n    engine = QQmlApplicationEngine()\n    qml_file = Path(__file__).resolve().parent / "qml" / "Main.qml"\n    engine.load(QUrl.fromLocalFile(str(qml_file)))\n    if not engine.rootObjects():\n        return -1\n    return app.exec()\n\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n`;
+}
+function pythonPyProjectToml(name, files) {
+    const encoded = files.map((entry) => JSON.stringify(entry)).join(', ');
+    return `[project]\nname = ${JSON.stringify(name)}\nversion = "1.0.0"\nrequires-python = ">=3.10"\ndependencies = ["PySide6>=6.9"]\n\n[tool.pyside6-project]\nfiles = [${encoded}]\n`;
 }
 function widgetsMainSource() {
     return `#include <QApplication>\n#include "mainwindow.h"\n\nint main(int argc, char *argv[])\n{\n    QApplication application(argc, argv);\n    MainWindow window;\n    window.show();\n    return application.exec();\n}\n`;
@@ -459,7 +487,7 @@ function widgetsMainWindowSource() {
     return `#include "mainwindow.h"\n#include "ui_mainwindow.h"\n\nMainWindow::MainWindow(QWidget *parent)\n    : QMainWindow(parent),\n      ui(std::make_unique<Ui::MainWindow>())\n{\n    ui->setupUi(this);\n}\n\nMainWindow::~MainWindow() = default;\n`;
 }
 function widgetsMainWindowUi(name) {
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<ui version="4.0">\n <class>MainWindow</class>\n <widget class="QMainWindow" name="MainWindow">\n  <property name="geometry">\n   <rect><x>0</x><y>0</y><width>800</width><height>500</height></rect>\n  </property>\n  <property name="windowTitle"><string>${escapeXml(name)}</string></property>\n  <widget class="QWidget" name="centralWidget">\n   <layout class="QVBoxLayout" name="verticalLayout">\n    <item>\n     <widget class="QLabel" name="titleLabel">\n      <property name="text"><string>${escapeXml(name)} — Qt Project Manager</string></property>\n      <property name="alignment"><set>Qt::AlignCenter</set></property>\n     </widget>\n    </item>\n   </layout>\n  </widget>\n  <widget class="QMenuBar" name="menuBar"/>\n  <widget class="QStatusBar" name="statusBar"/>\n </widget>\n <resources/>\n <connections/>\n</ui>\n`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<ui version="4.0">\n <class>MainWindow</class>\n <widget class="QMainWindow" name="MainWindow">\n  <property name="geometry">\n   <rect><x>0</x><y>0</y><width>800</width><height>500</height></rect>\n  </property>\n  <property name="windowTitle"><string>${escapeXml(name)}</string></property>\n  <widget class="QWidget" name="centralWidget"/>\n  <widget class="QMenuBar" name="menuBar"/>\n  <widget class="QStatusBar" name="statusBar"/>\n </widget>\n <resources/>\n <connections/>\n</ui>\n`;
 }
 function emptyResourceFile() {
     return `<RCC>\n    <qresource prefix="/"/>\n</RCC>\n`;
@@ -611,7 +639,7 @@ async function spawnDesigner(installation, target, output) {
         const child = (0, child_process_1.spawn)(executable, [target], {
             cwd: path.dirname(target),
             detached: true,
-            windowsHide: false,
+            windowsHide: process.platform === 'win32',
             stdio: 'ignore',
             shell: false,
             env: designerEnvironment(installation)
