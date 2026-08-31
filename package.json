@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.17.6",
+  "version": "0.30.0",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -101,6 +101,8 @@
     "onCommand:qpm.repairCppToolsProvider",
     "onCommand:qpm.enableAutomaticSuggestions",
     "onCommand:qpm.chooseBuildAction",
+    "onCommand:qpm.showBuildProblems",
+    "onCommand:qpm.showBuildTrace",
     "onCommand:qpm.clean",
     "onCommand:qpm.cleanProject",
     "onCommand:qpm.selectTargetType",
@@ -142,6 +144,7 @@
     "onCommand:qpm.showQtBuildPlan",
     "onCommand:qpm.deployQtRuntime",
     "onCommand:qpm.openQtDesigner",
+    "onCommand:qpm.convertQtFormToClass",
     "onCommand:qpm.selectQtDesigner",
     "onView:qpm.projectHealth",
     "onCommand:qpm.refreshQtTools",
@@ -301,7 +304,15 @@
     "onCommand:qpm.dependencies.install",
     "onCommand:qpm.dependencies.openReport",
     "onCommand:qpm.dependencies.revealOutput",
-    "onCommand:qpm.dependencies.clean"
+    "onCommand:qpm.dependencies.clean",
+    "onCommand:qpm.prepareQtDesignerWidgets",
+    "onCommand:qpm.prepareAndOpenQtDesignerWidgets",
+    "onCommand:qpm.configureQtDesignerWidgets",
+    "onCommand:qpm.buildQtDesignerWidgets",
+    "onCommand:qpm.installQtDesignerWidgets",
+    "onCommand:qpm.openQtDesignerWithCustomWidgets",
+    "onCommand:qpm.cleanQtDesignerWidgets",
+    "onCommand:qpm.revealQtDesignerWidgets"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -314,7 +325,7 @@
     "test:qt-direct": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js",
     "test:qt-ux": "npm run compile && node scripts/test-qt-ux-021.js",
     "test:qt-workspace": "npm run compile && node scripts/test-qt-workspace-021.js",
-    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js && node scripts/test-qt-python-0160.js && node scripts/test-qt-dependency-managers-0170.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-direct-0175.js && node scripts/test-qt-designer-regression-0176.js",
+    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js && node scripts/test-qt-python-0160.js && node scripts/test-qt-dependency-managers-0170.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-direct-0175.js && node scripts/test-qt-designer-regression-0176.js && node scripts/test-workspace-generated-0177.js && node scripts/test-qt-form-class-conversion-0178.js && node scripts/test-qt-custom-painted-widgets-0179.js && node scripts/test-qt-designer-custom-widget-plugin-0180.js && node scripts/test-qt-instrumentation-widgets-0190.js && node scripts/test-qt-advanced-instrumentation-0200.js && node scripts/test-qt-oscilloscope-analysis-0210.js && node scripts/test-qt-realtime-acquisition-0220.js && node scripts/test-qt-acquisition-sources-0230.js && node scripts/test-qt-scpi-instrument-manager-0240.js && node scripts/test-qt-instrument-profiles-0250.js && node scripts/test-qt-instrument-profile-editor-0260.js && node scripts/test-qt-scpi-profile-auto-detection-0270.js && node scripts/test-qt-instrument-driver-registry-0280.js && node scripts/test-qt-acquisition-dashboard-0290.js && node scripts/test-qt-designer-regressions-0291.js && node scripts/test-qt-signal-plot-bridge-qpointer-0292.js && node scripts/test-build-diagnostics-0300.js",
     "test:qt-toolchain": "npm run compile && node scripts/test-qt-toolchain-022.js",
     "test:qt-intellisense": "npm run compile && node scripts/test-qt-intellisense-022.js",
     "test:qt-designer": "npm run compile && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-session-0173.js && node scripts/test-qt-designer-recovery-fallback-0174.js && node scripts/test-qt-designer-regression-0176.js",
@@ -343,7 +354,19 @@
     "test:qt-publication": "npm run compile && node scripts/test-qt-publication-0150.js",
     "test:qt-reliability": "npm run compile && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-ui-modules-clean-0151.js",
     "test:qt-python": "npm run compile && node scripts/test-qt-python-0160.js",
-    "test:qt-dependencies-0170": "npm run compile && node scripts/test-qt-dependency-managers-0170.js"
+    "test:qt-dependencies-0170": "npm run compile && node scripts/test-qt-dependency-managers-0170.js",
+    "test:workspace-generated": "npm run compile && node scripts/test-workspace-generated-0177.js",
+    "test:qt-form-class": "npm run compile && node scripts/test-qt-form-class-conversion-0178.js",
+    "test:qt-custom-widgets": "npm run compile && node scripts/test-qt-custom-painted-widgets-0179.js",
+    "test:qt-designer-widgets": "npm run compile && node scripts/test-qt-designer-custom-widget-plugin-0180.js",
+    "test:qt-instrumentation": "npm run compile && node scripts/test-qt-custom-painted-widgets-0179.js && node scripts/test-qt-designer-custom-widget-plugin-0180.js && node scripts/test-qt-instrumentation-widgets-0190.js && node scripts/test-qt-advanced-instrumentation-0200.js && node scripts/test-qt-oscilloscope-analysis-0210.js && node scripts/test-qt-realtime-acquisition-0220.js && node scripts/test-qt-acquisition-sources-0230.js && node scripts/test-qt-scpi-instrument-manager-0240.js && node scripts/test-qt-instrument-profiles-0250.js && node scripts/test-qt-instrument-profile-editor-0260.js && node scripts/test-qt-scpi-profile-auto-detection-0270.js && node scripts/test-qt-instrument-driver-registry-0280.js && node scripts/test-qt-acquisition-dashboard-0290.js && node scripts/test-qt-designer-regressions-0291.js && node scripts/test-qt-signal-plot-bridge-qpointer-0292.js && node scripts/test-build-diagnostics-0300.js",
+    "test:qt-acquisition-sources": "npm run compile && node scripts/test-qt-acquisition-sources-0230.js",
+    "test:qt-scpi-manager": "npm run compile && node scripts/test-qt-scpi-instrument-manager-0240.js",
+    "test:qt-instrument-profiles": "npm run compile && node scripts/test-qt-instrument-profiles-0250.js",
+    "test:qt-instrument-profile-editor": "npm run compile && node scripts/test-qt-instrument-profile-editor-0260.js",
+    "test:qt-scpi-profile-auto-detection": "npm run compile && node scripts/test-qt-scpi-profile-auto-detection-0270.js",
+    "test:qt-acquisition-dashboard": "npm run compile && node scripts/test-qt-acquisition-dashboard-0290.js",
+    "test:build-diagnostics": "npm run compile && node scripts/test-build-diagnostics-0300.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -506,6 +529,60 @@
         "icon": "$(layout)"
       },
       {
+        "command": "qpm.prepareQtDesignerWidgets",
+        "title": "Qt Project Manager: Prepare All QPM Widgets for Qt Designer",
+        "category": "Qt Project Manager",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "qpm.prepareAndOpenQtDesignerWidgets",
+        "title": "Qt Project Manager: Prepare QPM Widgets & Open Designer",
+        "category": "Qt Project Manager",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "qpm.configureQtDesignerWidgets",
+        "title": "Qt Project Manager: Configure Qt Designer Custom Widgets...",
+        "category": "Qt Project Manager",
+        "icon": "$(symbol-misc)"
+      },
+      {
+        "command": "qpm.buildQtDesignerWidgets",
+        "title": "Qt Project Manager: Build Qt Designer Widget Plugin",
+        "category": "Qt Project Manager",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "qpm.installQtDesignerWidgets",
+        "title": "Qt Project Manager: Install Widget Plugin into Qt Designer...",
+        "category": "Qt Project Manager",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "qpm.openQtDesignerWithCustomWidgets",
+        "title": "Qt Project Manager: Open .ui in Designer with QPM Custom Widgets",
+        "category": "Qt Project Manager",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "qpm.cleanQtDesignerWidgets",
+        "title": "Qt Project Manager: Clean Qt Designer Widget Plugin",
+        "category": "Qt Project Manager",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.revealQtDesignerWidgets",
+        "title": "Qt Project Manager: Reveal Qt Designer Widget Plugin Output",
+        "category": "Qt Project Manager",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "qpm.convertQtFormToClass",
+        "title": "Qt Project Manager: Convert Designer Form to Qt C++ Class...",
+        "category": "Qt Project Manager",
+        "icon": "$(symbol-class)"
+      },
+      {
         "command": "qpm.selectQtDesigner",
         "title": "Qt Project Manager: Select Qt Widgets Designer Executable",
         "icon": "$(folder-opened)"
@@ -613,6 +690,16 @@
         "title": "Qt Project Manager: Rebuild Active Project"
       },
       {
+        "command": "qpm.showBuildProblems",
+        "title": "Qt Project Manager: Show Build Problems",
+        "icon": "$(issues)"
+      },
+      {
+        "command": "qpm.showBuildTrace",
+        "title": "Qt Project Manager: Show Full Build Trace",
+        "icon": "$(output)"
+      },
+      {
         "command": "qpm.run",
         "title": "Qt Project Manager: Build and Run Active Target",
         "icon": "$(play)"
@@ -717,6 +804,18 @@
       {
         "command": "qpm.openFile",
         "title": "Open"
+      },
+      {
+        "command": "qpm.openGeneratedFile",
+        "title": "Open Generated File"
+      },
+      {
+        "command": "qpm.revealGeneratedPath",
+        "title": "Reveal Generated Path in Explorer"
+      },
+      {
+        "command": "qpm.copyGeneratedPath",
+        "title": "Copy Generated Path"
       },
       {
         "command": "qpm.openPanelFile",
@@ -2037,6 +2136,24 @@
         "command": "qpm.dependencies.clean",
         "title": "Qt Project Manager: Clean Dependency Output",
         "icon": "$(trash)"
+      },
+      {
+        "command": "qpm.openInstrumentProfileEditor",
+        "title": "Qt Project Manager: Open SCPI Instrument Profile Catalog & Editor",
+        "category": "Qt Project Manager",
+        "icon": "$(radio-tower)"
+      },
+      {
+        "command": "qpm.openInstrumentProfileFile",
+        "title": "Qt Project Manager: Open SCPI Instrument Profile...",
+        "category": "Qt Project Manager",
+        "icon": "$(json)"
+      },
+      {
+        "command": "qpm.newInstrumentProfileFromCatalog",
+        "title": "Qt Project Manager: New SCPI Instrument Profile from Catalog",
+        "category": "Qt Project Manager",
+        "icon": "$(new-file)"
       }
     ],
     "menus": {
@@ -2589,6 +2706,11 @@
           "group": "navigation@0"
         },
         {
+          "command": "qpm.convertQtFormToClass",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\.form\\./ && qpm.qtCppProjectActive",
+          "group": "modification@0"
+        },
+        {
           "command": "qpm.editQtModules",
           "when": "view == qpm.workspaceExplorer && viewItem == qpmProjectNative",
           "group": "settings@0.5"
@@ -2642,6 +2764,41 @@
           "command": "qpm.buildDeployRunPlatform",
           "when": "view == qpm.workspaceExplorer && viewItem == qpmProjectNative",
           "group": "qtPlatforms@2"
+        },
+        {
+          "command": "qpm.openGeneratedFile",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmGeneratedFile",
+          "group": "inline@1"
+        },
+        {
+          "command": "qpm.copyGeneratedPath",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmGeneratedFile",
+          "group": "clipboard@1"
+        },
+        {
+          "command": "qpm.revealGeneratedPath",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmGeneratedFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.copyGeneratedPath",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmGeneratedFolder",
+          "group": "clipboard@1"
+        },
+        {
+          "command": "qpm.revealGeneratedPath",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmGeneratedFolder",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.configureQtDesignerWidgets",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmProjectNative && qpm.qtCppProjectActive",
+          "group": "qtDesigner@1"
+        },
+        {
+          "command": "qpm.buildQtDesignerWidgets",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmProjectNative && qpm.qtCppProjectActive",
+          "group": "qtDesigner@2"
         }
       ],
       "commandPalette": [
@@ -3128,7 +3285,7 @@
       "explorer/context": [
         {
           "submenu": "qpm.explorerRoot",
-          "when": "resourceExtname == .ui || resourceExtname == .qrc || resourceExtname == .qml || resourceExtname == .ts || resourceExtname == .xlf || resourceExtname == .c || resourceExtname == .cc || resourceExtname == .cpp || resourceExtname == .cxx || resourceExtname == .h || resourceExtname == .hh || resourceExtname == .hpp || resourceExtname == .hxx || resourceFilename =~ /.*\\.qtproject\\.json$/",
+          "when": "resourceExtname == .ui || resourceExtname == .qrc || resourceExtname == .qml || resourceExtname == .ts || resourceExtname == .xlf || resourceExtname == .c || resourceExtname == .cc || resourceExtname == .cpp || resourceExtname == .cxx || resourceExtname == .h || resourceExtname == .hh || resourceExtname == .hpp || resourceExtname == .hxx || resourceFilename =~ /.*\\.qtproject\\.json$/ || (resourceExtname == .json && resourceDirname =~ /instrument_profiles/)",
           "group": "modification@1"
         }
       ],
@@ -3151,6 +3308,11 @@
         {
           "command": "qpm.openTranslationInLinguist",
           "when": "resourceExtname == .ts || resourceExtname == .xlf",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.openInstrumentProfileEditor",
+          "when": "resourceExtname == .json && resourceDirname =~ /instrument_profiles/",
           "group": "navigation@1"
         }
       ],
@@ -3242,6 +3404,46 @@
         {
           "command": "qpm.clearTestHistory",
           "group": "quality@5"
+        },
+        {
+          "command": "qpm.prepareQtDesignerWidgets",
+          "group": "designer@0"
+        },
+        {
+          "command": "qpm.prepareAndOpenQtDesignerWidgets",
+          "group": "designer@0.5"
+        },
+        {
+          "command": "qpm.configureQtDesignerWidgets",
+          "group": "designer@1"
+        },
+        {
+          "command": "qpm.buildQtDesignerWidgets",
+          "group": "designer@2"
+        },
+        {
+          "command": "qpm.installQtDesignerWidgets",
+          "group": "designer@3"
+        },
+        {
+          "command": "qpm.revealQtDesignerWidgets",
+          "group": "designer@4"
+        },
+        {
+          "command": "qpm.cleanQtDesignerWidgets",
+          "group": "designer@5"
+        },
+        {
+          "command": "qpm.openInstrumentProfileEditor",
+          "group": "instrumentation@1"
+        },
+        {
+          "command": "qpm.newInstrumentProfileFromCatalog",
+          "group": "instrumentation@2"
+        },
+        {
+          "command": "qpm.openInstrumentProfileFile",
+          "group": "instrumentation@3"
         }
       ],
       "qpm.resourceTools": [
@@ -3325,6 +3527,11 @@
           "group": "0_designer@1"
         },
         {
+          "command": "qpm.convertQtFormToClass",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "0_designer@2"
+        },
+        {
           "submenu": "qpm.resourceTools",
           "when": "resourceExtname == .qrc",
           "group": "1_resource@1"
@@ -3343,6 +3550,16 @@
           "command": "qpm.openQtDocumentation",
           "when": "editorLangId == c || editorLangId == cpp || editorLangId == qml",
           "group": "4_documentation@1"
+        },
+        {
+          "command": "qpm.prepareAndOpenQtDesignerWidgets",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "navigation@0.4"
+        },
+        {
+          "command": "qpm.openQtDesignerWithCustomWidgets",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "navigation@0.5"
         }
       ],
       "qpm.snippetsQt": [
@@ -3499,6 +3716,11 @@
           "group": "1_qt@1"
         },
         {
+          "command": "qpm.convertQtFormToClass",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "1_qt@1.5"
+        },
+        {
           "submenu": "qpm.resourceTools",
           "when": "resourceExtname == .qrc",
           "group": "1_qt@2"
@@ -3555,6 +3777,21 @@
           "submenu": "qpm.explorerDependencies",
           "group": "2_dependencies@1",
           "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.prepareAndOpenQtDesignerWidgets",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "navigation@0.4"
+        },
+        {
+          "command": "qpm.openQtDesignerWithCustomWidgets",
+          "when": "resourceExtname == .ui && qpm.qtCppProjectActive",
+          "group": "navigation@0.5"
+        },
+        {
+          "command": "qpm.openInstrumentProfileEditor",
+          "when": "resourceExtname == .json && resourceDirname =~ /instrument_profiles/",
+          "group": "1_qt@5"
         }
       ],
       "qpm.editorPackaging": [
@@ -4236,6 +4473,21 @@
           ],
           "default": "debug64",
           "description": "Build mode used by QPM. Native Qt projects default to 64-bit and are aligned with the selected kit architecture. Debug modes add -g -O0; release modes add -O2."
+        },
+        "qpm.buildLogDetail": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "normal",
+            "verbose"
+          ],
+          "enumDescriptions": [
+            "Show phases, failures and the final summary only.",
+            "Recommended: show structured phases, per-tool status, parsed diagnostics and hints while keeping full command lines in the Build Trace output channel.",
+            "Also show full compiler commands and successful tool output in the main QPM output channel."
+          ],
+          "default": "normal",
+          "description": "Controls how much information QPM shows in the main build log. Full raw commands/output are always preserved in the separate Qt Project Manager - Build Trace output channel."
         },
         "qpm.runArguments": {
           "type": "array",

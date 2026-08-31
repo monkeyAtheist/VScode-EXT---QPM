@@ -39,6 +39,7 @@ const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
+const qpmQtInstallationService_1 = require("./qpmQtInstallationService");
 const MODULE_CHOICES = [
     'Core', 'Core5Compat', 'Gui', 'Widgets', 'Network', 'Concurrent',
     'SerialPort', 'SerialBus', 'Bluetooth', 'Sql', 'Xml',
@@ -155,6 +156,28 @@ class QpmQtProjectService {
     removeFile(manifestPath, filePath) {
         return (0, qtProjectManifest_1.removeFileFromQtManifest)(manifestPath, filePath);
     }
+    ensureModules(manifestPath, modules) {
+        const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(manifestPath);
+        const configured = new Set(manifest.qt.modules.map((entry) => entry.toLowerCase()));
+        const added = [];
+        for (const module of modules) {
+            const normalized = module.trim();
+            if (!normalized || configured.has(normalized.toLowerCase()))
+                continue;
+            manifest.qt.modules.push(normalized);
+            configured.add(normalized.toLowerCase());
+            added.push(normalized);
+        }
+        if (!configured.has('core')) {
+            manifest.qt.modules.unshift('Core');
+            added.unshift('Core');
+        }
+        if (added.length > 0) {
+            (0, qtProjectManifest_1.writeQtProjectManifest)(manifestPath, manifest);
+            this.output.appendLine(`[Qt] Added required module(s) to ${manifest.name}: ${added.join(', ')}`);
+        }
+        return added;
+    }
     async editModules(manifestPath) {
         const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(manifestPath);
         const installation = this.installations.getActive((0, qtProjectManifest_1.getQtInstallationPreference)(manifest));
@@ -171,7 +194,7 @@ class QpmQtProjectService {
         (0, qtProjectManifest_1.writeQtProjectManifest)(manifestPath, manifest);
         vscode.window.showInformationMessage(`Qt modules updated for ${manifest.name}.`);
     }
-    async openDesigner(input) {
+    async openDesigner(input, extraPluginRoots = []) {
         const target = designerTargetPath(input) ?? vscode.window.activeTextEditor?.document.uri.fsPath ?? activeTabResourcePath();
         if (!target || path.extname(target).toLowerCase() !== '.ui') {
             vscode.window.showErrorMessage('Select or open a Qt Designer .ui file first.');
@@ -198,7 +221,11 @@ class QpmQtProjectService {
         this.output.show(true);
         this.output.appendLine(`[Qt Designer] Form: ${target}`);
         this.output.appendLine(`[Qt Designer] Launcher: ${installation.designerPath} (${installation.designerLauncherKind ?? 'designer'}, ${installation.designerSource ?? 'unknown source'})`);
-        await spawnDesigner(installation, target, this.output);
+        const localPluginRoot = manifestPath ? path.join(path.dirname(manifestPath), '.qpm', 'designer-plugins', 'runtime') : undefined;
+        const pluginRoots = [...extraPluginRoots];
+        if (localPluginRoot && fs.existsSync(path.join(localPluginRoot, 'designer')))
+            pluginRoots.push(localPluginRoot);
+        await spawnDesigner(installation, target, this.output, pluginRoots);
         vscode.window.showInformationMessage(`Opened ${path.basename(target)} with ${installation.designerLauncherKind === 'qtcreator' ? 'Qt Creator' : 'Qt Widgets Designer'}.`);
     }
     async manageProfiles(manifestPath) {
@@ -609,12 +636,14 @@ function findNearestQtManifest(filePath) {
     }
     return undefined;
 }
-function designerEnvironment(installation) {
+function designerEnvironment(installation, extraPluginRoots = []) {
     const env = { ...process.env };
+    const directDesignerKit = installation.designerPath ? (0, qpmQtInstallationService_1.describeQtRoot)(path.dirname(path.dirname(installation.designerPath))) : undefined;
+    const runtimeKit = directDesignerKit ?? installation;
     const entries = [
         installation.designerPath ? path.dirname(installation.designerPath) : undefined,
-        installation.binDir,
-        installation.toolchain.binDir,
+        runtimeKit.binDir,
+        runtimeKit.toolchain.binDir,
         ...(process.env.PATH ?? '').split(path.delimiter)
     ].filter((entry) => Boolean(entry));
     const seen = new Set();
@@ -625,15 +654,16 @@ function designerEnvironment(installation) {
         seen.add(key);
         return true;
     }).join(path.delimiter);
-    if (installation.pluginsDir) {
-        env.QT_PLUGIN_PATH = installation.pluginsDir;
-        env.QT_QPA_PLATFORM_PLUGIN_PATH = path.join(installation.pluginsDir, 'platforms');
-    }
-    if (installation.qmlDir)
-        env.QML2_IMPORT_PATH = installation.qmlDir;
+    const pluginRoots = [runtimeKit.pluginsDir, ...extraPluginRoots].filter((entry) => !!entry && fs.existsSync(entry));
+    if (pluginRoots.length)
+        env.QT_PLUGIN_PATH = [...new Set(pluginRoots.map((entry) => path.normalize(entry)))].join(path.delimiter);
+    if (runtimeKit.pluginsDir)
+        env.QT_QPA_PLATFORM_PLUGIN_PATH = path.join(runtimeKit.pluginsDir, 'platforms');
+    if (runtimeKit.qmlDir)
+        env.QML2_IMPORT_PATH = runtimeKit.qmlDir;
     return env;
 }
-async function spawnDesigner(installation, target, output) {
+async function spawnDesigner(installation, target, output, extraPluginRoots = []) {
     const executable = installation.designerPath;
     await new Promise((resolve, reject) => {
         const child = (0, child_process_1.spawn)(executable, [target], {
@@ -642,7 +672,7 @@ async function spawnDesigner(installation, target, output) {
             windowsHide: false,
             stdio: 'ignore',
             shell: false,
-            env: designerEnvironment(installation)
+            env: designerEnvironment(installation, extraPluginRoots)
         });
         let started = false;
         child.once('error', (error) => {

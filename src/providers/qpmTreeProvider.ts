@@ -1,24 +1,37 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { QpmProject, QpmProjectFile, QpmWorkspaceProjectRef } from '../model/types';
-import { isQtProjectManifestPath } from '../model/qtProjectManifest';
+import { QpmBuildMode, QpmProject, QpmProjectFile, QpmWorkspaceProjectRef } from '../model/types';
+import { getPersistedQtBuildMode, isQtProjectManifestPath, qtGeneratedDirectory, readQtProjectManifest } from '../model/qtProjectManifest';
 import { QpmWorkspaceService } from '../services/qpmWorkspaceService';
 
-export type QpmTreeNode = WorkspaceNode | ProjectNode | FolderNode | FileNode | PlaceholderNode;
+export type QpmTreeNode = WorkspaceNode | ProjectNode | FolderNode | FileNode | GeneratedFolderNode | GeneratedFileNode | PlaceholderNode;
 
 export interface WorkspaceNode { kind: 'workspace'; }
 export interface ProjectNode { kind: 'project'; ref: QpmWorkspaceProjectRef; }
 export interface FolderNode { kind: 'folder'; ref: QpmWorkspaceProjectRef; project: QpmProject; folderPath: string; }
 export interface FileNode { kind: 'file'; ref: QpmWorkspaceProjectRef; file: QpmProjectFile; }
+export interface GeneratedFolderNode { kind: 'generatedFolder'; ref: QpmWorkspaceProjectRef; absolutePath: string; label: string; mode: QpmBuildMode; root: boolean; }
+export interface GeneratedFileNode { kind: 'generatedFile'; ref: QpmWorkspaceProjectRef; absolutePath: string; }
 export interface PlaceholderNode { kind: 'placeholder'; label: string; }
 
-export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode> {
+export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode>, vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<QpmTreeNode | undefined | null | void>();
+  private readonly disposables: vscode.Disposable[] = [];
   readonly onDidChangeTreeData = this.changeEmitter.event;
 
   constructor(private readonly workspaces: QpmWorkspaceService) {
-    this.workspaces.onDidChange(() => this.refresh());
+    this.disposables.push(
+      this.workspaces.onDidChange(() => this.refresh()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('qpm.buildMode')) this.refresh();
+      })
+    );
+  }
+
+  dispose(): void {
+    for (const disposable of this.disposables) disposable.dispose();
+    this.changeEmitter.dispose();
   }
 
   refresh(): void {
@@ -31,6 +44,8 @@ export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode> {
       case 'project': return this.projectItem(element);
       case 'folder': return this.folderItem(element);
       case 'file': return this.fileItem(element);
+      case 'generatedFolder': return this.generatedFolderItem(element);
+      case 'generatedFile': return this.generatedFileItem(element);
       case 'placeholder': return this.placeholderItem(element);
     }
   }
@@ -52,11 +67,16 @@ export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode> {
         if (!project) {
           return [{ kind: 'placeholder', label: element.ref.exists ? 'Unable to parse project' : 'Project file not found' }];
         }
-        return this.childrenForFolder(element.ref, project, '');
+        const projectChildren = this.childrenForFolder(element.ref, project, '');
+        const generated = this.generatedRootForProject(element.ref);
+        return generated ? [...projectChildren, generated] : projectChildren;
       }
       case 'folder':
         return this.childrenForFolder(element.ref, element.project, element.folderPath);
+      case 'generatedFolder':
+        return this.childrenForGeneratedFolder(element);
       case 'file':
+      case 'generatedFile':
       case 'placeholder':
         return [];
     }
@@ -98,6 +118,58 @@ export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode> {
 
     directFiles.sort((a, b) => path.basename(a.file.absolutePath).localeCompare(path.basename(b.file.absolutePath)));
     return [...folders, ...directFiles];
+  }
+
+  private generatedRootForProject(ref: QpmWorkspaceProjectRef): GeneratedFolderNode | undefined {
+    if (!ref.exists || !isQtProjectManifestPath(ref.absolutePath)) {
+      return undefined;
+    }
+    try {
+      const manifest = readQtProjectManifest(ref.absolutePath);
+      const mode = getPersistedQtBuildMode(manifest);
+      return {
+        kind: 'generatedFolder',
+        ref,
+        absolutePath: qtGeneratedDirectory(ref.absolutePath, mode, manifest),
+        label: 'Generated Files',
+        mode,
+        root: true
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private childrenForGeneratedFolder(node: GeneratedFolderNode): QpmTreeNode[] {
+    if (!fs.existsSync(node.absolutePath)) {
+      return [{ kind: 'placeholder', label: 'No generated files yet — build the project first' }];
+    }
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(node.absolutePath, { withFileTypes: true });
+    } catch {
+      return [{ kind: 'placeholder', label: 'Unable to read generated files' }];
+    }
+
+    const visibleEntries = entries
+      .filter((entry) => entry.isDirectory() || entry.isFile())
+      .sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    if (visibleEntries.length === 0) {
+      return [{ kind: 'placeholder', label: 'Generated directory is empty' }];
+    }
+
+    return visibleEntries.map((entry): QpmTreeNode => {
+      const absolutePath = path.join(node.absolutePath, entry.name);
+      if (entry.isDirectory()) {
+        return { kind: 'generatedFolder', ref: node.ref, absolutePath, label: entry.name, mode: node.mode, root: false };
+      }
+      return { kind: 'generatedFile', ref: node.ref, absolutePath };
+    });
   }
 
   private workspaceItem(): vscode.TreeItem {
@@ -158,6 +230,29 @@ export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode> {
     return item;
   }
 
+  private generatedFolderItem(node: GeneratedFolderNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Collapsed);
+    item.description = node.root ? `${buildModeLabel(node.mode)} · generated` : undefined;
+    item.contextValue = 'qpmGeneratedFolder';
+    item.tooltip = node.root
+      ? `Qt generated files (${buildModeLabel(node.mode)})\n${node.absolutePath}\nMOC/UIC/RCC artifacts are regenerated during builds; edit the source .h/.ui/.qrc files instead.`
+      : node.absolutePath;
+    item.iconPath = new vscode.ThemeIcon(node.root ? 'symbol-namespace' : 'folder');
+    item.resourceUri = vscode.Uri.file(node.absolutePath);
+    return item;
+  }
+
+  private generatedFileItem(node: GeneratedFileNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(`└─ ${path.basename(node.absolutePath)}`, vscode.TreeItemCollapsibleState.None);
+    item.description = generatedArtifactDescription(node.absolutePath);
+    item.tooltip = `${node.absolutePath}\nGenerated Qt artifact — changes may be overwritten on the next build.`;
+    item.contextValue = 'qpmGeneratedFile';
+    item.iconPath = new vscode.ThemeIcon(iconForPath(node.absolutePath));
+    item.resourceUri = vscode.Uri.file(node.absolutePath);
+    item.command = { command: 'qpm.openGeneratedFile', title: 'Open Generated File', arguments: [node] };
+    return item;
+  }
+
   private placeholderItem(node: PlaceholderNode): vscode.TreeItem {
     const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
     item.iconPath = new vscode.ThemeIcon('warning');
@@ -213,7 +308,11 @@ function iconForFile(file: QpmProjectFile): string {
   if (!fs.existsSync(file.absolutePath)) {
     return 'warning';
   }
-  switch (path.extname(file.absolutePath).toLowerCase()) {
+  return iconForPath(file.absolutePath);
+}
+
+function iconForPath(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
     case '.c':
     case '.cc':
     case '.cpp':
@@ -235,4 +334,21 @@ function iconForFile(file: QpmProjectFile): string {
     case '.fp': return 'symbol-method';
     default: return 'file';
   }
+}
+
+function buildModeLabel(mode: QpmBuildMode): string {
+  switch (mode) {
+    case 'debug': return 'Debug';
+    case 'release': return 'Release';
+    case 'debug64': return 'Debug x64';
+    case 'release64': return 'Release x64';
+  }
+}
+
+function generatedArtifactDescription(filePath: string): string {
+  const name = path.basename(filePath).toLowerCase();
+  if (name.startsWith('moc_') && ['.c', '.cc', '.cpp', '.cxx'].includes(path.extname(name))) return 'MOC · generated';
+  if (name.startsWith('ui_') && ['.h', '.hh', '.hpp', '.hxx'].includes(path.extname(name))) return 'UIC · generated';
+  if (name.startsWith('qrc_') && ['.c', '.cc', '.cpp', '.cxx'].includes(path.extname(name))) return 'RCC · generated';
+  return 'generated';
 }

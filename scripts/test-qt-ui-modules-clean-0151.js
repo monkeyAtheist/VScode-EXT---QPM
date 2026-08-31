@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const originalLoad = Module._load;
 Module._load = function patched(request, parent, isMain) {

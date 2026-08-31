@@ -1,4 +1,210 @@
+## 0.30.0 — Structured build diagnostics and readable logs
+
+- Reworked the direct/generic C++ build output into clear build phases instead of emitting every full compiler command into the main channel.
+- Added a dedicated `Qt Project Manager - Build Trace` output channel that always retains full tool paths, arguments, stdout, stderr, exit codes and timings.
+- Added GCC/MinGW/Clang and MSVC diagnostic parsing with file/line/column extraction, source-line context and error-family troubleshooting hints.
+- Publishes parsed QPM build diagnostics to the VS Code Problems view for clickable navigation.
+- Added `qpm.buildLogDetail = compact | normal | verbose` (`normal` by default).
+- Added commands to open Build Problems and the full Build Trace.
+- Build summaries now report elapsed time, tool-run count, error/warning totals, failed phase and the first/root diagnostic.
+- Cached generated/source files are summarized instead of flooding normal build logs; verbose mode still exposes them individually.
+- Parallel compilation output is captured per process and emitted as coherent result blocks, preventing multiple `g++` streams from becoming interleaved and unreadable.
+
+## 0.29.2 — SignalPlot bridge / QPointer Qt 6.11 fix
+
+- Fixes `qpm_signal_plot_bridge.h` generated with `QPointer<SignalPlot>` while `SignalPlot` was only forward-declared.
+- Includes `widgets/signal_plot.h` directly in the bridge header so Qt 6.11 MOC can instantiate `QPointer<SignalPlot>::data()` safely.
+- Adds the missing `<limits>` include used by the bridge header.
+- Adds a regression test covering the exact Qt 6.11 incomplete-type failure.
+
+## 0.29.1 — Designer plugin path/build fixes
+
+- Fixed generated `SignalPlot` C++ where the automatic-measurements label emitted a literal newline inside `QStringLiteral`, producing an unterminated C++ string.
+- Fixed generated `RotaryKnob` C++ by keeping both `qMin()` arguments as `qreal` values under Qt 6.11 / MinGW.
+- Fixed Qt Designer custom-widget plugin generation for Windows projects whose paths contain spaces (for example `Programmes C++ windows`). qmake intermediate directories are now relative to the plugin build directory and qmake values use `$$quote(...)`.
+- Added regression coverage for all three issues, including a project path containing spaces.
+
+## 0.29.0 — Complete acquisition dashboard and Designer preparation
+
+- Adds **Complete Acquisition Dashboard** to the Qt creation workflow.
+- Generates missing Serial/TCP/UDP/SCPI acquisition backends, `QpmSignalBuffer`, `QpmSignalPlotBridge`, advanced `SignalPlot`, `AcquisitionControl`, and a ready-to-run `AcquisitionDashboard`.
+- Automatically inserts `AcquisitionDashboard` into the untouched blank `mainwindow.ui`; non-empty user interfaces are preserved.
+- Adds Designer properties for channel count, buffer capacity, sample rate, refresh rate and display window size.
+- Keeps acquisition runtime objects disabled under `QPM_DESIGNER_PLUGIN_BUILD` while preserving a visual dashboard preview.
+- Adds **Prepare All QPM Widgets for Qt Designer** and **Prepare QPM Widgets & Open Designer** commands to synchronize all discovered project widgets, build the project-local Designer plugin and launch Designer with the correct plugin path.
+- Detects stale Designer widget configurations when newly generated widgets are not yet published and offers **Prepare all & rebuild**.
+- Adds regression coverage for complete dashboard generation, blank-MainWindow integration and the one-step Designer preparation commands.
+
+## 0.28.0 — Instrument Driver Registry, semantic capabilities and acquisition sample-rate fix
+
+- Adds **Instrument Driver Registry + Capabilities** to the Qt creation workflow.
+- Extends `QpmInstrumentProfile` with semantic `Capability` records (`id`, `label`, `category`, linked action IDs) while keeping existing action-based profiles compatible.
+- Adds `QpmInstrumentDriverRegistry`, which indexes project-local and built-in profiles by driver ID and model-independent capability, supports reverse lookup (`driversForCapability`) and exposes action mappings for each capability.
+- Adds capability IDs such as `measure.dc-voltage`, `measure.dc-current`, `measure.frequency`, `measure.vpp`, `power.voltage-set`, `power.output`, `source.frequency`, `source.amplitude`, `scope.single` and `scope.time-scale`.
+- Adds fallback capability inference when loading older 0.25–0.27 JSON profiles that do not yet contain a `capabilities` array.
+- Extends `QpmInstrumentManager` with applied profile IDs, capability queries, `supportsCapability()` and capability-driven invocation through `invokeActiveCapability()` / `invokeCapability()`.
+- Adds Designer-ready `InstrumentCapabilitiesControl` for inspecting/filtering the capabilities exposed by a selected or applied driver profile.
+- Extends the VS Code SCPI Profile Catalog & Editor with a visual capability table, action-link editing and validation of duplicate/invalid capabilities or references to missing actions.
+- Keeps capability application data-driven: application/test logic can request functions by semantic ID instead of branching on manufacturer/model names.
+- Fixes the acquisition sample-rate regression: generated `qpm_acquisition_controller.h` explicitly declares `m_sampleRateHz`, generated `QpmAcquisitionSource` now owns the sample-rate member it exposes, implements `setSampleRateHz()`, and the controller propagates the configured rate to the active source/buffer.
+- Adds regression coverage specifically checking both generated acquisition headers for `m_sampleRateHz` and the full 0.28.0 registry/capability workflow.
+
+## 0.27.0 — SCPI automatic profile detection and explicit profile application
+
+- Adds generated `QpmScpiProfileMatcher` / `QpmScpiIdentity` support for parsing `*IDN?` manufacturer, model, serial and firmware fields.
+- Adds canonical vendor matching for common naming changes such as Hewlett-Packard / Agilent / Keysight, plus Rigol, Fluke, Tektronix, Rohde & Schwarz and Siglent normalization.
+- Scores manufacturer/model profile matches with High/Medium/Low confidence and intentionally excludes generic starter profiles from automatic detection candidates.
+- Extends `QpmInstrumentManager` with a profile directory, automatic suggestion refresh on `identityChanged`, suggestion metadata and explicit `applySuggestedProfile()`.
+- Extends `InstrumentManagerControl` with a profile-directory selector, Suggested Profile table column and **Apply suggested profile** action.
+- Keeps profile switching user-controlled; a heuristic match never silently changes the active instrument profile.
+- Extends the VS Code SCPI profile catalogue/editor with an interactive `*IDN?` matcher that ranks catalogue entries before a profile is saved to the project.
+- Runtime matching searches project-local `instrument_profiles/*.json`; the bundled extension catalogue remains an authoring source rather than an implicit runtime dependency.
+- Adds QPM 0.27.0 regression coverage for identity parsing, vendor aliases, score ordering, generated matcher/manager code and the explicit apply workflow.
+
 # Changelog
+
+## 0.26.0 — SCPI instrument profile catalog and visual editor
+
+- Adds a **SCPI Instrument Profile Catalog & Editor** directly inside VS Code/QPM.
+- Adds a searchable/filterable catalog with generic DMM, power-supply, signal-generator and oscilloscope baselines plus manufacturer/model-labelled starter entries.
+- Treats manufacturer/model entries as explicit **starter baselines**, not verified instrument drivers; the UI and catalog notes require command review against the target programming manual.
+- Adds visual editing for profile ID, display name, family, manufacturer, model, documentation URL and description.
+- Adds a table editor for semantic SCPI actions (`measurement`, `numeric`, `toggle`, `action`) including query/write strings, units, ranges, decimals, default values and readback behavior.
+- Adds structural validation for duplicate IDs, missing commands, invalid numeric ranges, missing `%1` substitutions and inconsistent readback configuration.
+- Adds a live **Auto-control preview** matching the control kinds used by `ProfiledInstrumentControl`.
+- Adds New/Open/Save/Save As/Reload/Open JSON/Reveal folder workflows and first-save protection when cloning a catalog profile.
+- Extends generated `QpmInstrumentProfile` JSON support with optional `manufacturer`, `model`, `documentationUrl` and `schemaVersion` metadata while remaining backward compatible with 0.25.0 profiles.
+- Adds commands and QPM context-menu entries for opening profile JSON files under `instrument_profiles/`.
+- Adds regression coverage for catalog integrity, visual-editor commands, serializer compatibility and profile validation.
+
+## 0.25.0 — SCPI instrument profiles and auto-generated controls
+
+- Adds **SCPI Instrument Profiles + Auto Control Panel** to the Qt creation workflow.
+- Adds `QpmInstrumentProfile` with instrument families, semantic actions and four control kinds: measurement, numeric setpoint, toggle and command action.
+- Ships built-in starter profiles for digital multimeters, programmable power supplies, signal/function generators and oscilloscopes.
+- Writes matching editable JSON profiles under `instrument_profiles/` so vendor/model command dialects can be adapted without modifying the generated widget code.
+- Adds JSON load/save support through Qt Core (`QJsonDocument`) and preserves units, ranges, decimals, readback queries and `%1` write templates.
+- Adds Designer-ready `ProfiledInstrumentControl`, which builds its rows dynamically from a selected profile and binds at runtime to an existing `QpmScpiInstrument`.
+- Supports automatic readback refresh, numeric set/apply/read, ON/OFF toggles, action buttons and request-ID-based response routing.
+- Keeps SCPI runtime dependencies out of the Qt Designer plugin build with `QPM_DESIGNER_PLUGIN_BUILD`.
+- Treats the supplied command sets as generic SCPI starters rather than universal vendor guarantees; generated descriptions and JSON files explicitly direct users to verify the target programming manual.
+- Generates `QpmScpiInstrument` automatically when the profile starter is used in a project that does not already contain the 0.24.0 session layer.
+- Adds `Core`, `Widgets` and `Network` modules automatically when required.
+
+## 0.24.0 — SCPI Instrument Manager
+
+- Adds **SCPI Instrument Manager** to the Qt creation workflow.
+- Adds `QpmScpiInstrument`, a queued `QTcpSocket` SCPI session with configurable host/port, line terminator, per-command timeout, automatic `*IDN?`, asynchronous query/write APIs and a guarded blocking-query convenience API.
+- Serializes commands so only one query waits for a line response at a time and carries partial TCP data between `readyRead()` events.
+- Adds timestamped TX/RX/System traffic signals, unsolicited-response reporting, request IDs, queue-depth reporting and explicit timeout/error completion.
+- Adds `QpmInstrumentManager` for multiple named endpoints, active-instrument selection, Connect/Disconnect All and **Probe configured instruments** through `*IDN?`.
+- Avoids claiming universal LAN discovery because SCPI itself does not standardize one; later LXI/mDNS, VXI-11 or HiSLIP discovery providers can extend this layer.
+- Adds Designer-ready `InstrumentManagerControl` with endpoint editing, instrument table, state/identity display, Query/Write controls and bounded TX/RX history.
+- Keeps runtime manager dependencies out of the Designer plugin build with `QPM_DESIGNER_PLUGIN_BUILD`.
+- Adds `Core`, `Widgets` and `Network` modules automatically when the starter is generated.
+
+## 0.23.0 — Acquisition sources and Designer control panel
+
+- Adds **Acquisition Sources + Control Panel** to the Qt creation workflow.
+- Adds a common `QpmAcquisitionSource` abstraction that feeds the existing thread-safe `QpmSignalBuffer` without touching widgets directly.
+- Adds streaming decoders for ASCII CSV/line data, little-endian Float32, Float64 and Int16 interleaved samples, including carry-over handling for partial TCP/serial reads.
+- Adds `QpmSerialAcquisitionSource` (`Qt6::SerialPort`), `QpmTcpAcquisitionSource`, `QpmUdpAcquisitionSource` and an ASCII-numeric `QpmScpiAcquisitionSource` over TCP.
+- Adds `QpmAcquisitionController` to switch the same buffer between Serial/TCP/UDP/SCPI backends and centralize endpoint, channel, sampling-frequency, sample-format, scale and offset configuration.
+- Adds the Designer-ready `AcquisitionControl` widget with Start/Stop, backend selection, Serial/network/SCPI settings, status, sample/byte counters and transfer-rate display.
+- Keeps the Designer plugin independent from acquisition runtime code through `QPM_DESIGNER_PLUGIN_BUILD`, so the control can still appear in the **QPM Instrumentation** Widget Box.
+- Adds required Qt modules (`Network`, `SerialPort`, `Widgets`, and `Core` when missing) automatically to native manifests when this starter is generated.
+- Preserves the 0.22.0 ring-buffer/SignalPlot bridge workflow and generates the buffer automatically when acquisition sources are added to a project that does not have it yet.
+
+## 0.22.0 — Thread-safe acquisition and SignalPlot bridge
+
+- Added `Real-time Signal Acquisition Support` to the Qt file-generation workflow.
+- Added `QpmSignalBuffer`, a fixed-capacity multi-channel ring buffer using `QReadWriteLock` and an atomic revision counter.
+- Added single-sample, block, simultaneous-frame and interleaved acquisition writes.
+- Added coherent `snapshot()` and non-blocking `trySnapshot()` APIs.
+- Added `QpmSignalPlotBridge`, a GUI-thread `QTimer` adapter with configurable refresh rate and display window.
+- Added skipped-refresh accounting so the UI can yield to a short writer instead of blocking.
+- Added `SignalPlot::setChannelSamplesBatch()` to update multiple channels with one trigger/autoscale/paint pass.
+- Preserved the 0.21.0 `SignalPlot` and `SpectrumPlot` APIs.
+
+## 0.21.0 — Trigger, automatic measurements and spectral persistence
+
+- Extends generated `SignalPlot` with DC/AC coupling, Off/Auto/Normal trigger modes, rising/falling trigger edge, trigger channel/level/pre-trigger position and last-trigger alignment.
+- Adds automatic `Vpp`, `Vrms`, `Vavg`, frequency and duty-cycle measurements plus a measurement overlay and signal.
+- Adds Y1/Y2 horizontal cursors (`Alt+Left` / `Alt+Right`) and `Ctrl+Left` trigger-level placement while preserving the 0.20.0 A/B time cursors.
+- Extends generated `SpectrumPlot` with Maximum/Minimum hold, per-trace persistence history and a primary-trace peak marker/measurement.
+- Keeps the 0.20.0 multichannel/multitrace APIs backward compatible and adds dedicated 0.21.0 regression coverage.
+
+
+## 0.20.0 — Advanced SignalPlot and SpectrumPlot instrumentation
+
+- Upgrades **Signal Plot / Chart** into an oscilloscope-style multichannel control while preserving the 0.19.0 single-channel API.
+- Adds channel names, colors, visibility, independent sample buffers, legend rendering and primary-channel compatibility through `setSamples()` / `appendSample()`.
+- Adds configurable `sampleInterval`, dual A/B time cursors and direct `Δt`, `ΔV` and `1/Δt` frequency measurements.
+- Adds dynamic Y autoscale, horizontal sample-window zoom, follow-latest realtime scrolling, block append, middle-button / Shift+left pan, Ctrl+wheel Y zoom, hover inspection and double-click view reset/autoscale.
+- Upgrades **Spectrum Plot** to multiple named/colored traces while preserving `setMagnitudes()` and `cursorBinChanged()`.
+- Adds data/view frequency ranges, linear or logarithmic frequency axes, dual A/B spectral cursors, `Δf` / `ΔA` measurements, legend rendering, X/Y zoom and frequency pan.
+- Keeps both advanced widgets as plain Qt Widgets (`QWidget` + `QPainter`) with Designer-friendly `Q_PROPERTY` metadata and QSS-aware palette rendering.
+- Adds 0.20.0 regression coverage for backward compatibility and the new multichannel/multitrace measurement APIs.
+
+## 0.19.0 — QPM Instrumentation widget library
+
+- Expands **Custom Painted Widget (QPainter)** into a reusable instrumentation-oriented widget library.
+- Adds **Complete QPM Instrumentation Pack** to generate all eight production starters in one operation.
+- Adds **LED Indicator** with boolean state, label, optional Designer-editable active/inactive colors and palette-aware fallback styling.
+- Adds **Digital Meter** with value, decimal precision, title, prefix, unit and optional positive sign.
+- Adds **Rotary Knob** with value/range/single-step properties plus mouse and wheel interaction.
+- Adds **Linear Gauge** with horizontal/vertical orientation, ticks, range/value properties and direct manipulation.
+- Keeps **Analog Gauge / Dial** and **Signal Plot / Chart** as first-class instrumentation controls.
+- Adds **Spectrum Plot** for FFT-style uniformly spaced magnitude bins with frequency limit, dB range, cursor readout, Y zoom and optional filled trace.
+- Adds **XY Plot** for scientific X/Y datasets with independent axis ranges, markers, connected trace and nearest-point cursor inspection.
+- All generated controls use `Q_OBJECT`, Designer-editable `Q_PROPERTY` metadata, Qt palette/QStyle rendering and remain compatible with both **Promote to...** and the QPM 0.18.0 native Designer Widget Box plugin.
+- Adds QPM 0.19.0 regression coverage that generates and validates every new instrumentation widget template.
+
+## 0.18.0 — Qt Widgets Designer custom-widget plugins
+
+- Adds a project-local Qt Widgets Designer plugin workflow for native `Q_OBJECT` / `QWidget` classes.
+- Adds **Configure Qt Designer Custom Widgets...** with multi-selection and a configurable Widget Box group (default **QPM Instrumentation**).
+- Generates a single `QDesignerCustomWidgetCollectionInterface` plugin containing the selected widgets, backed by `QDesignerCustomWidgetInterface` adapters.
+- Generates a qmake plugin project using `QT += widgets uiplugin`, keeping Designer-only dependencies out of the normal application target.
+- Resolves the Qt kit that owns the selected standalone `designer.exe` when possible and builds the plugin with that ABI/toolchain; MSVC developer environments are captured automatically when available.
+- Stores build/runtime output under `.qpm/designer-plugins/` and automatically injects the project-local plugin root into `QT_PLUGIN_PATH` whenever QPM opens a `.ui` form.
+- Adds commands to build, clean, reveal and optionally install the plugin into the Qt installation's `plugins/designer` directory.
+- Keeps **Promote to...** as a fallback when a Designer plugin is not configured or cannot be loaded.
+- Improves Designer launch environment resolution when the configured `designer.exe` belongs to a different Qt kit than the active application build kit.
+
+## 0.17.9 — Custom painted Qt widgets
+
+- Adds **Custom Painted Widget (QPainter)** to `Create > Qt`.
+- Adds a **Generic Painted Value Widget** starter with `value`, `minimum`, `maximum`, `title` and `unit` `Q_PROPERTY` values, mouse dragging and wheel adjustment.
+- Adds an **Analog Gauge / Dial** starter with a 270° scale, ticks, needle rendering, range/value properties and mouse/wheel interaction.
+- Adds a **Signal Plot / Chart** starter with a bounded `QVector<double>` sample buffer, grid rendering, cursor inspection, configurable Y range and wheel zoom.
+- Stores custom widget classes under `include/widgets/` and `src/widgets/` and registers both files automatically in native Qt manifests.
+- Uses the QWidget style primitive and Qt palette in generated painting code so QSS/background styling continues to apply.
+- Documents the Qt Designer **Promote to...** workflow in generated output instead of requiring a Designer plugin for normal project-local custom controls.
+- Refreshes direct-build Qt generated files after general `Create New File`, so newly created `Q_OBJECT` widgets can receive MOC output immediately when the active toolchain is available.
+- Adds regression coverage for all three custom-widget generators.
+
+## 0.17.8 — Designer form to Qt C++ class
+
+- Clarifies Qt file creation by separating **Qt Widget / QObject class** from **Designer Form Only (.ui)**.
+- Renames the QWidget, QDialog and QMainWindow class templates to make it explicit that they create `.h`, `.cpp` and `.ui` files together.
+- Adds **Convert Designer Form to Qt C++ Class...** for existing standalone `.ui` files.
+- Detects the `<class>` name and root `QWidget`, `QDialog` or `QMainWindow` type from the existing Designer XML without rewriting the form.
+- Creates the corresponding `include/<class>.h` and `src/<class>.cpp`, registers them in the native `.qtproject.json`, and preserves the existing `.ui` reference.
+- Refreshes direct-build MOC/UIC artifacts immediately after conversion when the selected Qt toolchain is available, so `moc_<class>.cpp` and `ui_<form>.h` appear in **Generated Files** without requiring a separate project edit.
+- Exposes the conversion from the QPM Workspace form context menu, the editor QPM menu and the VS Code Explorer QPM menu.
+- Adds regression coverage using a real `QDialog` Designer form conversion.
+
+## 0.17.7 — Generated Qt artifacts in Workspace
+
+- Adds a dedicated **Generated Files** node to native Qt projects in the QPM Workspace view.
+- Displays `moc_*.cpp`, `ui_*.h`, `qrc_*.cpp` and other generated files recursively from the active build profile's configured generated directory.
+- Follows the persisted Debug/Release and x86/x64 build mode instead of hard-coding `build/debug/generated`.
+- Adds generated-artifact labels for MOC, UIC and RCC output.
+- Keeps generated nodes separate from `project.files`, preventing rename/remove/exclude/compile-object actions from being offered on derived files.
+- Adds safe Open, Reveal and Copy Path actions for generated files and directories.
+- Refreshes the Workspace tree after project build, rebuild and clean operations, and whenever `qpm.buildMode` changes.
+- Adds regression coverage for the generated-artifact Workspace integration.
 
 ## 0.17.6 — Restore pre-Python Qt Designer launch semantics
 
@@ -27,8 +233,6 @@
 - Launch the fallback with `-no-crashcheck` and without a Windows console.
 - Keep the 0.17.3 single-session `designer.exe --server` workflow when the standalone Designer state is clean.
 - Add QPM 0.17.4 recovery-safe Designer regression coverage.
-
-# Changelog
 
 ## 0.17.3
 

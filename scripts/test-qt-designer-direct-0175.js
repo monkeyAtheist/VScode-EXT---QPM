@@ -5,10 +5,10 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const cppSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
-assert(cppSource.includes('await spawnDesigner(installation, target, this.output);'), 'C++ .ui files must use the validated direct Designer launcher');
+assert(cppSource.includes('await spawnDesigner(installation, target, this.output, pluginRoots);'), 'C++ .ui files must keep the validated direct Designer launcher while allowing project-local widget plugin roots');
 assert(cppSource.includes('spawn(executable, [target]'), 'C++ Designer must receive the .ui path directly on its command line');
 assert(cppSource.includes('windowsHide: false'), 'C++ Designer must use the exact validated 0.10.0 Windows launch flag');
 assert(!cppSource.includes("spawn(executable, ['--server']"), 'C++ Designer server mode must stay disabled after rollback');
@@ -25,4 +25,4 @@ const pythonSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtPy
 assert(pythonSource.includes('pyside6-designer'), 'PySide6 Designer support must remain present');
 assert(pythonSource.includes("windowsHide: process.platform === 'win32'"), 'PySide6 Designer must remain console-less on Windows');
 
-console.log('QPM 0.17.6 direct C++ Designer rollback and PySide6 isolation tests: PASS');
+console.log('QPM 0.17.7 direct C++ Designer rollback and PySide6 isolation tests: PASS');

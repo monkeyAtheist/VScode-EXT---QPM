@@ -50,6 +50,7 @@ const qpmQtDirectBuildService_1 = require("./qpmQtDirectBuildService");
 const qpmQtBuildBackendService_1 = require("./qpmQtBuildBackendService");
 const qpmGnuResponseFile_1 = require("./qpmGnuResponseFile");
 const qpmBuildCleanup_1 = require("./qpmBuildCleanup");
+const qpmBuildDiagnostics_1 = require("./qpmBuildDiagnostics");
 class QpmBuildService {
     parser;
     workspaces;
@@ -58,9 +59,18 @@ class QpmBuildService {
     output;
     qtPython;
     qtDependencies;
+    buildTrace;
     qtBackends;
     launchedApplications = new Map();
-    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies) {
+    buildDiagnostics = vscode.languages.createDiagnosticCollection('qpm-build');
+    diagnosticStore = new Map();
+    buildStartedAt = 0;
+    buildToolRuns = 0;
+    buildErrors = 0;
+    buildWarnings = 0;
+    failedPhase = '';
+    firstBuildError;
+    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies, buildTrace) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
@@ -68,7 +78,11 @@ class QpmBuildService {
         this.output = output;
         this.qtPython = qtPython;
         this.qtDependencies = qtDependencies;
+        this.buildTrace = buildTrace;
         this.qtBackends = new qpmQtBuildBackendService_1.QpmQtBuildBackendService(output);
+    }
+    dispose() {
+        this.buildDiagnostics.dispose();
     }
     get buildMode() {
         const ref = this.workspaces.activeProjectRef;
@@ -173,22 +187,30 @@ class QpmBuildService {
         }
         this.beginOutput(`${rebuild ? 'Rebuild' : 'Build'} ${ref.name}`);
         const order = this.projectSettings.getBuildOrder(ref);
-        this.output.appendLine(`[Qt/C++] Build order: ${order.map((item) => item.name).join(' -> ')}`);
+        this.logSection('BUILD ORDER');
+        this.output.appendLine(`  ${order.map((item) => item.name).join(' -> ')}`);
         this.output.appendLine('');
         for (const item of order) {
             const cwd = path.dirname(item.absolutePath);
             const settings = this.projectSettings.getSettings(item);
             if (!await this.projectSettings.runActions(settings.preBuildActions, `Pre-build actions — ${item.name}`, cwd)) {
+                this.failedPhase = 'Pre-build actions';
+                this.finishBuild(false);
                 return false;
             }
             if (!await this.projectSettings.runActions(settings.customBuildActions, `Custom build actions — ${item.name}`, cwd)) {
+                this.failedPhase = 'Custom build actions';
+                this.finishBuild(false);
                 return false;
             }
             const success = await this.buildOneProject(item, rebuild);
             if (!success) {
+                this.finishBuild(false);
                 return false;
             }
             if (!await this.projectSettings.runActions(settings.postBuildActions, `Post-build actions — ${item.name}`, cwd)) {
+                this.failedPhase = 'Post-build actions';
+                this.finishBuild(false);
                 return false;
             }
         }
@@ -198,6 +220,7 @@ class QpmBuildService {
         catch {
             // Microsoft C/C++ may not be installed or active.
         }
+        this.finishBuild(true);
         vscode.window.showInformationMessage(`${rebuild ? 'Rebuild' : 'Build'} completed successfully.`);
         return true;
     }
@@ -852,14 +875,16 @@ class QpmBuildService {
             return result.success;
         }
         const plan = (0, qpmQtDirectBuildService_1.createQtDirectBuildPlan)(ref.absolutePath, this.buildMode, installation);
-        this.output.appendLine(`[Qt Direct] Project: ${manifest.name}`);
-        this.output.appendLine(`[Qt Direct] Qt kit: ${installation.label}`);
-        this.output.appendLine(`[Qt Direct] Compiler: ${installation.toolchain.cppCompilerPath}`);
-        this.output.appendLine(`[Qt Direct] Modules: ${plan.qtLibraries.join(', ')}`);
-        this.output.appendLine(`[Qt Direct] Generated steps: ${plan.generationSteps.length}`);
-        this.output.appendLine(`[Qt Direct] Target: ${plan.targetPath}`);
+        this.logSection('PROJECT / TOOLCHAIN');
+        this.output.appendLine(`  Project   : ${manifest.name}`);
+        this.output.appendLine(`  Backend   : Qt Direct`);
+        this.output.appendLine(`  Qt kit    : ${installation.label}`);
+        this.output.appendLine(`  Compiler  : ${installation.toolchain.cppCompilerPath}`);
+        this.output.appendLine(`  Modules   : ${plan.qtLibraries.join(', ')}`);
+        this.output.appendLine(`  Target    : ${plan.targetPath}`);
+        this.output.appendLine(`  Generated : ${plan.generationSteps.length} moc/uic/rcc/resource step(s)`);
         for (const warning of plan.warnings)
-            this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+            this.output.appendLine(`  [!] ${warning}`);
         this.output.appendLine('');
         const modeOutputDirectory = path.dirname(plan.targetPath);
         if (rebuild) {
@@ -868,11 +893,13 @@ class QpmBuildService {
                 modeDirectory: modeOutputDirectory,
                 requiredDirectories: [plan.generatedDirectory, plan.objectDirectory]
             });
-            this.output.appendLine(`[Qt Direct] Rebuild clean strategy: ${cleanResult.strategy}.`);
+            this.logSection('CLEAN / REBUILD PREPARATION');
+            this.output.appendLine(`  Strategy : ${cleanResult.strategy}`);
             if (cleanResult.pendingDirectory)
-                this.output.appendLine(`[Qt Direct] Previous output is pending removal: ${cleanResult.pendingDirectory}`);
+                this.output.appendLine(`  Pending  : ${cleanResult.pendingDirectory}`);
             for (const warning of cleanResult.warnings)
-                this.output.appendLine(`[Qt Direct] Warning: ${warning}`);
+                this.output.appendLine(`  [!] ${warning}`);
+            this.output.appendLine('');
             if (!cleanResult.success) {
                 vscode.window.showErrorMessage(`Unable to clean locked build artifacts for ${manifest.name}. Close the running application and retry.`);
                 return false;
@@ -882,17 +909,27 @@ class QpmBuildService {
             if (!await this.ensureDirectory(directory, label))
                 return false;
         }
-        for (const step of plan.generationSteps) {
-            if (!(0, qpmQtDirectBuildService_1.generationStepIsOutdated)(step) && !rebuild) {
-                this.output.appendLine(`[Qt Direct] Up to date: ${path.basename(step.outputPath)}`);
-                continue;
+        this.logSection('QT CODE GENERATION (MOC / UIC / RCC)');
+        const generationToRun = plan.generationSteps.filter((step) => rebuild || (0, qpmQtDirectBuildService_1.generationStepIsOutdated)(step));
+        const generationCached = plan.generationSteps.length - generationToRun.length;
+        this.output.appendLine(`  Total: ${plan.generationSteps.length} | Run: ${generationToRun.length} | Cached: ${generationCached}`);
+        if (this.buildLogDetail() === 'verbose' && generationCached > 0) {
+            for (const step of plan.generationSteps.filter((entry) => !generationToRun.includes(entry))) {
+                this.output.appendLine(`  [CACHED] ${path.basename(step.outputPath)}`);
             }
+        }
+        for (const step of generationToRun) {
             const ok = await this.spawnTool(step.toolPath, step.arguments, plan.projectDirectory, `${step.kind} ${path.basename(step.inputPath)}`);
             if (!ok)
                 return false;
             if (!this.validateProducedFile(step.outputPath, `${step.kind} output`))
                 return false;
         }
+        if (generationToRun.length === 0)
+            this.output.appendLine('  [OK] All generated files are up to date.');
+        else if (this.buildLogDetail() === 'compact')
+            this.output.appendLine(`  [OK] Generated ${generationToRun.length} file(s).`);
+        this.output.appendLine('');
         if (plan.precompiledHeaderPath && plan.precompiledHeaderCopyPath && plan.precompiledHeaderOutputPath) {
             const sourceChanged = !fs.existsSync(plan.precompiledHeaderCopyPath) || fs.statSync(plan.precompiledHeaderPath).mtimeMs > fs.statSync(plan.precompiledHeaderCopyPath).mtimeMs;
             if (sourceChanged)
@@ -904,7 +941,8 @@ class QpmBuildService {
                     return false;
             }
             else {
-                this.output.appendLine(`[Qt Direct] Up to date: ${path.basename(plan.precompiledHeaderOutputPath)}`);
+                if (this.buildLogDetail() === 'verbose')
+                    this.output.appendLine(`  [CACHED] ${path.basename(plan.precompiledHeaderOutputPath)}`);
             }
         }
         let allSources = [...plan.sourceFiles, ...plan.generatedSourceFiles];
@@ -914,7 +952,7 @@ class QpmBuildService {
             if (!fs.existsSync(unityPath) || fs.readFileSync(unityPath, 'utf8') !== unityContent)
                 fs.writeFileSync(unityPath, unityContent, 'utf8');
             allSources = [unityPath];
-            this.output.appendLine(`[Qt Direct] Unity build source: ${unityPath}`);
+            this.output.appendLine(`  Unity source: ${unityPath}`);
         }
         if (allSources.length === 0) {
             vscode.window.showErrorMessage(`${manifest.name} has no C++ source file to compile.`);
@@ -926,17 +964,29 @@ class QpmBuildService {
         const sourceObjectFiles = allSources.map((sourcePath) => (0, qpmQtDirectBuildService_1.qtObjectPathForSource)(plan, sourcePath));
         const compileItems = allSources.map((sourcePath, index) => ({ sourcePath, objectPath: sourceObjectFiles[index] }))
             .filter((item) => (0, qpmQtDirectBuildService_1.sourceNeedsCompilation)(item.sourcePath, item.objectPath, generatedDependencies, rebuild));
-        for (const sourcePath of allSources.filter((entry) => !compileItems.some((item) => item.sourcePath === entry))) {
-            this.output.appendLine(`[Qt Direct] Up to date: ${path.basename(sourcePath)}`);
-        }
+        const cachedSources = allSources.filter((entry) => !compileItems.some((item) => item.sourcePath === entry));
         const jobs = plan.buildProfile.parallelJobs > 0 ? plan.buildProfile.parallelJobs : Math.max(1, os.cpus().length);
+        this.logSection('C++ COMPILATION');
+        this.output.appendLine(`  Sources: ${allSources.length} | Compile: ${compileItems.length} | Cached: ${cachedSources.length} | Parallel jobs: ${jobs}`);
+        if (this.buildLogDetail() === 'verbose') {
+            for (const sourcePath of cachedSources)
+                this.output.appendLine(`  [CACHED] ${path.basename(sourcePath)}`);
+        }
         const compiled = await runWithConcurrency(compileItems, jobs, async (item) => {
             const args = (0, qpmQtDirectBuildService_1.qtCompileArguments)(plan, item.sourcePath, item.objectPath);
             const ok = await this.spawnTool(installation.toolchain.cppCompilerPath, args, plan.projectDirectory, `Compile ${path.basename(item.sourcePath)}`);
             return ok && this.validateProducedFile(item.objectPath, 'compiler output');
         });
-        if (!compiled)
+        if (!compiled) {
+            this.failedPhase = this.failedPhase || 'C++ compilation';
+            this.output.appendLine('  [SKIP] Link step skipped because compilation failed.');
             return false;
+        }
+        if (compileItems.length === 0)
+            this.output.appendLine('  [OK] All C++ objects are up to date.');
+        else if (this.buildLogDetail() === 'compact')
+            this.output.appendLine(`  [OK] Compiled ${compileItems.length} source file(s).`);
+        this.output.appendLine('');
         const objectFiles = [...sourceObjectFiles, ...plan.additionalObjectFiles];
         if (manifest.kind === 'static-library') {
             const archiver = installation.toolchain.archiverPath || 'ar';
@@ -949,7 +999,8 @@ class QpmBuildService {
         let linkArguments = rawLinkArguments;
         if (useResponseFile) {
             linkArguments = (0, qpmGnuResponseFile_1.createGnuResponseFileArguments)(rawLinkArguments, responseFilePath);
-            this.output.appendLine(`[Qt Direct] Link response file: ${responseFilePath} (${(0, qpmGnuResponseFile_1.estimateGnuArgumentLength)(rawLinkArguments)} characters)`);
+            if (this.buildLogDetail() !== 'compact')
+                this.output.appendLine(`  Link response file: ${responseFilePath} (${(0, qpmGnuResponseFile_1.estimateGnuArgumentLength)(rawLinkArguments)} characters)`);
         }
         else if (fs.existsSync(responseFilePath)) {
             // Remove stale response files from previous builds so the build directory
@@ -962,13 +1013,16 @@ class QpmBuildService {
         if (fs.existsSync(plan.targetPath)) {
             await this.stopApplicationsForTarget(plan.targetPath, 'link');
         }
+        this.logSection('LINK');
+        this.output.appendLine(`  Objects: ${objectFiles.length}`);
         const linked = await this.spawnTool(installation.toolchain.cppCompilerPath, linkArguments, plan.projectDirectory, `Link ${path.basename(plan.targetPath)}`);
         if (!linked || !this.validateProducedFile(plan.targetPath, 'linker output'))
             return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, 'import library output'))
             return false;
         if ((0, qtProjectManifest_1.getActiveQtDeployProfile)(manifest).enabled) {
-            this.output.appendLine('[Qt Direct] Automatic Qt runtime deployment enabled.');
+            this.logSection('DEPLOYMENT');
+            this.output.appendLine('  Automatic Qt runtime deployment enabled.');
             if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
                 return false;
         }
@@ -1152,9 +1206,108 @@ class QpmBuildService {
     beginOutput(label) {
         this.output.clear();
         this.output.show(true);
-        this.output.appendLine(`[Qt/C++] ${label} started`);
-        this.output.appendLine(`[Qt/C++] Build mode: ${this.buildMode}`);
+        this.buildTrace?.clear();
+        this.buildStartedAt = Date.now();
+        this.buildToolRuns = 0;
+        this.buildErrors = 0;
+        this.buildWarnings = 0;
+        this.failedPhase = '';
+        this.firstBuildError = undefined;
+        this.diagnosticStore.clear();
+        this.buildDiagnostics.clear();
+        this.output.appendLine('================================================================================');
+        this.output.appendLine(` QPM BUILD  |  ${label}`);
+        this.output.appendLine('================================================================================');
+        this.output.appendLine(`  Mode      : ${this.buildMode}`);
+        this.output.appendLine(`  Started   : ${new Date(this.buildStartedAt).toLocaleString()}`);
+        this.output.appendLine(`  Log detail: ${this.buildLogDetail()}`);
         this.output.appendLine('');
+        if (this.buildLogDetail() !== 'verbose') {
+            this.output.appendLine('  Full compiler commands and raw tool output are available in:');
+            this.output.appendLine('  Output -> Qt Project Manager - Build Trace');
+            this.output.appendLine('');
+        }
+        this.buildTrace?.appendLine('================================================================================');
+        this.buildTrace?.appendLine(` QPM RAW BUILD TRACE  |  ${label}`);
+        this.buildTrace?.appendLine('================================================================================');
+        this.buildTrace?.appendLine(`Mode: ${this.buildMode}`);
+        this.buildTrace?.appendLine(`Started: ${new Date(this.buildStartedAt).toISOString()}`);
+        this.buildTrace?.appendLine('');
+    }
+    buildLogDetail() {
+        return vscode.workspace.getConfiguration('qpm').get('buildLogDetail', 'normal');
+    }
+    logSection(title) {
+        this.output.appendLine(`--- ${title} ${'-'.repeat(Math.max(2, 72 - title.length))}`);
+    }
+    finishBuild(success) {
+        const duration = this.buildStartedAt ? Date.now() - this.buildStartedAt : 0;
+        this.output.appendLine('');
+        this.output.appendLine('================================================================================');
+        this.output.appendLine(success ? ' BUILD SUCCEEDED' : ' BUILD FAILED');
+        this.output.appendLine('================================================================================');
+        this.output.appendLine(`  Duration  : ${(0, qpmBuildDiagnostics_1.formatDuration)(duration)}`);
+        this.output.appendLine(`  Tool runs : ${this.buildToolRuns}`);
+        this.output.appendLine(`  Errors    : ${this.buildErrors}`);
+        this.output.appendLine(`  Warnings  : ${this.buildWarnings}`);
+        if (!success && this.failedPhase)
+            this.output.appendLine(`  Failed at : ${this.failedPhase}`);
+        if (!success && this.firstBuildError) {
+            const first = this.firstBuildError;
+            const location = first.filePath ? `${first.filePath}:${first.line ?? '?'}:${first.column ?? '?'}` : '(linker/tool)';
+            this.output.appendLine(`  First error: ${location}`);
+            this.output.appendLine(`               ${first.message}`);
+        }
+        if (!success) {
+            this.output.appendLine('');
+            this.output.appendLine('  Next steps:');
+            this.output.appendLine('    1. Fix the first ERROR block above; later diagnostics may be consequences.');
+            this.output.appendLine('    2. Open View -> Problems for clickable QPM build diagnostics.');
+            this.output.appendLine('    3. Use Output -> Qt Project Manager - Build Trace for full commands/raw output.');
+        }
+        this.output.appendLine('================================================================================');
+    }
+    publishDiagnostics(items) {
+        for (const item of items) {
+            if (item.severity === 'error') {
+                this.buildErrors += 1;
+                this.firstBuildError ??= item;
+            }
+            else if (item.severity === 'warning')
+                this.buildWarnings += 1;
+            const diagnostic = (0, qpmBuildDiagnostics_1.toVsCodeDiagnostic)(item);
+            if (!diagnostic || !item.filePath)
+                continue;
+            const key = path.normalize(item.filePath);
+            const existing = this.diagnosticStore.get(key) ?? [];
+            existing.push(diagnostic);
+            this.diagnosticStore.set(key, existing);
+            this.buildDiagnostics.set(vscode.Uri.file(key), existing);
+        }
+    }
+    printDiagnosticBlock(items, cwd, fallbackOutput) {
+        const useful = items.filter((item) => item.severity !== 'note');
+        if (useful.length === 0) {
+            this.output.appendLine('  No structured compiler diagnostic could be extracted. Raw tool output:');
+            const text = fallbackOutput.trim();
+            this.output.appendLine(text ? (0, qpmBuildDiagnostics_1.indentMultiline)(text, '    ') : '    (no output)');
+            return;
+        }
+        useful.forEach((item, index) => {
+            const location = item.filePath
+                ? `${(0, qpmBuildDiagnostics_1.relativeDiagnosticPath)(item.filePath, cwd)}:${item.line ?? '?'}:${item.column ?? '?'}`
+                : '(linker/tool)';
+            this.output.appendLine(`  [${(0, qpmBuildDiagnostics_1.diagnosticSeverityIcon)(item.severity)}] ${(0, qpmBuildDiagnostics_1.diagnosticSeverityLabel)(item.severity)} ${index + 1}/${useful.length}`);
+            this.output.appendLine(`      Location : ${location}`);
+            if (item.code)
+                this.output.appendLine(`      Code     : ${item.code}`);
+            this.output.appendLine(`      Message  : ${item.message}`);
+            if (item.sourceLine)
+                this.output.appendLine(`      Source   : ${item.sourceLine}`);
+            if (item.hint)
+                this.output.appendLine(`      Hint     : ${item.hint}`);
+            this.output.appendLine('');
+        });
     }
     trackLaunchedApplication(executablePath, child) {
         const key = runtimePathKey(executablePath);
@@ -1215,32 +1368,105 @@ class QpmBuildService {
     }
     async spawnTool(executable, args, cwd, label, environment) {
         const launch = resolveToolLaunch(executable);
-        this.output.appendLine(`[Qt/C++] ${label}`);
-        this.output.appendLine(`[Qt/C++] Tool: ${executable}`);
-        if (launch.note) {
-            this.output.appendLine(`[Qt/C++] ${launch.note}`);
+        const detail = this.buildLogDetail();
+        const startedAt = Date.now();
+        this.buildToolRuns += 1;
+        if (detail === 'verbose') {
+            this.output.appendLine(`[RUN] ${label}`);
+            this.output.appendLine(`      Tool      : ${executable}`);
+            this.output.appendLine(`      Directory : ${cwd}`);
+            this.output.appendLine(`      Arguments : ${args.map(renderArgument).join(' ')}`);
+            if (launch.note)
+                this.output.appendLine(`      Note      : ${launch.note}`);
+            if (launch.warning)
+                this.output.appendLine(`      Warning   : ${launch.warning}`);
         }
-        if (launch.warning) {
-            this.output.appendLine(`[Qt/C++] ${launch.warning}`);
-        }
-        this.output.appendLine(`[Qt/C++] Arguments: ${args.map(renderArgument).join(' ')}`);
-        this.output.appendLine('');
         return await new Promise((resolve) => {
+            const stdoutChunks = [];
+            const stderrChunks = [];
+            let startFailed = false;
             const child = (0, child_process_1.spawn)(launch.executable, args, { cwd, windowsHide: true, shell: false, env: mergeToolEnvironments(environment, launch.env) });
-            child.stdout.on('data', (data) => this.output.append(data.toString()));
-            child.stderr.on('data', (data) => this.output.append(data.toString()));
+            child.stdout.on('data', (data) => stdoutChunks.push(Buffer.from(data)));
+            child.stderr.on('data', (data) => stderrChunks.push(Buffer.from(data)));
             child.on('error', (error) => {
-                this.output.appendLine(`\n[Qt/C++] Unable to start ${executable}: ${error.message}`);
+                startFailed = true;
+                const durationMs = Date.now() - startedAt;
+                this.failedPhase = label;
+                this.buildErrors += 1;
+                this.output.appendLine(`  [X] ${label} - unable to start (${(0, qpmBuildDiagnostics_1.formatDuration)(durationMs)})`);
+                this.output.appendLine(`      Tool    : ${executable}`);
+                this.output.appendLine(`      Message : ${error.message}`);
+                this.output.appendLine('');
+                this.buildTrace?.appendLine(`[${label}]`);
+                this.buildTrace?.appendLine(`Tool: ${executable}`);
+                this.buildTrace?.appendLine(`Directory: ${cwd}`);
+                this.buildTrace?.appendLine(`Arguments: ${args.map(renderArgument).join(' ')}`);
+                this.buildTrace?.appendLine(`START ERROR: ${error.message}`);
+                this.buildTrace?.appendLine('');
                 vscode.window.showErrorMessage(`Unable to start ${executable}: ${error.message}`);
                 resolve(false);
             });
             child.on('close', (code) => {
-                this.output.appendLine('');
-                this.output.appendLine(`[Qt/C++] ${path.basename(executable)} exited with code ${String(code)}.`);
-                if (code !== 0) {
-                    vscode.window.showErrorMessage(`${label} failed. Open the Qt Project Manager output channel for details.`);
+                if (startFailed)
+                    return;
+                const durationMs = Date.now() - startedAt;
+                const stdout = Buffer.concat(stdoutChunks).toString();
+                const stderr = Buffer.concat(stderrChunks).toString();
+                const combined = [stdout, stderr].filter(Boolean).join(stdout && stderr ? '\n' : '');
+                const diagnostics = (0, qpmBuildDiagnostics_1.parseBuildDiagnostics)(combined, cwd);
+                this.publishDiagnostics(diagnostics);
+                const result = {
+                    success: code === 0,
+                    exitCode: code,
+                    stdout,
+                    stderr,
+                    diagnostics,
+                    durationMs
+                };
+                this.buildTrace?.appendLine('--------------------------------------------------------------------------------');
+                this.buildTrace?.appendLine(`[${label}]`);
+                this.buildTrace?.appendLine(`Tool: ${executable}`);
+                this.buildTrace?.appendLine(`Directory: ${cwd}`);
+                if (launch.note)
+                    this.buildTrace?.appendLine(`Note: ${launch.note}`);
+                if (launch.warning)
+                    this.buildTrace?.appendLine(`Warning: ${launch.warning}`);
+                this.buildTrace?.appendLine(`Arguments: ${args.map(renderArgument).join(' ')}`);
+                this.buildTrace?.appendLine(`Exit code: ${String(code)} | Duration: ${(0, qpmBuildDiagnostics_1.formatDuration)(durationMs)}`);
+                if (stdout.trim()) {
+                    this.buildTrace?.appendLine('--- stdout ---');
+                    this.buildTrace?.append(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
                 }
-                resolve(code === 0);
+                if (stderr.trim()) {
+                    this.buildTrace?.appendLine('--- stderr ---');
+                    this.buildTrace?.append(stderr.endsWith('\n') ? stderr : `${stderr}\n`);
+                }
+                this.buildTrace?.appendLine('');
+                if (result.success) {
+                    const warnings = diagnostics.filter((item) => item.severity === 'warning');
+                    if (detail !== 'compact') {
+                        this.output.appendLine(`  [OK] ${label} (${(0, qpmBuildDiagnostics_1.formatDuration)(durationMs)})${warnings.length ? ` - ${warnings.length} warning(s)` : ''}`);
+                    }
+                    else if (warnings.length) {
+                        this.output.appendLine(`  [!] ${label}: ${warnings.length} warning(s)`);
+                    }
+                    if (warnings.length && detail !== 'compact')
+                        this.printDiagnosticBlock(warnings, cwd, combined);
+                    if (detail === 'verbose' && combined.trim() && warnings.length === 0) {
+                        this.output.appendLine((0, qpmBuildDiagnostics_1.indentMultiline)(combined.trim(), '      '));
+                    }
+                }
+                else {
+                    this.failedPhase = label;
+                    this.output.appendLine('');
+                    this.output.appendLine(`  [X] ${label} FAILED (exit code ${String(code)}, ${(0, qpmBuildDiagnostics_1.formatDuration)(durationMs)})`);
+                    this.output.appendLine('  ------------------------------------------------------------------------------');
+                    this.printDiagnosticBlock(diagnostics, cwd, combined);
+                    this.output.appendLine('  Full command and unfiltered output: Output -> Qt Project Manager - Build Trace');
+                    this.output.appendLine('');
+                    vscode.window.showErrorMessage(`${label} failed. See the structured QPM build diagnostics and the Problems view.`);
+                }
+                resolve(result.success);
             });
         });
     }

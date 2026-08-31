@@ -1,9 +1,215 @@
+## QPM 0.30.0 — Build logging architecture
+
+The build pipeline now uses two complementary output surfaces. `Qt Project Manager` is the structured report intended for day-to-day debugging; `Qt Project Manager - Build Trace` is the lossless raw trace. Tool processes are captured into per-process stdout/stderr buffers and only emitted after completion, so parallel jobs cannot interleave diagnostic text. `qpmBuildDiagnostics.ts` parses common compiler/linker diagnostics and feeds both structured log blocks and a `vscode.DiagnosticCollection` named `qpm-build`.
+
+Build phases are explicitly separated at the orchestration layer. The direct backend reports preparation, Qt code generation, C++ compilation, linking and deployment. Cached work is summarized in normal/compact modes and expanded only in verbose mode. The full command line is never discarded; it is always retained in Build Trace.
+
+# QPM architecture
+
+## Complete acquisition dashboard architecture (0.29.0)
+
+The dashboard is a compositional QWidget above the existing 0.22/0.23 layers:
+
+```text
+AcquisitionDashboard
+├─ AcquisitionControl
+│      │
+│      ▼
+│  QpmAcquisitionController
+│      │
+│      ▼
+│  Serial / TCP / UDP / SCPI
+│      │
+│      ▼
+├─ QpmSignalBuffer
+│      │ snapshot
+│      ▼
+├─ QpmSignalPlotBridge
+│      │
+│      ▼
+└─ SignalPlot
+```
+
+The dashboard owns the buffer and QObject runtime adapters but not transport-specific UI logic. Under `QPM_DESIGNER_PLUGIN_BUILD`, runtime acquisition objects are not created; only `AcquisitionControl` and `SignalPlot` are laid out for preview. The complete-dashboard generator modifies `forms/mainwindow.ui` only when `centralWidget` is still the untouched empty widget created by the QPM application template.
+
+Designer publication remains a compiled-plugin operation. `Prepare All QPM Widgets for Qt Designer` regenerates `.qpm/designer-plugins/widgets.json` from every discoverable project QWidget, builds the collection against the Qt kit that owns the selected standalone Designer, and stores the DLL under the project-local `runtime/designer` path.
+
+
+## Instrument-driver capability architecture (0.28.0)
+
+The profile action layer remains the concrete SCPI implementation, while capabilities provide a stable semantic contract above it:
+
+```text
+Application / test sequence
+        │
+        │ "measure.dc-voltage"
+        ▼
+QpmInstrumentManager
+        │ applied profile ID
+        ▼
+QpmInstrumentDriverRegistry
+        │ capability -> action IDs
+        ▼
+QpmInstrumentProfile
+        │ action -> SCPI query/write
+        ▼
+QpmScpiInstrument
+        ▼
+Instrument
+```
+
+A capability is stored as `id`, `label`, `category` and one or more `actionIds`. The registry indexes profiles in both directions: capabilities for a driver and drivers for a capability. `invokeCapability()` resolves the first mapped action and dispatches measurement/action/numeric/toggle operations through the already queued `QpmScpiInstrument` session. Explicit profile application from 0.27.0 remains mandatory; capability dispatch never selects a heuristic profile silently.
+
+Older action-only profile JSON files are accepted. When no explicit capability array exists, generated `QpmInstrumentProfile::loadJsonFile()` infers a conservative set from established starter action IDs. Explicit capability metadata always takes precedence.
+
+`InstrumentCapabilitiesControl` depends only on the registry at runtime and optionally follows the active/applied driver from `QpmInstrumentManager`. Under `QPM_DESIGNER_PLUGIN_BUILD` it presents a static preview so Qt Designer never creates live instrument sessions.
+
+The acquisition sample-rate state is now owned at both controller and source layers. `QpmAcquisitionController::configureSource()` forwards `m_sampleRateHz`; `QpmAcquisitionSource::setSampleRateHz()` updates the attached `QpmSignalBuffer::sampleInterval` when the value is positive.
+
+## SCPI identity/profile matching architecture (0.27.0)
+
+The runtime manager now treats `*IDN?` identity and profile selection as separate steps. Identification can happen automatically after connection, but profile application remains explicit:
+
+```text
+QpmScpiInstrument
+      │ *IDN?
+      ▼
+QpmScpiIdentity
+ manufacturer/model/serial/firmware
+      │
+      ▼
+QpmScpiProfileMatcher
+      │ scans project-local instrument_profiles/*.json
+      │ manufacturer + model score
+      ▼
+QpmInstrumentManager
+      │ suggestion only
+      ▼
+InstrumentManagerControl
+      │ Apply suggested profile
+      ▼
+profileApplied(name, profileId, path)
+```
+
+Generic profiles are not detection candidates. The matcher canonicalizes common vendor-name changes such as Hewlett-Packard → Agilent → Keysight, but it does not infer a driver from manufacturer alone with high confidence. Runtime code does not depend on the VS Code extension's bundled catalogue; model profiles must exist in the project's `instrument_profiles` directory. This keeps deployed applications self-contained and makes the selected profile auditable.
+
+The VS Code 0.27.0 editor mirrors the same score policy in its `*IDN? matcher` preview, allowing a developer to test an identity against bundled starters before saving the chosen profile into the project.
+
 
 ## Qt Designer launcher policy (0.17.5)
 
 The Qt/C++ and PySide6 Designer launch paths are deliberately isolated. Native Qt/C++ forms use a direct standalone Designer process (`designer.exe <form.ui>`) with `windowsHide` on Windows. QPM does not use Designer server mode, does not intercept Designer recovery state, and does not redirect native forms to Qt Creator. PySide6 uses its own `pyside6-designer` launcher.
 
-# QPM architecture
+## Instrument-profile catalog/editor architecture (0.26.0)
+
+The 0.26.0 editor is a VS Code-side data authoring layer above the 0.25.0 runtime profile format:
+
+```text
+Bundled catalog (data/qt_instrument_profile_catalog.json)
+                  │
+                  ▼
+   QtInstrumentProfileEditorPanel
+      search/filter + validation
+      action table + live preview
+                  │
+                  ▼
+      instrument_profiles/*.json
+                  │
+                  ▼
+        QpmInstrumentProfile
+                  │
+                  ▼
+     ProfiledInstrumentControl
+                  │
+                  ▼
+         QpmScpiInstrument
+```
+
+The catalog is deliberately metadata/data-driven and does not introduce vendor logic into the webview. Generic entries and manufacturer/model-labelled entries use the same normalized profile schema. Manufacturer/model entries bundled by QPM are marked `starter`; this distinction is preserved in catalog metadata so an editable baseline is not confused with a verified driver.
+
+The editor serializer remains backward compatible with 0.25.0 JSON. Optional model metadata is ignored safely by older generated profile loaders; 0.26.0 generated loaders additionally preserve `manufacturer`, `model`, `documentationUrl` and `schemaVersion`. Structural validation runs before save but does not pretend to semantically validate a vendor's SCPI command tree.
+
+## Instrument-profile architecture (0.25.0)
+
+The profile layer sits above the generic SCPI transport from 0.24.0. It deliberately separates **what an operation means** from the vendor command string used to perform it:
+
+```text
+Profile JSON / built-in profile
+  voltage setpoint -> VOLT %1
+  output toggle    -> OUTP %1
+  measured voltage-> MEAS:VOLT?
+             │
+             ▼
+   QpmInstrumentProfile
+             │ semantic controls
+             ▼
+ ProfiledInstrumentControl
+             │ request IDs
+             ▼
+     QpmScpiInstrument
+             │
+             ▼
+       SCPI/TCP device
+```
+
+`ProfiledInstrumentControl` dynamically creates measurement rows, `QDoubleSpinBox` setpoints, `QCheckBox` toggles and action buttons. Query request IDs are mapped back to semantic action IDs so asynchronous replies update the correct readback. The widget is transport-agnostic beyond its runtime dependency on `QpmScpiInstrument`; profiles themselves contain no sockets or QWidget code.
+
+Built-in profiles are useful defaults and the generated JSON copies are intended to be edited for real instruments. QPM does not assume that generic SCPI command trees are identical across manufacturers. This keeps vendor/model-specific syntax in data while the control/rendering logic remains reusable. Under `QPM_DESIGNER_PLUGIN_BUILD`, the widget creates a static profile preview and avoids linking the SCPI session implementation into Designer.
+
+## SCPI instrument-session architecture (0.24.0)
+
+The SCPI control path is intentionally separate from the high-rate acquisition path. `QpmScpiInstrument` owns one asynchronous TCP session and serializes SCPI commands through a FIFO queue:
+
+```text
+Application / InstrumentManagerControl
+              │
+              ▼
+       QpmInstrumentManager
+              │ selected/name-routed session
+              ▼
+        QpmScpiInstrument
+              │
+        FIFO command queue
+              │ one active query
+              ▼
+          QTcpSocket
+              │
+        SCPI instrument
+```
+
+`writeCommand()` completes when the command has been accepted by the socket buffer, while `query()` keeps one request active until a newline-terminated response arrives or its timer expires. TCP fragmentation is handled by an internal receive buffer. `queryBlocking()` uses a nested event loop only as a convenience API and rejects cross-thread use; normal GUI code should prefer asynchronous request IDs/signals.
+
+The manager can probe **configured** endpoints using `*IDN?`. It does not implement generic LAN scanning because SCPI itself has no universal discovery protocol. Discovery providers for LXI/mDNS, VXI-11, HiSLIP or vendor-specific mechanisms can be layered above the manager without changing the command-session abstraction.
+
+The acquisition path from 0.23.0 remains independent: a project may use `QpmScpiInstrument` for control/configuration and `QpmScpiAcquisitionSource` for periodic numeric acquisition, or replace both later with an instrument-specific shared transport.
+
+## Acquisition-source architecture (0.23.0)
+
+The realtime instrumentation path is split into transport, decoding, buffering and rendering layers:
+
+```text
+Serial / TCP / UDP / SCPI
+          │
+          ▼
+QpmAcquisitionSource
+          │ raw QByteArray
+          ▼
+ QpmSampleDecoder
+          │ interleaved doubles
+          ▼
+  QpmSignalBuffer
+          │ snapshot
+          ▼
+QpmSignalPlotBridge
+          │
+          ▼
+     SignalPlot
+```
+
+`QpmAcquisitionSource` owns common state, counters, scale/offset transformation and decoder integration. The concrete Qt backends remain asynchronous and can be moved to a worker thread by application code when throughput warrants it. `QpmAcquisitionController` is the convenience same-thread factory/configuration layer used by the generated `AcquisitionControl`; high-rate applications can instantiate a concrete source directly and move it to a dedicated `QThread` while keeping the same `QpmSignalBuffer`.
+
+The Designer control is compiled with `QPM_DESIGNER_PLUGIN_BUILD` inside the Widget Box plugin, suppressing runtime-controller linkage while preserving the preview UI. Native project creation results can declare required Qt modules; `QpmWorkspaceService` forwards them to `QpmQtProjectService.ensureModules()` after files are registered.
+
 
 ## Schema v17 persistence
 
@@ -314,3 +520,29 @@ Standalone Qt Widgets Designer is treated as a shared GUI tool rather than a per
 ### Recovery-safe Qt Widgets Designer fallback (0.17.4)
 
 On Windows, standalone Qt Widgets Designer stores crash-recovery lists in the native QSettings registry hierarchy `HKCU\Software\QtProject\Designer\backup`. QPM probes the `fileListOrg` and `fileListBak` values read-only before starting an auto-detected standalone Designer. If recovery state is pending, QPM does not clear, rewrite or import those values. Instead it discovers Qt Creator from the active Qt installation tree and opens the `.ui` file in Qt Creator's integrated Widgets Designer with `-no-crashcheck`. This avoids blocking the QPM workflow while preserving the user's recoverable standalone Designer forms. Explicitly configured Designer launchers remain authoritative.
+
+## Qt Widgets Designer custom-widget plugin subsystem (0.18.0)
+
+`QpmQtDesignerWidgetService` discovers manifest-owned `Q_OBJECT` / `QWidget` classes, persists the selected Designer exposure set in `.qpm/designer-plugins/widgets.json`, generates a qmake `uiplugin` collection, builds it with the resolved Designer Qt kit and manages project-local/runtime installation. `QpmQtProjectService` augments Designer's environment with the project-local runtime root while keeping the actual Designer kit's platform plugins and QML paths authoritative.
+## QPM 0.20.0 advanced instrumentation view model
+
+The generated `SignalPlot` now owns a vector of channel records (`name`, `color`, `samples`, `visible`) and keeps channel 0 as the compatibility surface for the original single-series API. Time cursor measurements are derived from the configured `sampleInterval`; the view state (X zoom/pan and Y range/autoscale) remains entirely local to the widget.
+
+`SpectrumPlot` mirrors that architecture with named/colored trace records. The data frequency range is kept separate from the current view frequency range so wheel zoom and pan crop the plotted bins instead of relabelling the same data. Linear/logarithmic X mapping is therefore a rendering/view concern, not a mutation of the FFT data. Both controls remain project source files and do not introduce runtime dependencies on the Designer plugin subsystem.
+
+## QPM 0.19.0 instrumentation widgets
+
+Instrumentation controls are generated as normal project sources (`include/widgets/*.h`, `src/widgets/*.cpp`) and therefore stay independent from the Designer plugin ABI. They use `QWidget` + `QPainter`, `Q_OBJECT` and `Q_PROPERTY`; the existing Designer widget discovery service can expose any generated control through the project-local `QDesignerCustomWidgetCollectionInterface` plugin. This separation keeps runtime applications free of `QtUiPlugin` while allowing the same classes to be used through C++, `Promote to...`, or the native Designer Widget Box.
+
+
+## QPM 0.21.0 trigger and measurement model
+
+The generated `SignalPlot` keeps sample storage independent from view processing. DC/AC coupling is a display/measurement transform; trigger detection records the latest threshold crossing on a selectable channel and the view uses `triggerPosition` as a pre-trigger fraction. Automatic measurements operate on the visible primary-channel window. `SpectrumPlot` stores current, hold and persistence vectors independently per trace so Designer/runtime use does not require an external chart library.
+
+## Real-time acquisition boundary (0.22.0)
+
+The instrumentation architecture now separates producer-rate data acquisition from GUI-rate rendering:
+
+`Acquisition worker(s) -> QpmSignalBuffer -> QpmSignalPlotBridge/QTimer -> SignalPlot`
+
+`QpmSignalBuffer` is transport-agnostic and thread-safe. Writers use a fixed-capacity ring per channel; the GUI obtains ordered snapshots. `trySnapshot()` deliberately permits dropping a display refresh rather than blocking the GUI behind a writer. `QpmSignalPlotBridge` must stay in the GUI thread because it updates a QWidget. The bridge does not own either endpoint.

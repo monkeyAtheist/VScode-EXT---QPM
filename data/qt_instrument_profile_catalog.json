@@ -1,0 +1,955 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "catalogId": "generic-dmm",
+      "status": "starter",
+      "notes": "Generic SCPI baseline. Verify commands against the programming manual for the target instrument.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "dmm",
+        "displayName": "Generic SCPI Digital Multimeter",
+        "family": "dmm",
+        "manufacturer": "Generic",
+        "model": "SCPI DMM",
+        "description": "Starter profile using common SCPI measurement commands.",
+        "actions": [
+          {
+            "id": "voltage-dc",
+            "label": "DC voltage",
+            "kind": "measurement",
+            "query": "MEAS:VOLT:DC?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "current-dc",
+            "label": "DC current",
+            "kind": "measurement",
+            "query": "MEAS:CURR:DC?",
+            "unit": "A",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "resistance",
+            "label": "Resistance",
+            "kind": "measurement",
+            "query": "MEAS:RES?",
+            "unit": "Ohm",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "measurement",
+            "query": "MEAS:FREQ?",
+            "unit": "Hz",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.dc-voltage",
+            "label": "DC voltage measurement",
+            "category": "measurement",
+            "actions": [
+              "voltage-dc"
+            ]
+          },
+          {
+            "id": "measure.dc-current",
+            "label": "DC current measurement",
+            "category": "measurement",
+            "actions": [
+              "current-dc"
+            ]
+          },
+          {
+            "id": "measure.resistance",
+            "label": "Resistance measurement",
+            "category": "measurement",
+            "actions": [
+              "resistance"
+            ]
+          },
+          {
+            "id": "measure.frequency",
+            "label": "Frequency measurement",
+            "category": "measurement",
+            "actions": [
+              "frequency"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "generic-power-supply",
+      "status": "starter",
+      "notes": "Generic single-output programmable power-supply baseline. Channel selection syntax varies by vendor.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "power-supply",
+        "displayName": "Generic SCPI Power Supply",
+        "family": "power-supply",
+        "manufacturer": "Generic",
+        "model": "SCPI PSU",
+        "description": "Starter profile for programmable DC power supplies.",
+        "actions": [
+          {
+            "id": "voltage",
+            "label": "Voltage setpoint",
+            "kind": "numeric",
+            "query": "VOLT?",
+            "write": "VOLT %1",
+            "unit": "V",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 5,
+            "readback": true
+          },
+          {
+            "id": "current",
+            "label": "Current limit",
+            "kind": "numeric",
+            "query": "CURR?",
+            "write": "CURR %1",
+            "unit": "A",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "output",
+            "label": "Output",
+            "kind": "toggle",
+            "query": "OUTP?",
+            "write": "OUTP %1",
+            "readback": true
+          },
+          {
+            "id": "measured-voltage",
+            "label": "Measured voltage",
+            "kind": "measurement",
+            "query": "MEAS:VOLT?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "measured-current",
+            "label": "Measured current",
+            "kind": "measurement",
+            "query": "MEAS:CURR?",
+            "unit": "A",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.dc-voltage",
+            "label": "DC voltage measurement",
+            "category": "measurement",
+            "actions": [
+              "measured-voltage"
+            ]
+          },
+          {
+            "id": "measure.dc-current",
+            "label": "DC current measurement",
+            "category": "measurement",
+            "actions": [
+              "measured-current"
+            ]
+          },
+          {
+            "id": "power.voltage-set",
+            "label": "Voltage setpoint",
+            "category": "power",
+            "actions": [
+              "voltage"
+            ]
+          },
+          {
+            "id": "power.current-limit",
+            "label": "Current limit",
+            "category": "power",
+            "actions": [
+              "current"
+            ]
+          },
+          {
+            "id": "power.output",
+            "label": "Output enable",
+            "category": "power",
+            "actions": [
+              "output"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "generic-signal-generator",
+      "status": "starter",
+      "notes": "Generic single-channel signal-generator baseline. Source/channel prefixes and amplitude semantics vary by vendor.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "signal-generator",
+        "displayName": "Generic SCPI Signal Generator",
+        "family": "signal-generator",
+        "manufacturer": "Generic",
+        "model": "SCPI Generator",
+        "description": "Starter profile for a single-channel function/arbitrary generator.",
+        "actions": [
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "numeric",
+            "query": "FREQ?",
+            "write": "FREQ %1",
+            "unit": "Hz",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "decimals": 6,
+            "defaultValue": 1000,
+            "readback": true
+          },
+          {
+            "id": "amplitude",
+            "label": "Amplitude",
+            "kind": "numeric",
+            "query": "VOLT?",
+            "write": "VOLT %1",
+            "unit": "Vpp",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "offset",
+            "label": "DC offset",
+            "kind": "numeric",
+            "query": "VOLT:OFFS?",
+            "write": "VOLT:OFFS %1",
+            "unit": "V",
+            "minimum": -1000,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 0,
+            "readback": true
+          },
+          {
+            "id": "output",
+            "label": "Output",
+            "kind": "toggle",
+            "query": "OUTP?",
+            "write": "OUTP %1",
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "source.frequency",
+            "label": "Frequency control",
+            "category": "source",
+            "actions": [
+              "frequency"
+            ]
+          },
+          {
+            "id": "source.output",
+            "label": "Output enable",
+            "category": "source",
+            "actions": [
+              "output"
+            ]
+          },
+          {
+            "id": "source.amplitude",
+            "label": "Amplitude control",
+            "category": "source",
+            "actions": [
+              "amplitude"
+            ]
+          },
+          {
+            "id": "source.offset",
+            "label": "DC offset control",
+            "category": "source",
+            "actions": [
+              "offset"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "generic-oscilloscope",
+      "status": "starter",
+      "notes": "Generic oscilloscope baseline. Timebase, channel and measurement command trees differ significantly between vendors.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "oscilloscope",
+        "displayName": "Generic SCPI Oscilloscope",
+        "family": "oscilloscope",
+        "manufacturer": "Generic",
+        "model": "SCPI Oscilloscope",
+        "description": "Starter profile for common oscilloscope controls.",
+        "actions": [
+          {
+            "id": "run",
+            "label": "Run",
+            "kind": "action",
+            "write": "RUN",
+            "readback": false
+          },
+          {
+            "id": "stop",
+            "label": "Stop",
+            "kind": "action",
+            "write": "STOP",
+            "readback": false
+          },
+          {
+            "id": "single",
+            "label": "Single acquisition",
+            "kind": "action",
+            "write": "SING",
+            "readback": false
+          },
+          {
+            "id": "time-scale",
+            "label": "Time scale",
+            "kind": "numeric",
+            "query": "TIM:SCAL?",
+            "write": "TIM:SCAL %1",
+            "unit": "s/div",
+            "minimum": 1e-12,
+            "maximum": 1000,
+            "decimals": 9,
+            "defaultValue": 0.001,
+            "readback": true
+          },
+          {
+            "id": "channel1-scale",
+            "label": "CH1 vertical scale",
+            "kind": "numeric",
+            "query": "CHAN1:SCAL?",
+            "write": "CHAN1:SCAL %1",
+            "unit": "V/div",
+            "minimum": 1e-09,
+            "maximum": 1000,
+            "decimals": 9,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "measurement",
+            "query": "MEAS:FREQ?",
+            "unit": "Hz",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "vpp",
+            "label": "Peak-to-peak",
+            "kind": "measurement",
+            "query": "MEAS:VPP?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.frequency",
+            "label": "Frequency measurement",
+            "category": "measurement",
+            "actions": [
+              "frequency"
+            ]
+          },
+          {
+            "id": "scope.run",
+            "label": "Run acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "run"
+            ]
+          },
+          {
+            "id": "scope.stop",
+            "label": "Stop acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "stop"
+            ]
+          },
+          {
+            "id": "scope.single",
+            "label": "Single acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "single"
+            ]
+          },
+          {
+            "id": "scope.time-scale",
+            "label": "Timebase control",
+            "category": "oscilloscope",
+            "actions": [
+              "time-scale"
+            ]
+          },
+          {
+            "id": "scope.vertical-scale",
+            "label": "Vertical scale control",
+            "category": "oscilloscope",
+            "actions": [
+              "channel1-scale"
+            ]
+          },
+          {
+            "id": "measure.vpp",
+            "label": "Peak-to-peak measurement",
+            "category": "measurement",
+            "actions": [
+              "vpp"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "keysight-34461a-starter",
+      "status": "starter",
+      "notes": "Model-labelled starter derived from the generic DMM baseline. The bundled catalogue intentionally does not claim vendor-command verification; compare with the 34461A programming guide before use.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "keysight-34461a",
+        "displayName": "Keysight 34461A \u2014 starter",
+        "family": "dmm",
+        "manufacturer": "Keysight",
+        "model": "34461A",
+        "description": "Starter model profile based on common SCPI DMM commands. Verify the complete command mapping before production use.",
+        "actions": [
+          {
+            "id": "voltage-dc",
+            "label": "DC voltage",
+            "kind": "measurement",
+            "query": "MEAS:VOLT:DC?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "current-dc",
+            "label": "DC current",
+            "kind": "measurement",
+            "query": "MEAS:CURR:DC?",
+            "unit": "A",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "resistance",
+            "label": "Resistance",
+            "kind": "measurement",
+            "query": "MEAS:RES?",
+            "unit": "Ohm",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "measurement",
+            "query": "MEAS:FREQ?",
+            "unit": "Hz",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.dc-voltage",
+            "label": "DC voltage measurement",
+            "category": "measurement",
+            "actions": [
+              "voltage-dc"
+            ]
+          },
+          {
+            "id": "measure.dc-current",
+            "label": "DC current measurement",
+            "category": "measurement",
+            "actions": [
+              "current-dc"
+            ]
+          },
+          {
+            "id": "measure.resistance",
+            "label": "Resistance measurement",
+            "category": "measurement",
+            "actions": [
+              "resistance"
+            ]
+          },
+          {
+            "id": "measure.frequency",
+            "label": "Frequency measurement",
+            "category": "measurement",
+            "actions": [
+              "frequency"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "fluke-8845a-starter",
+      "status": "starter",
+      "notes": "Model-labelled starter derived from the generic DMM baseline. Verify the command dialect against the Fluke 8845A remote-programming documentation.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "fluke-8845a",
+        "displayName": "Fluke 8845A \u2014 starter",
+        "family": "dmm",
+        "manufacturer": "Fluke",
+        "model": "8845A",
+        "description": "Starter model profile; commands are intentionally treated as a baseline to review, not a verified instrument driver.",
+        "actions": [
+          {
+            "id": "voltage-dc",
+            "label": "DC voltage",
+            "kind": "measurement",
+            "query": "MEAS:VOLT:DC?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "current-dc",
+            "label": "DC current",
+            "kind": "measurement",
+            "query": "MEAS:CURR:DC?",
+            "unit": "A",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "resistance",
+            "label": "Resistance",
+            "kind": "measurement",
+            "query": "MEAS:RES?",
+            "unit": "Ohm",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "measurement",
+            "query": "MEAS:FREQ?",
+            "unit": "Hz",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.dc-voltage",
+            "label": "DC voltage measurement",
+            "category": "measurement",
+            "actions": [
+              "voltage-dc"
+            ]
+          },
+          {
+            "id": "measure.dc-current",
+            "label": "DC current measurement",
+            "category": "measurement",
+            "actions": [
+              "current-dc"
+            ]
+          },
+          {
+            "id": "measure.resistance",
+            "label": "Resistance measurement",
+            "category": "measurement",
+            "actions": [
+              "resistance"
+            ]
+          },
+          {
+            "id": "measure.frequency",
+            "label": "Frequency measurement",
+            "category": "measurement",
+            "actions": [
+              "frequency"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "keysight-e36313a-starter",
+      "status": "starter",
+      "notes": "Model-labelled starter derived from the generic power-supply baseline. Multi-output/channel selection requires validation against the E36313A programming guide.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "keysight-e36313a",
+        "displayName": "Keysight E36313A \u2014 starter",
+        "family": "power-supply",
+        "manufacturer": "Keysight",
+        "model": "E36313A",
+        "description": "Starter power-supply profile. Review channel addressing and output-specific commands before use.",
+        "actions": [
+          {
+            "id": "voltage",
+            "label": "Voltage setpoint",
+            "kind": "numeric",
+            "query": "VOLT?",
+            "write": "VOLT %1",
+            "unit": "V",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 5,
+            "readback": true
+          },
+          {
+            "id": "current",
+            "label": "Current limit",
+            "kind": "numeric",
+            "query": "CURR?",
+            "write": "CURR %1",
+            "unit": "A",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "output",
+            "label": "Output",
+            "kind": "toggle",
+            "query": "OUTP?",
+            "write": "OUTP %1",
+            "readback": true
+          },
+          {
+            "id": "measured-voltage",
+            "label": "Measured voltage",
+            "kind": "measurement",
+            "query": "MEAS:VOLT?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "measured-current",
+            "label": "Measured current",
+            "kind": "measurement",
+            "query": "MEAS:CURR?",
+            "unit": "A",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.dc-voltage",
+            "label": "DC voltage measurement",
+            "category": "measurement",
+            "actions": [
+              "measured-voltage"
+            ]
+          },
+          {
+            "id": "measure.dc-current",
+            "label": "DC current measurement",
+            "category": "measurement",
+            "actions": [
+              "measured-current"
+            ]
+          },
+          {
+            "id": "power.voltage-set",
+            "label": "Voltage setpoint",
+            "category": "power",
+            "actions": [
+              "voltage"
+            ]
+          },
+          {
+            "id": "power.current-limit",
+            "label": "Current limit",
+            "category": "power",
+            "actions": [
+              "current"
+            ]
+          },
+          {
+            "id": "power.output",
+            "label": "Output enable",
+            "category": "power",
+            "actions": [
+              "output"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "rigol-dg1022z-starter",
+      "status": "starter",
+      "notes": "Model-labelled starter derived from the generic signal-generator baseline. Channel/source prefixes must be checked against the DG1022Z programming guide.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "rigol-dg1022z",
+        "displayName": "Rigol DG1022Z \u2014 starter",
+        "family": "signal-generator",
+        "manufacturer": "Rigol",
+        "model": "DG1022Z",
+        "description": "Starter generator profile. Treat command mappings as editable baseline data.",
+        "actions": [
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "numeric",
+            "query": "FREQ?",
+            "write": "FREQ %1",
+            "unit": "Hz",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "decimals": 6,
+            "defaultValue": 1000,
+            "readback": true
+          },
+          {
+            "id": "amplitude",
+            "label": "Amplitude",
+            "kind": "numeric",
+            "query": "VOLT?",
+            "write": "VOLT %1",
+            "unit": "Vpp",
+            "minimum": 0,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "offset",
+            "label": "DC offset",
+            "kind": "numeric",
+            "query": "VOLT:OFFS?",
+            "write": "VOLT:OFFS %1",
+            "unit": "V",
+            "minimum": -1000,
+            "maximum": 1000,
+            "decimals": 6,
+            "defaultValue": 0,
+            "readback": true
+          },
+          {
+            "id": "output",
+            "label": "Output",
+            "kind": "toggle",
+            "query": "OUTP?",
+            "write": "OUTP %1",
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "source.frequency",
+            "label": "Frequency control",
+            "category": "source",
+            "actions": [
+              "frequency"
+            ]
+          },
+          {
+            "id": "source.output",
+            "label": "Output enable",
+            "category": "source",
+            "actions": [
+              "output"
+            ]
+          },
+          {
+            "id": "source.amplitude",
+            "label": "Amplitude control",
+            "category": "source",
+            "actions": [
+              "amplitude"
+            ]
+          },
+          {
+            "id": "source.offset",
+            "label": "DC offset control",
+            "category": "source",
+            "actions": [
+              "offset"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "catalogId": "rigol-ds1054z-starter",
+      "status": "starter",
+      "notes": "Model-labelled starter derived from the generic oscilloscope baseline. Timebase/channel/measurement commands must be reviewed against the DS1054Z programming guide.",
+      "profile": {
+        "schemaVersion": 1,
+        "id": "rigol-ds1054z",
+        "displayName": "Rigol DS1054Z \u2014 starter",
+        "family": "oscilloscope",
+        "manufacturer": "Rigol",
+        "model": "DS1054Z",
+        "description": "Starter oscilloscope profile. Use the visual editor to adapt commands to the target firmware/dialect.",
+        "actions": [
+          {
+            "id": "run",
+            "label": "Run",
+            "kind": "action",
+            "write": "RUN",
+            "readback": false
+          },
+          {
+            "id": "stop",
+            "label": "Stop",
+            "kind": "action",
+            "write": "STOP",
+            "readback": false
+          },
+          {
+            "id": "single",
+            "label": "Single acquisition",
+            "kind": "action",
+            "write": "SING",
+            "readback": false
+          },
+          {
+            "id": "time-scale",
+            "label": "Time scale",
+            "kind": "numeric",
+            "query": "TIM:SCAL?",
+            "write": "TIM:SCAL %1",
+            "unit": "s/div",
+            "minimum": 1e-12,
+            "maximum": 1000,
+            "decimals": 9,
+            "defaultValue": 0.001,
+            "readback": true
+          },
+          {
+            "id": "channel1-scale",
+            "label": "CH1 vertical scale",
+            "kind": "numeric",
+            "query": "CHAN1:SCAL?",
+            "write": "CHAN1:SCAL %1",
+            "unit": "V/div",
+            "minimum": 1e-09,
+            "maximum": 1000,
+            "decimals": 9,
+            "defaultValue": 1,
+            "readback": true
+          },
+          {
+            "id": "frequency",
+            "label": "Frequency",
+            "kind": "measurement",
+            "query": "MEAS:FREQ?",
+            "unit": "Hz",
+            "decimals": 6,
+            "readback": true
+          },
+          {
+            "id": "vpp",
+            "label": "Peak-to-peak",
+            "kind": "measurement",
+            "query": "MEAS:VPP?",
+            "unit": "V",
+            "decimals": 6,
+            "readback": true
+          }
+        ],
+        "capabilities": [
+          {
+            "id": "measure.frequency",
+            "label": "Frequency measurement",
+            "category": "measurement",
+            "actions": [
+              "frequency"
+            ]
+          },
+          {
+            "id": "scope.run",
+            "label": "Run acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "run"
+            ]
+          },
+          {
+            "id": "scope.stop",
+            "label": "Stop acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "stop"
+            ]
+          },
+          {
+            "id": "scope.single",
+            "label": "Single acquisition",
+            "category": "oscilloscope",
+            "actions": [
+              "single"
+            ]
+          },
+          {
+            "id": "scope.time-scale",
+            "label": "Timebase control",
+            "category": "oscilloscope",
+            "actions": [
+              "time-scale"
+            ]
+          },
+          {
+            "id": "scope.vertical-scale",
+            "label": "Vertical scale control",
+            "category": "oscilloscope",
+            "actions": [
+              "channel1-scale"
+            ]
+          },
+          {
+            "id": "measure.vpp",
+            "label": "Peak-to-peak measurement",
+            "category": "measurement",
+            "actions": [
+              "vpp"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -62,6 +62,18 @@ export class QpmWorkspaceService implements vscode.Disposable {
     return this.parseProjectPath(project.absolutePath);
   }
 
+  findProjectRefForPath(filePath: string): QpmWorkspaceProjectRef | undefined {
+    const target = normalizeComparablePath(filePath);
+    return this.workspace?.projects
+      .filter((project) => project.exists)
+      .map((project) => ({ project, root: path.dirname(path.resolve(project.absolutePath)) }))
+      .filter(({ root }) => {
+        const comparableRoot = normalizeComparablePath(root);
+        return target === comparableRoot || target.startsWith(`${comparableRoot}${path.sep}`);
+      })
+      .sort((a, b) => b.root.length - a.root.length)[0]?.project;
+  }
+
   getProject(projectRef: QpmWorkspaceProjectRef): QpmProject | undefined {
     if (!projectRef.exists) {
       return undefined;
@@ -641,9 +653,13 @@ export class QpmWorkspaceService implements vscode.Disposable {
       return;
     }
 
-    const added = isQtProjectManifestPath(ref.absolutePath)
+    const nativeQtProject = isQtProjectManifestPath(ref.absolutePath);
+    const added = nativeQtProject
       ? this.qtProjects.addFiles(ref.absolutePath, generated.files)
       : this.parser.addFilesToProject(ref.absolutePath, generated.files, folderOverride);
+    const addedModules = nativeQtProject && generated.requiredQtModules?.length
+      ? this.qtProjects.ensureModules(ref.absolutePath, generated.requiredQtModules)
+      : [];
     this.refresh();
 
     if (generated.primaryPath && fs.existsSync(generated.primaryPath) && path.extname(generated.primaryPath).toLowerCase() !== '.uir') {
@@ -651,7 +667,8 @@ export class QpmWorkspaceService implements vscode.Disposable {
       await vscode.window.showTextDocument(document, { preview: false });
     }
 
-    const summary = `${added} project reference(s) added. ${generated.createdFiles.length} file(s) written.`;
+    const moduleSummary = addedModules.length ? ` Required Qt modules added: ${addedModules.join(', ')}.` : '';
+    const summary = `${added} project reference(s) added. ${generated.createdFiles.length} file(s) written.${moduleSummary}`;
     if (generated.uirPath) {
       const action = await vscode.window.showInformationMessage(`${summary} The blank UIR resource is ready for graphical editing.`, 'Open panel in QPM');
       if (action === 'Open panel in QPM') {
@@ -660,6 +677,68 @@ export class QpmWorkspaceService implements vscode.Disposable {
     } else {
       vscode.window.showInformationMessage(summary);
     }
+  }
+
+  async convertQtFormToClass(projectRef?: QpmWorkspaceProjectRef, formPath?: string): Promise<QpmWorkspaceProjectRef | undefined> {
+    let ref = projectRef;
+    if (!ref && formPath) {
+      ref = this.findProjectRefForPath(formPath);
+    }
+    ref ??= this.activeProjectRef;
+    if (!ref?.exists) {
+      vscode.window.showErrorMessage('No existing Qt project is selected.');
+      return undefined;
+    }
+    if (!isQtProjectManifestPath(ref.absolutePath)) {
+      vscode.window.showErrorMessage('Converting a Designer form to a Qt C++ class is available for native .qtproject.json projects.');
+      return undefined;
+    }
+
+    let target = formPath ? path.resolve(formPath) : undefined;
+    if (!target) {
+      const project = this.getProject(ref);
+      const forms = project?.files.filter((file) => file.type === 'Qt Form' && file.exists) ?? [];
+      if (!forms.length) {
+        vscode.window.showInformationMessage('This project does not contain any Qt Designer .ui form to convert.');
+        return undefined;
+      }
+      const selected = await vscode.window.showQuickPick(forms.map((file) => ({
+        label: path.basename(file.absolutePath),
+        description: file.relativePath ?? file.absolutePath,
+        filePath: file.absolutePath
+      })), {
+        title: 'Convert Designer Form to Qt C++ Class',
+        placeHolder: 'Select the .ui form that should receive a C++ QWidget/QDialog/QMainWindow wrapper',
+        matchOnDescription: true
+      });
+      if (!selected) {
+        return undefined;
+      }
+      target = selected.filePath;
+    }
+
+    if (path.extname(target).toLowerCase() !== '.ui') {
+      vscode.window.showErrorMessage('Select a Qt Designer .ui form to convert.');
+      return undefined;
+    }
+
+    const generated = await this.templates.convertQtDesignerFormToClass(path.dirname(ref.absolutePath), target);
+    if (!generated) {
+      return undefined;
+    }
+
+    const added = this.qtProjects.addFiles(ref.absolutePath, generated.files);
+    this.refresh();
+
+    if (generated.primaryPath && fs.existsSync(generated.primaryPath)) {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(generated.primaryPath));
+      await vscode.window.showTextDocument(document, { preview: false });
+    }
+
+    const createdNames = generated.createdFiles.map((file) => path.basename(file));
+    const createdText = createdNames.length ? createdNames.join(', ') : 'existing class files';
+    vscode.window.showInformationMessage(`Qt C++ class wrapper ready for ${path.basename(target)}: ${createdText}. MOC/UIC artifacts will be refreshed automatically.`);
+    return ref;
   }
 
   async addFolder(projectRef?: QpmWorkspaceProjectRef, parentFolder = ''): Promise<void> {
@@ -993,6 +1072,11 @@ export class QpmWorkspaceService implements vscode.Disposable {
     }
     return result;
   }
+}
+
+function normalizeComparablePath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
 function renderSdlStarterSource(projectName: string, language: 'c' | 'cpp', sdlVersion: QpmSdlResolvedVersion): string {

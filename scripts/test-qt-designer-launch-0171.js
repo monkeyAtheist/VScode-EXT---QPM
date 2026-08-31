@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const projectSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
 assert(projectSource.includes('windowsHide: false'), 'C++ Designer must preserve the validated pre-Python Windows launch behavior');
@@ -28,4 +28,4 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 assert(readme.includes('Ctrl+0'), 'README must explain how to break an existing Qt layout');
 assert(readme.includes('QtCreator\\bin\\qtcreator.exe'), 'README must document the Qt Creator integrated Designer launcher path');
 
-console.log('QPM 0.17.6 Designer launch and free-form starter compatibility tests: PASS');
+console.log('QPM 0.17.7 Designer launch and free-form starter compatibility tests: PASS');

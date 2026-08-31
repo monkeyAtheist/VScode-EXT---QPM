@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { QpmParser } from './model/qpmParser';
-import { QpmTreeProvider, FileNode, FolderNode, ProjectNode } from './providers/qpmTreeProvider';
+import { QpmTreeProvider, FileNode, FolderNode, GeneratedFileNode, GeneratedFolderNode, ProjectNode } from './providers/qpmTreeProvider';
 import { QpmFileSymbolsProvider } from './providers/qpmFileSymbolsProvider';
 import { QpmQtProjectHealthProvider } from './providers/qpmQtProjectHealthProvider';
 import { QpmQtToolsProvider } from './providers/qpmQtToolsProvider';
@@ -26,6 +26,7 @@ import { QpmColorValueService } from './services/qpmColorValueService';
 import { QpmEditorUtilitiesService } from './services/qpmEditorUtilitiesService';
 import { QpmQtInstallationService } from './services/qpmQtInstallationService';
 import { QpmQtProjectService } from './services/qpmQtProjectService';
+import { QpmQtDesignerWidgetService } from './services/qpmQtDesignerWidgetService';
 import { QpmQtToolsService } from './services/qpmQtToolsService';
 import { QpmQtQualityService } from './services/qpmQtQualityService';
 import { QpmQtTestingService } from './services/qpmQtTestingService';
@@ -52,11 +53,13 @@ import { QpmQmlLanguageProvider } from './providers/qpmQmlLanguageProvider';
 import { QpmQtPythonService } from './services/qpmQtPythonService';
 import { QpmQtPythonProvider } from './providers/qpmQtPythonProvider';
 import { QpmQtDependencyService } from './services/qpmQtDependencyService';
+import { QpmInstrumentProfileService } from './services/qpmInstrumentProfileService';
 import { QpmQtDependencyProvider } from './providers/qpmQtDependencyProvider';
 import { getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, readQtProjectManifest } from './model/qtProjectManifest';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('Qt Project Manager');
+  const buildTrace = vscode.window.createOutputChannel('Qt Project Manager - Build Trace');
   await migrateLegacyConfiguration(output);
   const parser = new QpmParser();
   const installations = new QpmInstallationService(output);
@@ -67,12 +70,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const templates = new QpmTemplateService(context, installations, output);
   const sdl = new QpmSdlService(output);
   const workspaces = new QpmWorkspaceService(context, parser, installations, templates, sdl, qtProjects, output);
+  const qtDesignerWidgets = new QpmQtDesignerWidgetService(workspaces, qtInstallations, qtProjects, output);
   const projectSettings = new QpmProjectSettingsService(workspaces, parser, output);
   const qtTools = new QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new QpmQmlLanguageService(workspaces, qtInstallations, output);
   const qtPython = new QpmQtPythonService(workspaces, output);
   const qtDependencies = new QpmQtDependencyService(workspaces, output);
-  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, qtPython, qtDependencies);
+  const instrumentProfiles = new QpmInstrumentProfileService(context.extensionPath, workspaces, output);
+  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, qtPython, qtDependencies, buildTrace);
   const debugging = new QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -241,6 +246,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     output,
+    buildTrace,
+    builds,
     workspaces,
     home,
     buildSettings,
@@ -279,6 +286,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     qtPythonProvider,
     qtPythonView,
     qtDependencies,
+    instrumentProfiles,
     qtDependencyProvider,
     qtDependencyView,
     qtAndroidProvider,
@@ -294,6 +302,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     testing,
     qtQualityProvider,
     qtQualityView,
+    treeProvider,
     treeView,
     fileSymbolsView,
     projectHealthProvider,
@@ -304,6 +313,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const selected = event.selection[0];
       if (selected?.kind === 'file' && isSourceOrHeader(selected.file.absolutePath)) {
         fileSymbolsProvider.setSelectedFile(selected.file.absolutePath);
+      } else if (selected?.kind === 'generatedFile' && isSourceOrHeader(selected.absolutePath)) {
+        fileSymbolsProvider.setSelectedFile(selected.absolutePath);
       }
     }),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -463,6 +474,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.openTranslationInLinguist', (target?: unknown) => qtTools.openTranslationInLinguist(target)),
     register('qpm.showTranslationStatus', (target?: unknown) => qtTools.showTranslationStatus(target)),
     register('qpm.openQrcEditor', (target?: unknown) => qtTools.openResourceEditor(target)),
+    register('qpm.openInstrumentProfileEditor', (target?: unknown) => instrumentProfiles.openEditor(target)),
+    register('qpm.openInstrumentProfileFile', (target?: unknown) => instrumentProfiles.openProfileFile(target)),
+    register('qpm.newInstrumentProfileFromCatalog', () => instrumentProfiles.newFromCatalog()),
     register('qpm.validateQrc', (target?: unknown) => qtTools.validateResourceCollection(target)),
     register('qpm.qmlLintFile', (target?: unknown) => qtTools.lintQmlFile(target)),
     register('qpm.qmlLintProject', (target?: unknown) => qtTools.lintQmlProject(target)),
@@ -514,10 +528,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.toolbarBuildModeR32', () => builds.selectBuildMode()),
     register('qpm.toolbarBuildModeD64', () => builds.selectBuildMode()),
     register('qpm.toolbarBuildModeR64', () => builds.selectBuildMode()),
-    register('qpm.chooseBuildAction', () => builds.chooseBuildAction()),
-    register('qpm.build', () => isAndroidPlatformActive() ? platforms.buildActive(false) : builds.build(false)),
-    register('qpm.rebuild', () => isAndroidPlatformActive() ? platforms.buildActive(true) : builds.build(true)),
-    register('qpm.clean', () => builds.clean()),
+    register('qpm.chooseBuildAction', async () => { const result = await builds.chooseBuildAction(); treeProvider.refresh(); return result; }),
+    register('qpm.showBuildProblems', () => vscode.commands.executeCommand('workbench.actions.view.problems')),
+    register('qpm.showBuildTrace', () => buildTrace.show(true)),
+    register('qpm.build', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(false) : await builds.build(false); treeProvider.refresh(); return result; }),
+    register('qpm.rebuild', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(true) : await builds.build(true); treeProvider.refresh(); return result; }),
+    register('qpm.clean', async () => { const result = await builds.clean(); treeProvider.refresh(); return result; }),
     register('qpm.run', () => isAndroidPlatformActive() ? android.buildInstallRun() : isApplePlatformActive() ? platforms.buildDeployRun() : builds.buildAndRun()),
     register('qpm.chooseRunAction', () => builds.chooseRunAction()),
     register('qpm.runWithoutBuild', () => isAndroidPlatformActive() ? android.runApplication() : isApplePlatformActive() ? platforms.runActive() : builds.runWithoutBuild()),
@@ -633,9 +649,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.dependencies.clean', async () => { await qtDependencies.clean(); }),
     register('qpm.openWorkspaceFile', () => builds.openWorkspaceFile()),
     register('qpm.setActiveProject', (node?: ProjectNode) => workspaces.setActiveProject(node?.ref)),
-    register('qpm.buildProject', (node?: ProjectNode) => node ? builds.build(false, node.ref) : undefined),
-    register('qpm.rebuildProject', (node?: ProjectNode) => node ? builds.build(true, node.ref) : undefined),
-    register('qpm.cleanProject', (node?: ProjectNode) => node ? builds.clean(node.ref) : undefined),
+    register('qpm.buildProject', async (node?: ProjectNode) => { const result = node ? await builds.build(false, node.ref) : undefined; treeProvider.refresh(); return result; }),
+    register('qpm.rebuildProject', async (node?: ProjectNode) => { const result = node ? await builds.build(true, node.ref) : undefined; treeProvider.refresh(); return result; }),
+    register('qpm.cleanProject', async (node?: ProjectNode) => { const result = node ? await builds.clean(node.ref) : undefined; treeProvider.refresh(); return result; }),
     register('qpm.selectTargetType', (node?: ProjectNode) => workspaces.selectTargetType(node?.ref)),
     register('qpm.selectTargetTypeEXE', () => workspaces.selectTargetType()),
     register('qpm.selectTargetTypeDLL', () => workspaces.selectTargetType()),
@@ -660,11 +676,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       return workspaces.addFiles(node?.ref);
     }),
-    register('qpm.createNewFile', (node?: ProjectNode | FolderNode) => {
+    register('qpm.createNewFile', async (node?: ProjectNode | FolderNode) => {
+      const ref = node?.ref ?? workspaces.activeProjectRef;
       if (node?.kind === 'folder') {
-        return workspaces.createNewFile(node.ref, node.folderPath);
+        await workspaces.createNewFile(node.ref, node.folderPath);
+      } else {
+        await workspaces.createNewFile(node?.ref);
       }
-      return workspaces.createNewFile(node?.ref);
+      await builds.prepareNativeQtGeneratedFiles(ref);
+      treeProvider.refresh();
+    }),
+    register('qpm.convertQtFormToClass', async (target?: FileNode | vscode.Uri) => {
+      let ref = target && 'kind' in target && target.kind === 'file' ? target.ref : undefined;
+      let formPath = target && 'kind' in target && target.kind === 'file'
+        ? target.file.absolutePath
+        : target instanceof vscode.Uri
+          ? target.fsPath
+          : undefined;
+      if (!formPath && vscode.window.activeTextEditor?.document.uri.scheme === 'file' && path.extname(vscode.window.activeTextEditor.document.uri.fsPath).toLowerCase() === '.ui') {
+        formPath = vscode.window.activeTextEditor.document.uri.fsPath;
+      }
+      ref ??= formPath ? workspaces.findProjectRefForPath(formPath) : undefined;
+      const convertedRef = await workspaces.convertQtFormToClass(ref, formPath);
+      if (convertedRef) {
+        await builds.prepareNativeQtGeneratedFiles(convertedRef);
+        treeProvider.refresh();
+      }
     }),
     register('qpm.addFolder', (node?: ProjectNode | FolderNode) => {
       if (node?.kind === 'folder') {
@@ -688,6 +725,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.saveFile', (node?: FileNode) => node ? workspaces.saveFile(node.file.absolutePath) : undefined),
     register('qpm.openPanelFile', (node?: FileNode) => node ? builds.openPanelFile(node.file.absolutePath) : undefined),
     register('qpm.openQtDesigner', (target?: unknown) => isQtPythonActive() ? qtPython.openDesigner(undefined, target) : qtProjects.openDesigner(target)),
+    register('qpm.prepareQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.prepareAll(node?.ref)),
+    register('qpm.prepareAndOpenQtDesignerWidgets', (target?: unknown) => qtDesignerWidgets.prepareAllAndOpen(target)),
+    register('qpm.configureQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.configure(node?.ref)),
+    register('qpm.buildQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.build(node?.ref)),
+    register('qpm.installQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.install(node?.ref)),
+    register('qpm.openQtDesignerWithCustomWidgets', (target?: unknown) => qtDesignerWidgets.openDesigner(target)),
+    register('qpm.cleanQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.clean(node?.ref)),
+    register('qpm.revealQtDesignerWidgets', (node?: ProjectNode) => qtDesignerWidgets.reveal(node?.ref)),
     register('qpm.openPanelPathFile', (filePath?: string) => filePath ? builds.openPanelFile(filePath) : undefined),
     register('qpm.openFunctionPanel', (node?: FileNode) => node ? functionPanels.open(node.file.absolutePath) : undefined),
     register('qpm.insertSnippet', () => templates.insertSnippet()),
@@ -714,6 +759,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.importFileTemplate', () => templates.importFileTemplate()),
     register('qpm.manageFileTemplates', () => templates.manageFileTemplates()),
     register('qpm.openFile', (node?: FileNode) => node ? workspaces.openPath(node.file.absolutePath) : undefined),
+    register('qpm.openGeneratedFile', (node?: GeneratedFileNode) => node ? workspaces.openPath(node.absolutePath) : undefined),
+    register('qpm.revealGeneratedPath', (node?: GeneratedFileNode | GeneratedFolderNode) => node ? workspaces.revealInExplorer(node.absolutePath) : undefined),
+    register('qpm.copyGeneratedPath', (node?: GeneratedFileNode | GeneratedFolderNode) => node ? workspaces.copyFilePath(node.absolutePath) : undefined),
     register('qpm.revealProjectFile', (node?: ProjectNode) => node ? workspaces.revealInExplorer(node.ref.absolutePath) : undefined),
     register('qpm.revealFile', (node?: FileNode) => node ? workspaces.revealInExplorer(node.file.absolutePath) : undefined),
     register('qpm.copyFilePath', (node?: FileNode) => node ? workspaces.copyFilePath(node.file.absolutePath) : undefined),

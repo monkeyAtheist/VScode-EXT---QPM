@@ -8,7 +8,7 @@ const childProcess = require('child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const rsp = require('../out/services/qpmGnuResponseFile');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-response-051-'));

@@ -3163,6 +3163,18 @@ function validateCppClassName(value) {
         return 'Use a valid C++ identifier.';
     return undefined;
 }
+function inspectQtDesignerForm(content) {
+    const classMatch = content.match(/<class>\s*([^<]+?)\s*<\/class>/i);
+    const firstWidgetTag = content.match(/<widget\b[^>]*>/i)?.[0];
+    const widgetClassMatch = firstWidgetTag?.match(/\bclass=(["'])([^"']+)\1/i);
+    if (!classMatch || !widgetClassMatch) {
+        return undefined;
+    }
+    return {
+        className: classMatch[1].trim(),
+        baseClass: widgetClassMatch[2].trim()
+    };
+}
 function qtFileStem(className) {
     return className.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
 }
@@ -3177,6 +3189,6126 @@ function qtWidgetHeader(className, baseClass) {
 }
 function qtWidgetSource(className, baseClass, headerFile, stem) {
     return `#include "${headerFile}"\n#include "ui_${stem}.h"\n\n${className}::${className}(QWidget *parent)\n    : ${baseClass}(parent),\n      ui(std::make_unique<Ui::${className}>())\n{\n    ui->setupUi(this);\n}\n\n${className}::~${className}() = default;\n`;
+}
+function qtPaintedValueWidgetHeader(className) {
+    return `#pragma once\n\n#include <QWidget>\n#include <QString>\n\nclass QMouseEvent;\nclass QPaintEvent;\nclass QWheelEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(double value READ value WRITE setValue NOTIFY valueChanged)\n    Q_PROPERTY(double minimum READ minimum WRITE setMinimum)\n    Q_PROPERTY(double maximum READ maximum WRITE setMaximum)\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(QString unit READ unit WRITE setUnit)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n\n    double value() const noexcept { return m_value; }\n    double minimum() const noexcept { return m_minimum; }\n    double maximum() const noexcept { return m_maximum; }\n    QString title() const { return m_title; }\n    QString unit() const { return m_unit; }\n\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setValue(double value);\n    void setMinimum(double minimum);\n    void setMaximum(double maximum);\n    void setRange(double minimum, double maximum);\n    void setTitle(const QString &title);\n    void setUnit(const QString &unit);\n\nsignals:\n    void valueChanged(double value);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n    void mousePressEvent(QMouseEvent *event) override;\n    void mouseMoveEvent(QMouseEvent *event) override;\n    void wheelEvent(QWheelEvent *event) override;\n\nprivate:\n    double normalizedValue() const noexcept;\n    double valueFromX(double x) const noexcept;\n\n    double m_value = 50.0;\n    double m_minimum = 0.0;\n    double m_maximum = 100.0;\n    QString m_title = QStringLiteral("Value");\n    QString m_unit;\n};\n`;
+}
+function qtPaintedValueWidgetSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QMouseEvent>\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QWheelEvent>\n#include <QtGlobal>\n\n${className}::${className}(QWidget *parent)\n    : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n    setMouseTracking(true);\n}\n\nQSize ${className}::minimumSizeHint() const\n{\n    return {120, 70};\n}\n\nQSize ${className}::sizeHint() const\n{\n    return {240, 120};\n}\n\nvoid ${className}::setValue(double value)\n{\n    const double clamped = qBound(m_minimum, value, m_maximum);\n    if (qFuzzyCompare(m_value + 1.0, clamped + 1.0))\n        return;\n\n    m_value = clamped;\n    update();\n    emit valueChanged(m_value);\n}\n\nvoid ${className}::setMinimum(double minimum)\n{\n    setRange(minimum, m_maximum);\n}\n\nvoid ${className}::setMaximum(double maximum)\n{\n    setRange(m_minimum, maximum);\n}\n\nvoid ${className}::setRange(double minimum, double maximum)\n{\n    if (maximum < minimum)\n        qSwap(minimum, maximum);\n    if (qFuzzyCompare(minimum + 1.0, maximum + 1.0))\n        maximum = minimum + 1.0;\n\n    m_minimum = minimum;\n    m_maximum = maximum;\n    setValue(m_value);\n    update();\n}\n\nvoid ${className}::setTitle(const QString &title)\n{\n    if (m_title == title)\n        return;\n    m_title = title;\n    update();\n}\n\nvoid ${className}::setUnit(const QString &unit)\n{\n    if (m_unit == unit)\n        return;\n    m_unit = unit;\n    update();\n}\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);\n\n    QStyleOption option;\n    option.initFrom(this);\n\n    QPainter painter(this);\n    painter.setRenderHint(QPainter::Antialiasing);\n    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);\n\n    const QRectF content = QRectF(rect()).adjusted(12.0, 10.0, -12.0, -10.0);\n    const QColor foreground = palette().color(QPalette::WindowText);\n    const QColor highlight = palette().color(QPalette::Highlight);\n    const QColor base = palette().color(QPalette::Base);\n\n    painter.setPen(foreground);\n    QFont titleFont = painter.font();\n    titleFont.setBold(true);\n    painter.setFont(titleFont);\n    painter.drawText(content, Qt::AlignTop | Qt::AlignHCenter, m_title);\n\n    QFont valueFont = painter.font();\n    valueFont.setPointSizeF(qMax(11.0, valueFont.pointSizeF() * 1.6));\n    painter.setFont(valueFont);\n    const QString valueText = QStringLiteral("%1 %2").arg(m_value, 0, 'f', 2).arg(m_unit);\n    painter.drawText(content, Qt::AlignCenter, valueText.trimmed());\n\n    const QRectF bar(content.left(), content.bottom() - 14.0, content.width(), 10.0);\n    painter.setPen(palette().color(QPalette::Mid));\n    painter.setBrush(base);\n    painter.drawRoundedRect(bar, 4.0, 4.0);\n\n    QRectF fill = bar.adjusted(1.0, 1.0, -1.0, -1.0);\n    fill.setWidth(fill.width() * normalizedValue());\n    painter.setPen(Qt::NoPen);\n    painter.setBrush(highlight);\n    painter.drawRoundedRect(fill, 3.0, 3.0);\n}\n\nvoid ${className}::mousePressEvent(QMouseEvent *event)\n{\n    if (event->button() == Qt::LeftButton)\n        setValue(valueFromX(event->position().x()));\n    QWidget::mousePressEvent(event);\n}\n\nvoid ${className}::mouseMoveEvent(QMouseEvent *event)\n{\n    if (event->buttons().testFlag(Qt::LeftButton))\n        setValue(valueFromX(event->position().x()));\n    QWidget::mouseMoveEvent(event);\n}\n\nvoid ${className}::wheelEvent(QWheelEvent *event)\n{\n    const double step = (m_maximum - m_minimum) / 100.0;\n    if (!qFuzzyIsNull(step))\n        setValue(m_value + (event->angleDelta().y() >= 0 ? step : -step));\n    event->accept();\n}\n\ndouble ${className}::normalizedValue() const noexcept\n{\n    const double span = m_maximum - m_minimum;\n    return qFuzzyIsNull(span) ? 0.0 : qBound(0.0, (m_value - m_minimum) / span, 1.0);\n}\n\ndouble ${className}::valueFromX(double x) const noexcept\n{\n    if (width() <= 1)\n        return m_minimum;\n    const double ratio = qBound(0.0, x / static_cast<double>(width()), 1.0);\n    return m_minimum + ratio * (m_maximum - m_minimum);\n}\n`;
+}
+function qtAnalogGaugeHeader(className) {
+    return `#pragma once\n\n#include <QWidget>\n#include <QString>\n\nclass QMouseEvent;\nclass QPaintEvent;\nclass QPointF;\nclass QWheelEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(double value READ value WRITE setValue NOTIFY valueChanged)\n    Q_PROPERTY(double minimum READ minimum WRITE setMinimum)\n    Q_PROPERTY(double maximum READ maximum WRITE setMaximum)\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(QString unit READ unit WRITE setUnit)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n\n    double value() const noexcept { return m_value; }\n    double minimum() const noexcept { return m_minimum; }\n    double maximum() const noexcept { return m_maximum; }\n    QString title() const { return m_title; }\n    QString unit() const { return m_unit; }\n\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setValue(double value);\n    void setMinimum(double minimum);\n    void setMaximum(double maximum);\n    void setRange(double minimum, double maximum);\n    void setTitle(const QString &title);\n    void setUnit(const QString &unit);\n\nsignals:\n    void valueChanged(double value);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n    void mousePressEvent(QMouseEvent *event) override;\n    void mouseMoveEvent(QMouseEvent *event) override;\n    void wheelEvent(QWheelEvent *event) override;\n\nprivate:\n    double normalizedValue() const noexcept;\n    double valueFromPosition(const QPointF &position) const noexcept;\n\n    double m_value = 50.0;\n    double m_minimum = 0.0;\n    double m_maximum = 100.0;\n    QString m_title = QStringLiteral("Gauge");\n    QString m_unit;\n};\n`;
+}
+function qtAnalogGaugeSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QMouseEvent>\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QWheelEvent>\n#include <QtGlobal>\n\n#include <cmath>\n\nnamespace\n{\nconstexpr double kPi = 3.14159265358979323846;\nconstexpr double kStartAngleDeg = 225.0;\nconstexpr double kSweepAngleDeg = 270.0;\n}\n\n${className}::${className}(QWidget *parent)\n    : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n    setMouseTracking(true);\n}\n\nQSize ${className}::minimumSizeHint() const\n{\n    return {120, 120};\n}\n\nQSize ${className}::sizeHint() const\n{\n    return {220, 220};\n}\n\nvoid ${className}::setValue(double value)\n{\n    const double clamped = qBound(m_minimum, value, m_maximum);\n    if (qFuzzyCompare(m_value + 1.0, clamped + 1.0))\n        return;\n    m_value = clamped;\n    update();\n    emit valueChanged(m_value);\n}\n\nvoid ${className}::setMinimum(double minimum)\n{\n    setRange(minimum, m_maximum);\n}\n\nvoid ${className}::setMaximum(double maximum)\n{\n    setRange(m_minimum, maximum);\n}\n\nvoid ${className}::setRange(double minimum, double maximum)\n{\n    if (maximum < minimum)\n        qSwap(minimum, maximum);\n    if (qFuzzyCompare(minimum + 1.0, maximum + 1.0))\n        maximum = minimum + 1.0;\n    m_minimum = minimum;\n    m_maximum = maximum;\n    setValue(m_value);\n    update();\n}\n\nvoid ${className}::setTitle(const QString &title)\n{\n    if (m_title == title)\n        return;\n    m_title = title;\n    update();\n}\n\nvoid ${className}::setUnit(const QString &unit)\n{\n    if (m_unit == unit)\n        return;\n    m_unit = unit;\n    update();\n}\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);\n\n    QStyleOption option;\n    option.initFrom(this);\n    QPainter painter(this);\n    painter.setRenderHint(QPainter::Antialiasing);\n    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);\n\n    const QRectF area = QRectF(rect()).adjusted(12.0, 12.0, -12.0, -12.0);\n    const QPointF center = area.center();\n    const double radius = qMax(10.0, qMin(area.width(), area.height()) * 0.42);\n    const QColor foreground = palette().color(QPalette::WindowText);\n    const QColor mid = palette().color(QPalette::Mid);\n    const QColor highlight = palette().color(QPalette::Highlight);\n\n    painter.setPen(QPen(mid, qMax(2.0, radius * 0.04), Qt::SolidLine, Qt::RoundCap));\n    QRectF arcRect(center.x() - radius, center.y() - radius, radius * 2.0, radius * 2.0);\n    painter.drawArc(arcRect, -45 * 16, -270 * 16);\n\n    painter.save();\n    painter.translate(center);\n    painter.setPen(QPen(foreground, 1.0));\n    for (int tick = 0; tick <= 10; ++tick)\n    {\n        const double angleDeg = kStartAngleDeg - (kSweepAngleDeg * tick / 10.0);\n        const double angleRad = angleDeg * kPi / 180.0;\n        const QPointF outer(std::cos(angleRad) * radius, -std::sin(angleRad) * radius);\n        const QPointF inner(std::cos(angleRad) * radius * 0.88, -std::sin(angleRad) * radius * 0.88);\n        painter.drawLine(inner, outer);\n    }\n\n    const double needleAngleDeg = kStartAngleDeg - normalizedValue() * kSweepAngleDeg;\n    const double needleAngleRad = needleAngleDeg * kPi / 180.0;\n    const QPointF tip(std::cos(needleAngleRad) * radius * 0.78, -std::sin(needleAngleRad) * radius * 0.78);\n    painter.setPen(QPen(highlight, qMax(2.0, radius * 0.025), Qt::SolidLine, Qt::RoundCap));\n    painter.drawLine(QPointF(0.0, 0.0), tip);\n    painter.setBrush(highlight);\n    painter.setPen(Qt::NoPen);\n    painter.drawEllipse(QPointF(0.0, 0.0), radius * 0.055, radius * 0.055);\n    painter.restore();\n\n    painter.setPen(foreground);\n    QFont titleFont = painter.font();\n    titleFont.setBold(true);\n    painter.setFont(titleFont);\n    painter.drawText(QRectF(area.left(), area.top(), area.width(), 24.0), Qt::AlignHCenter | Qt::AlignTop, m_title);\n\n    QFont valueFont = painter.font();\n    valueFont.setPointSizeF(qMax(10.0, valueFont.pointSizeF() * 1.35));\n    painter.setFont(valueFont);\n    const QString valueText = QStringLiteral("%1 %2").arg(m_value, 0, 'f', 2).arg(m_unit);\n    painter.drawText(QRectF(area.left(), center.y() + radius * 0.38, area.width(), 30.0), Qt::AlignHCenter | Qt::AlignVCenter, valueText.trimmed());\n}\n\nvoid ${className}::mousePressEvent(QMouseEvent *event)\n{\n    if (event->button() == Qt::LeftButton)\n        setValue(valueFromPosition(event->position()));\n    QWidget::mousePressEvent(event);\n}\n\nvoid ${className}::mouseMoveEvent(QMouseEvent *event)\n{\n    if (event->buttons().testFlag(Qt::LeftButton))\n        setValue(valueFromPosition(event->position()));\n    QWidget::mouseMoveEvent(event);\n}\n\nvoid ${className}::wheelEvent(QWheelEvent *event)\n{\n    const double step = (m_maximum - m_minimum) / 100.0;\n    if (!qFuzzyIsNull(step))\n        setValue(m_value + (event->angleDelta().y() >= 0 ? step : -step));\n    event->accept();\n}\n\ndouble ${className}::normalizedValue() const noexcept\n{\n    const double span = m_maximum - m_minimum;\n    return qFuzzyIsNull(span) ? 0.0 : qBound(0.0, (m_value - m_minimum) / span, 1.0);\n}\n\ndouble ${className}::valueFromPosition(const QPointF &position) const noexcept\n{\n    const QPointF center = QRectF(rect()).center();\n    const double dx = position.x() - center.x();\n    const double dy = center.y() - position.y();\n    double angleDeg = std::atan2(dy, dx) * 180.0 / kPi;\n    if (angleDeg < 0.0)\n        angleDeg += 360.0;\n\n    double progress = kStartAngleDeg - angleDeg;\n    while (progress < 0.0) progress += 360.0;\n    while (progress >= 360.0) progress -= 360.0;\n    if (progress > kSweepAngleDeg)\n        progress = progress < 315.0 ? kSweepAngleDeg : 0.0;\n\n    const double ratio = progress / kSweepAngleDeg;\n    return m_minimum + ratio * (m_maximum - m_minimum);\n}\n`;
+}
+function qtSignalPlotHeader(className) {
+    return `#pragma once
+
+#include <QColor>
+#include <QPointF>
+#include <QString>
+#include <QVector>
+#include <QWidget>
+
+class QEvent;
+class QMouseEvent;
+class QPaintEvent;
+class QRectF;
+class QWheelEvent;
+
+class ${className} final : public QWidget
+{
+    Q_OBJECT
+
+public:
+    enum class Coupling { DC, AC };
+    Q_ENUM(Coupling)
+    enum class TriggerMode { Off, Auto, Normal };
+    Q_ENUM(TriggerMode)
+    enum class TriggerEdge { Rising, Falling };
+    Q_ENUM(TriggerEdge)
+
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+    Q_PROPERTY(double yMinimum READ yMinimum WRITE setYMinimum)
+    Q_PROPERTY(double yMaximum READ yMaximum WRITE setYMaximum)
+    Q_PROPERTY(bool gridVisible READ gridVisible WRITE setGridVisible)
+    Q_PROPERTY(int maxSamples READ maxSamples WRITE setMaxSamples)
+    Q_PROPERTY(double sampleInterval READ sampleInterval WRITE setSampleInterval)
+    Q_PROPERTY(bool legendVisible READ legendVisible WRITE setLegendVisible)
+    Q_PROPERTY(bool autoScale READ autoScale WRITE setAutoScale)
+    Q_PROPERTY(bool cursorsVisible READ cursorsVisible WRITE setCursorsVisible)
+    Q_PROPERTY(bool followLatest READ followLatest WRITE setFollowLatest)
+    Q_PROPERTY(Coupling coupling READ coupling WRITE setCoupling)
+    Q_PROPERTY(TriggerMode triggerMode READ triggerMode WRITE setTriggerMode)
+    Q_PROPERTY(TriggerEdge triggerEdge READ triggerEdge WRITE setTriggerEdge)
+    Q_PROPERTY(double triggerLevel READ triggerLevel WRITE setTriggerLevel)
+    Q_PROPERTY(int triggerChannel READ triggerChannel WRITE setTriggerChannel)
+    Q_PROPERTY(double triggerPosition READ triggerPosition WRITE setTriggerPosition)
+    Q_PROPERTY(bool triggerVisible READ triggerVisible WRITE setTriggerVisible)
+    Q_PROPERTY(bool measurementsVisible READ measurementsVisible WRITE setMeasurementsVisible)
+    Q_PROPERTY(bool horizontalCursorsVisible READ horizontalCursorsVisible WRITE setHorizontalCursorsVisible)
+    Q_PROPERTY(double cursorY1 READ cursorY1 WRITE setCursorY1)
+    Q_PROPERTY(double cursorY2 READ cursorY2 WRITE setCursorY2)
+
+    explicit ${className}(QWidget *parent = nullptr);
+
+    QString title() const { return m_title; }
+    double yMinimum() const noexcept { return m_yMinimum; }
+    double yMaximum() const noexcept { return m_yMaximum; }
+    bool gridVisible() const noexcept { return m_gridVisible; }
+    int maxSamples() const noexcept { return m_maxSamples; }
+    double sampleInterval() const noexcept { return m_sampleInterval; }
+    bool legendVisible() const noexcept { return m_legendVisible; }
+    bool autoScale() const noexcept { return m_autoScale; }
+    bool cursorsVisible() const noexcept { return m_cursorsVisible; }
+    bool followLatest() const noexcept { return m_followLatest; }
+    Coupling coupling() const noexcept { return m_coupling; }
+    TriggerMode triggerMode() const noexcept { return m_triggerMode; }
+    TriggerEdge triggerEdge() const noexcept { return m_triggerEdge; }
+    double triggerLevel() const noexcept { return m_triggerLevel; }
+    int triggerChannel() const noexcept { return m_triggerChannel; }
+    double triggerPosition() const noexcept { return m_triggerPosition; }
+    bool triggerVisible() const noexcept { return m_triggerVisible; }
+    bool measurementsVisible() const noexcept { return m_measurementsVisible; }
+    bool horizontalCursorsVisible() const noexcept { return m_horizontalCursorsVisible; }
+    double cursorY1() const noexcept { return m_cursorY1; }
+    double cursorY2() const noexcept { return m_cursorY2; }
+    const QVector<double> &samples() const noexcept;
+
+    double peakToPeak() const;
+    double rms() const;
+    double average() const;
+    double measuredFrequency() const;
+    double dutyCycle() const;
+
+    int channelCount() const noexcept { return m_channels.size(); }
+    int addChannel(const QString &name = QString(), const QColor &color = QColor());
+    void removeChannel(int channel);
+    void clearChannels();
+    QString channelName(int channel) const;
+    QColor channelColor(int channel) const;
+    bool channelVisible(int channel) const;
+    QVector<double> channelSamples(int channel) const;
+    void setChannelName(int channel, const QString &name);
+    void setChannelColor(int channel, const QColor &color);
+    void setChannelVisible(int channel, bool visible);
+    void setChannelSamples(int channel, const QVector<double> &samples);
+    void setChannelSamplesBatch(const QVector<QVector<double>> &channels);
+    void appendSample(int channel, double sample);
+    void appendSamples(int channel, const QVector<double> &samples);
+
+    QSize minimumSizeHint() const override;
+    QSize sizeHint() const override;
+
+public slots:
+    void setTitle(const QString &title);
+    void setYMinimum(double minimum);
+    void setYMaximum(double maximum);
+    void setYRange(double minimum, double maximum);
+    void setGridVisible(bool visible);
+    void setMaxSamples(int maxSamples);
+    void setSampleInterval(double seconds);
+    void setLegendVisible(bool visible);
+    void setAutoScale(bool enabled);
+    void setCursorsVisible(bool visible);
+    void setFollowLatest(bool enabled);
+    void setCoupling(Coupling coupling);
+    void setTriggerMode(TriggerMode mode);
+    void setTriggerEdge(TriggerEdge edge);
+    void setTriggerLevel(double level);
+    void setTriggerChannel(int channel);
+    void setTriggerPosition(double position);
+    void setTriggerVisible(bool visible);
+    void setMeasurementsVisible(bool visible);
+    void setHorizontalCursorsVisible(bool visible);
+    void setCursorY1(double value);
+    void setCursorY2(double value);
+
+    // Backward-compatible primary-channel API.
+    void setSamples(const QVector<double> &samples);
+    void appendSample(double sample);
+    void appendSamples(const QVector<double> &samples);
+    void clearSamples();
+
+    void clearAllSamples();
+    void autoScaleNow();
+    void resetView();
+    void clearCursors();
+    void clearHorizontalCursors();
+
+signals:
+    void samplesChanged();
+    void channelSamplesChanged(int channel);
+    void channelsChanged();
+    void cursorSampleChanged(int index, double value);
+    void cursorMeasurementsChanged(double deltaTime, double deltaValue, double frequency);
+    void horizontalCursorMeasurementsChanged(double y1, double y2, double deltaY);
+    void automaticMeasurementsChanged(double peakToPeak, double rms, double average, double frequency, double dutyCycle);
+    void triggerDetected(int index, double time);
+    void triggerConfigurationChanged();
+    void viewChanged();
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+
+private:
+    struct Channel
+    {
+        QString name;
+        QColor color;
+        QVector<double> samples;
+        bool visible = true;
+    };
+
+    struct MeasurementSnapshot
+    {
+        double peakToPeak = 0.0;
+        double rms = 0.0;
+        double average = 0.0;
+        double frequency = 0.0;
+        double dutyCycle = 0.0;
+    };
+
+    int ensureChannel(int channel);
+    int maximumSampleCount() const noexcept;
+    QRectF plotRect() const;
+    void visibleSampleRange(int &first, int &last) const;
+    int sampleIndexFromX(double x) const;
+    double sampleX(int index, int first, int last) const;
+    double sampleY(double value) const;
+    double valueFromY(double y) const;
+    double sampleTime(int index) const noexcept;
+    double channelMean(int channel, int first, int last) const;
+    double coupledValue(int channel, int index, double mean) const;
+    bool triggerCrossing(double previous, double current) const noexcept;
+    int findLatestTrigger(int channel) const;
+    void rescanTrigger();
+    void updateHoverCursor(double x);
+    void updateAutoScale();
+    MeasurementSnapshot measurementSnapshot() const;
+    void emitAutomaticMeasurements();
+    void emitCursorMeasurements();
+    void emitHorizontalCursorMeasurements();
+    QColor defaultChannelColor(int channel) const;
+    QString formatEngineering(double value, const QString &unit = QString()) const;
+
+    QVector<Channel> m_channels;
+    QString m_title = QStringLiteral("Signal");
+    double m_yMinimum = -1.0;
+    double m_yMaximum = 1.0;
+    double m_sampleInterval = 0.001;
+    bool m_gridVisible = true;
+    bool m_legendVisible = true;
+    bool m_autoScale = false;
+    bool m_cursorsVisible = true;
+    bool m_followLatest = true;
+    Coupling m_coupling = Coupling::DC;
+    TriggerMode m_triggerMode = TriggerMode::Off;
+    TriggerEdge m_triggerEdge = TriggerEdge::Rising;
+    double m_triggerLevel = 0.0;
+    int m_triggerChannel = 0;
+    double m_triggerPosition = 0.25;
+    bool m_triggerVisible = true;
+    bool m_measurementsVisible = true;
+    bool m_horizontalCursorsVisible = false;
+    double m_cursorY1 = 0.5;
+    double m_cursorY2 = -0.5;
+    int m_lastTriggerIndex = -1;
+    int m_maxSamples = 2048;
+    int m_hoverIndex = -1;
+    int m_cursorA = -1;
+    int m_cursorB = -1;
+    double m_xZoom = 1.0;
+    double m_xPan = 0.0;
+    bool m_panning = false;
+    QPointF m_lastPanPosition;
+};
+`;
+}
+function qtSignalPlotSource(className, headerInclude) {
+    return `#include "${headerInclude}"
+
+#include <QEvent>
+#include <QFont>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPaintEvent>
+#include <QStyle>
+#include <QStyleOption>
+#include <QWheelEvent>
+#include <QtGlobal>
+
+#include <cmath>
+#include <limits>
+
+${className}::${className}(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
+    setMouseTracking(true);
+    ensureChannel(0);
+}
+
+const QVector<double> &${className}::samples() const noexcept
+{
+    return m_channels[0].samples;
+}
+
+int ${className}::ensureChannel(int channel)
+{
+    while (m_channels.size() <= channel)
+    {
+        const int index = m_channels.size();
+        Channel entry;
+        entry.name = QStringLiteral("CH%1").arg(index + 1);
+        entry.color = defaultChannelColor(index);
+        m_channels.push_back(entry);
+    }
+    return channel;
+}
+
+int ${className}::addChannel(const QString &name, const QColor &color)
+{
+    Channel entry;
+    const int index = m_channels.size();
+    entry.name = name.isEmpty() ? QStringLiteral("CH%1").arg(index + 1) : name;
+    entry.color = color.isValid() ? color : defaultChannelColor(index);
+    m_channels.push_back(entry);
+    update();
+    emit channelsChanged();
+    return index;
+}
+
+void ${className}::removeChannel(int channel)
+{
+    if (channel < 0 || channel >= m_channels.size()) return;
+    if (m_channels.size() == 1)
+    {
+        m_channels[0].samples.clear();
+        m_channels[0].name = QStringLiteral("CH1");
+        m_channels[0].color = defaultChannelColor(0);
+    }
+    else m_channels.removeAt(channel);
+    m_triggerChannel = qBound(0, m_triggerChannel, m_channels.size() - 1);
+    clearCursors();
+    rescanTrigger();
+    updateAutoScale();
+    update();
+    emit channelsChanged();
+    emit samplesChanged();
+    emitAutomaticMeasurements();
+}
+
+void ${className}::clearChannels()
+{
+    m_channels.clear();
+    ensureChannel(0);
+    m_triggerChannel = 0;
+    m_lastTriggerIndex = -1;
+    clearCursors();
+    resetView();
+    update();
+    emit channelsChanged();
+    emit samplesChanged();
+    emitAutomaticMeasurements();
+}
+
+QString ${className}::channelName(int channel) const
+{
+    return channel >= 0 && channel < m_channels.size() ? m_channels[channel].name : QString();
+}
+
+QColor ${className}::channelColor(int channel) const
+{
+    return channel >= 0 && channel < m_channels.size() ? m_channels[channel].color : QColor();
+}
+
+bool ${className}::channelVisible(int channel) const
+{
+    return channel >= 0 && channel < m_channels.size() && m_channels[channel].visible;
+}
+
+QVector<double> ${className}::channelSamples(int channel) const
+{
+    return channel >= 0 && channel < m_channels.size() ? m_channels[channel].samples : QVector<double>();
+}
+
+void ${className}::setChannelName(int channel, const QString &name)
+{
+    if (channel < 0) return;
+    ensureChannel(channel);
+    if (m_channels[channel].name == name) return;
+    m_channels[channel].name = name;
+    update();
+    emit channelsChanged();
+}
+
+void ${className}::setChannelColor(int channel, const QColor &color)
+{
+    if (channel < 0 || !color.isValid()) return;
+    ensureChannel(channel);
+    if (m_channels[channel].color == color) return;
+    m_channels[channel].color = color;
+    update();
+    emit channelsChanged();
+}
+
+void ${className}::setChannelVisible(int channel, bool visible)
+{
+    if (channel < 0) return;
+    ensureChannel(channel);
+    if (m_channels[channel].visible == visible) return;
+    m_channels[channel].visible = visible;
+    updateAutoScale();
+    update();
+    emit channelsChanged();
+}
+
+void ${className}::setChannelSamples(int channel, const QVector<double> &values)
+{
+    if (channel < 0) return;
+    ensureChannel(channel);
+    m_channels[channel].samples = values;
+    if (m_channels[channel].samples.size() > m_maxSamples)
+        m_channels[channel].samples.remove(0, m_channels[channel].samples.size() - m_maxSamples);
+    clearCursors();
+    if (channel == m_triggerChannel) rescanTrigger();
+    if (m_followLatest) m_xPan = 0.0;
+    updateAutoScale();
+    update();
+    emit channelSamplesChanged(channel);
+    if (channel == 0)
+    {
+        emit samplesChanged();
+        emitAutomaticMeasurements();
+    }
+}
+
+void ${className}::setChannelSamplesBatch(const QVector<QVector<double>> &channels)
+{
+    if (channels.isEmpty()) return;
+
+    bool channelsAdded = false;
+    while (m_channels.size() < channels.size())
+    {
+        const int index = m_channels.size();
+        Channel entry;
+        entry.name = QStringLiteral("CH%1").arg(index + 1);
+        entry.color = defaultChannelColor(index);
+        m_channels.push_back(entry);
+        channelsAdded = true;
+    }
+
+    for (int channel = 0; channel < channels.size(); ++channel)
+    {
+        m_channels[channel].samples = channels[channel];
+        if (m_channels[channel].samples.size() > m_maxSamples)
+            m_channels[channel].samples.remove(0, m_channels[channel].samples.size() - m_maxSamples);
+    }
+
+    const int maximum = maximumSampleCount();
+    if (m_hoverIndex >= maximum) m_hoverIndex = -1;
+    if (m_cursorA >= maximum) m_cursorA = -1;
+    if (m_cursorB >= maximum) m_cursorB = -1;
+    if (m_triggerChannel >= 0 && m_triggerChannel < channels.size()) rescanTrigger();
+    if (m_followLatest && m_triggerMode == TriggerMode::Off) m_xPan = 0.0;
+    updateAutoScale();
+    update();
+
+    if (channelsAdded) emit channelsChanged();
+    for (int channel = 0; channel < channels.size(); ++channel)
+        emit channelSamplesChanged(channel);
+    emit samplesChanged();
+    emitAutomaticMeasurements();
+    emitCursorMeasurements();
+}
+
+void ${className}::appendSample(int channel, double sample)
+{
+    if (channel < 0) return;
+    ensureChannel(channel);
+    Channel &entry = m_channels[channel];
+    entry.samples.push_back(sample);
+    int removed = 0;
+    if (entry.samples.size() > m_maxSamples)
+    {
+        removed = entry.samples.size() - m_maxSamples;
+        entry.samples.remove(0, removed);
+    }
+    if (channel == m_triggerChannel)
+    {
+        if (removed > 0 && m_lastTriggerIndex >= 0) m_lastTriggerIndex -= removed;
+        if (m_lastTriggerIndex < 0) m_lastTriggerIndex = -1;
+        if (entry.samples.size() >= 2)
+        {
+            const int last = entry.samples.size() - 1;
+            const double mean = m_coupling == Coupling::AC ? channelMean(channel, 0, last) : 0.0;
+            const double previous = coupledValue(channel, last - 1, mean);
+            const double current = coupledValue(channel, last, mean);
+            if (triggerCrossing(previous, current))
+            {
+                m_lastTriggerIndex = last;
+                emit triggerDetected(last, sampleTime(last));
+            }
+        }
+    }
+    if (removed > 0) clearCursors();
+    if (m_followLatest && m_triggerMode == TriggerMode::Off) m_xPan = 0.0;
+    updateAutoScale();
+    update();
+    emit channelSamplesChanged(channel);
+    if (channel == 0)
+    {
+        emit samplesChanged();
+        emitAutomaticMeasurements();
+    }
+}
+
+void ${className}::appendSamples(int channel, const QVector<double> &values)
+{
+    if (channel < 0 || values.isEmpty()) return;
+    ensureChannel(channel);
+    Channel &entry = m_channels[channel];
+    entry.samples += values;
+    if (entry.samples.size() > m_maxSamples)
+        entry.samples.remove(0, entry.samples.size() - m_maxSamples);
+    if (channel == m_triggerChannel) rescanTrigger();
+    if (m_followLatest && m_triggerMode == TriggerMode::Off) m_xPan = 0.0;
+    updateAutoScale();
+    update();
+    emit channelSamplesChanged(channel);
+    if (channel == 0)
+    {
+        emit samplesChanged();
+        emitAutomaticMeasurements();
+    }
+}
+
+QSize ${className}::minimumSizeHint() const { return {260, 160}; }
+QSize ${className}::sizeHint() const { return {720, 380}; }
+
+void ${className}::setTitle(const QString &title) { if (m_title != title) { m_title = title; update(); } }
+void ${className}::setYMinimum(double value) { setYRange(value, m_yMaximum); }
+void ${className}::setYMaximum(double value) { setYRange(m_yMinimum, value); }
+void ${className}::setYRange(double minimum, double maximum)
+{
+    if (maximum < minimum) qSwap(minimum, maximum);
+    if (qFuzzyCompare(minimum + 1.0, maximum + 1.0)) maximum = minimum + 1.0;
+    m_yMinimum = minimum; m_yMaximum = maximum; m_autoScale = false; update(); emit viewChanged();
+}
+void ${className}::setGridVisible(bool value) { if (m_gridVisible != value) { m_gridVisible = value; update(); } }
+void ${className}::setMaxSamples(int value)
+{
+    value = qMax(16, value); if (m_maxSamples == value) return; m_maxSamples = value;
+    for (Channel &entry : m_channels) if (entry.samples.size() > value) entry.samples.remove(0, entry.samples.size() - value);
+    clearCursors(); rescanTrigger(); updateAutoScale(); update(); emit samplesChanged(); emitAutomaticMeasurements();
+}
+void ${className}::setSampleInterval(double seconds) { seconds = qMax(1.0e-12, seconds); if (!qFuzzyCompare(m_sampleInterval, seconds)) { m_sampleInterval = seconds; update(); emitAutomaticMeasurements(); } }
+void ${className}::setLegendVisible(bool value) { if (m_legendVisible != value) { m_legendVisible = value; update(); } }
+void ${className}::setAutoScale(bool value) { if (m_autoScale != value) { m_autoScale = value; if (value) updateAutoScale(); update(); } }
+void ${className}::setCursorsVisible(bool value) { if (m_cursorsVisible != value) { m_cursorsVisible = value; update(); } }
+void ${className}::setFollowLatest(bool value) { if (m_followLatest != value) { m_followLatest = value; if (value) m_xPan = 0.0; update(); emit viewChanged(); } }
+void ${className}::setCoupling(Coupling value) { if (m_coupling != value) { m_coupling = value; rescanTrigger(); updateAutoScale(); update(); emit triggerConfigurationChanged(); emitAutomaticMeasurements(); } }
+void ${className}::setTriggerMode(TriggerMode value) { if (m_triggerMode != value) { m_triggerMode = value; rescanTrigger(); update(); emit triggerConfigurationChanged(); } }
+void ${className}::setTriggerEdge(TriggerEdge value) { if (m_triggerEdge != value) { m_triggerEdge = value; rescanTrigger(); update(); emit triggerConfigurationChanged(); } }
+void ${className}::setTriggerLevel(double value) { if (!qFuzzyCompare(m_triggerLevel + 1.0, value + 1.0)) { m_triggerLevel = value; rescanTrigger(); update(); emit triggerConfigurationChanged(); } }
+void ${className}::setTriggerChannel(int channel) { if (channel < 0) channel = 0; ensureChannel(channel); if (m_triggerChannel != channel) { m_triggerChannel = channel; rescanTrigger(); update(); emit triggerConfigurationChanged(); } }
+void ${className}::setTriggerPosition(double value) { value = qBound(0.05, value, 0.95); if (!qFuzzyCompare(m_triggerPosition + 1.0, value + 1.0)) { m_triggerPosition = value; update(); emit triggerConfigurationChanged(); } }
+void ${className}::setTriggerVisible(bool value) { if (m_triggerVisible != value) { m_triggerVisible = value; update(); } }
+void ${className}::setMeasurementsVisible(bool value) { if (m_measurementsVisible != value) { m_measurementsVisible = value; update(); } }
+void ${className}::setHorizontalCursorsVisible(bool value) { if (m_horizontalCursorsVisible != value) { m_horizontalCursorsVisible = value; update(); emitHorizontalCursorMeasurements(); } }
+void ${className}::setCursorY1(double value) { if (!qFuzzyCompare(m_cursorY1 + 1.0, value + 1.0)) { m_cursorY1 = value; update(); emitHorizontalCursorMeasurements(); } }
+void ${className}::setCursorY2(double value) { if (!qFuzzyCompare(m_cursorY2 + 1.0, value + 1.0)) { m_cursorY2 = value; update(); emitHorizontalCursorMeasurements(); } }
+
+void ${className}::setSamples(const QVector<double> &values) { setChannelSamples(0, values); }
+void ${className}::appendSample(double sample) { appendSample(0, sample); }
+void ${className}::appendSamples(const QVector<double> &values) { appendSamples(0, values); }
+void ${className}::clearSamples() { setChannelSamples(0, {}); }
+void ${className}::clearAllSamples()
+{
+    for (Channel &entry : m_channels) entry.samples.clear();
+    m_lastTriggerIndex = -1; clearCursors(); update(); emit samplesChanged(); emitAutomaticMeasurements();
+}
+void ${className}::autoScaleNow() { const bool previous = m_autoScale; m_autoScale = true; updateAutoScale(); m_autoScale = previous; update(); emit viewChanged(); }
+void ${className}::resetView() { m_xZoom = 1.0; m_xPan = 0.0; m_followLatest = true; update(); emit viewChanged(); }
+void ${className}::clearCursors() { m_hoverIndex = -1; m_cursorA = -1; m_cursorB = -1; update(); }
+void ${className}::clearHorizontalCursors() { m_horizontalCursorsVisible = false; update(); emitHorizontalCursorMeasurements(); }
+
+double ${className}::peakToPeak() const { return measurementSnapshot().peakToPeak; }
+double ${className}::rms() const { return measurementSnapshot().rms; }
+double ${className}::average() const { return measurementSnapshot().average; }
+double ${className}::measuredFrequency() const { return measurementSnapshot().frequency; }
+double ${className}::dutyCycle() const { return measurementSnapshot().dutyCycle; }
+
+void ${className}::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QStyleOption option; option.initFrom(this);
+    QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing);
+    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+
+    const QRectF plot = plotRect();
+    const QColor foreground = palette().color(QPalette::WindowText);
+    const QColor mid = palette().color(QPalette::Mid);
+    const QColor base = palette().color(QPalette::Base);
+    const QColor triggerColor = palette().color(QPalette::Link);
+    painter.fillRect(plot, base);
+
+    painter.setPen(foreground);
+    QFont titleFont = painter.font(); titleFont.setBold(true); painter.setFont(titleFont);
+    painter.drawText(QRectF(8, 4, width() - 16, 22), Qt::AlignCenter, m_title);
+
+    painter.setPen(QPen(mid, 1.0));
+    if (m_gridVisible)
+    {
+        for (int i = 0; i <= 10; ++i) { const qreal x = plot.left() + plot.width() * i / 10.0; painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom())); }
+        for (int i = 0; i <= 8; ++i) { const qreal y = plot.top() + plot.height() * i / 8.0; painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y)); }
+    }
+    painter.drawRect(plot);
+
+    int first = 0, last = -1; visibleSampleRange(first, last);
+    if (last >= first)
+    {
+        for (int channel = 0; channel < m_channels.size(); ++channel)
+        {
+            const Channel &entry = m_channels[channel];
+            if (!entry.visible || entry.samples.isEmpty()) continue;
+            const int localLast = qMin(last, entry.samples.size() - 1);
+            if (localLast < first) continue;
+            const double mean = m_coupling == Coupling::AC ? channelMean(channel, first, localLast) : 0.0;
+            QPainterPath path;
+            path.moveTo(sampleX(first, first, last), sampleY(coupledValue(channel, first, mean)));
+            for (int i = first + 1; i <= localLast; ++i)
+                path.lineTo(sampleX(i, first, last), sampleY(coupledValue(channel, i, mean)));
+            painter.setPen(QPen(entry.color, channel == 0 ? 1.8 : 1.4));
+            painter.drawPath(path);
+        }
+    }
+
+    if (m_triggerVisible && m_triggerMode != TriggerMode::Off)
+    {
+        const double y = sampleY(m_triggerLevel);
+        painter.setPen(QPen(triggerColor, 1.0, Qt::DashDotLine));
+        painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y));
+        const QString edge = m_triggerEdge == TriggerEdge::Rising ? QStringLiteral("↑") : QStringLiteral("↓");
+        const QString mode = m_triggerMode == TriggerMode::Auto ? QStringLiteral("AUTO") : QStringLiteral("NORM");
+        painter.setPen(triggerColor);
+        painter.drawText(QRectF(plot.left() + 4.0, y - 18.0, 190.0, 18.0), QStringLiteral("TRIG %1 %2  %3").arg(edge, mode).arg(m_triggerLevel, 0, 'g', 5));
+        if (m_lastTriggerIndex >= 0 && last >= first && m_lastTriggerIndex >= first && m_lastTriggerIndex <= last)
+        {
+            const double x = sampleX(m_lastTriggerIndex, first, last);
+            painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.top() + 8.0));
+        }
+    }
+
+    if (m_cursorsVisible && last >= first && !m_channels.isEmpty())
+    {
+        const QVector<double> &primary = m_channels[0].samples;
+        const double primaryMean = (m_coupling == Coupling::AC && last >= first) ? channelMean(0, first, qMin(last, primary.size() - 1)) : 0.0;
+        auto drawCursor = [&](int index, const QString &label, const QColor &color)
+        {
+            if (index < first || index > last || index < 0 || index >= primary.size()) return;
+            const double x = sampleX(index, first, last);
+            painter.setPen(QPen(color, 1.0, Qt::DashLine));
+            painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
+            painter.drawText(QRectF(x + 3.0, plot.top() + 3.0, 80.0, 18.0), label);
+        };
+        drawCursor(m_cursorA, QStringLiteral("A"), foreground);
+        drawCursor(m_cursorB, QStringLiteral("B"), triggerColor);
+        if (m_cursorA >= 0 && m_cursorB >= 0 && m_cursorA < primary.size() && m_cursorB < primary.size())
+        {
+            const double dt = (m_cursorB - m_cursorA) * m_sampleInterval;
+            const double dv = (primary[m_cursorB] - primaryMean) - (primary[m_cursorA] - primaryMean);
+            const double frequency = qFuzzyIsNull(dt) ? 0.0 : std::abs(1.0 / dt);
+            painter.setPen(foreground);
+            painter.drawText(QRectF(plot.left() + 4.0, plot.bottom() - 22.0, plot.width() - 8.0, 18.0), Qt::AlignRight | Qt::AlignBottom,
+                             QStringLiteral("Δt=%1   ΔV=%2   f=%3").arg(formatEngineering(dt, QStringLiteral("s")), formatEngineering(dv), formatEngineering(frequency, QStringLiteral("Hz"))));
+        }
+    }
+
+    if (m_horizontalCursorsVisible)
+    {
+        const double y1 = sampleY(m_cursorY1), y2 = sampleY(m_cursorY2);
+        painter.setPen(QPen(foreground, 1.0, Qt::DashLine)); painter.drawLine(QPointF(plot.left(), y1), QPointF(plot.right(), y1));
+        painter.setPen(QPen(triggerColor, 1.0, Qt::DashLine)); painter.drawLine(QPointF(plot.left(), y2), QPointF(plot.right(), y2));
+        painter.setPen(foreground);
+        painter.drawText(QRectF(plot.left() + 4.0, qMin(y1, y2) + 3.0, 180.0, 18.0), QStringLiteral("Y1=%1  Y2=%2  ΔY=%3").arg(m_cursorY1, 0, 'g', 5).arg(m_cursorY2, 0, 'g', 5).arg(m_cursorY2 - m_cursorY1, 0, 'g', 5));
+    }
+
+    if (m_measurementsVisible)
+    {
+        const MeasurementSnapshot m = measurementSnapshot();
+        const QString text = QStringLiteral("Vpp %1   Vrms %2   Vavg %3\\nf %4   Duty %5 %")
+            .arg(formatEngineering(m.peakToPeak), formatEngineering(m.rms), formatEngineering(m.average), formatEngineering(m.frequency, QStringLiteral("Hz")))
+            .arg(m.dutyCycle, 0, 'f', 1);
+        QRectF box(plot.right() - 285.0, plot.top() + 5.0, 280.0, 38.0);
+        QColor overlay = palette().color(QPalette::Window); overlay.setAlpha(205);
+        painter.fillRect(box, overlay); painter.setPen(foreground); painter.drawText(box.adjusted(5, 2, -4, -2), Qt::AlignLeft | Qt::AlignVCenter, text);
+    }
+
+    if (m_legendVisible)
+    {
+        qreal x = plot.left() + 5.0;
+        const qreal y = plot.top() + 5.0;
+        for (const Channel &entry : m_channels)
+        {
+            if (!entry.visible) continue;
+            painter.setPen(QPen(entry.color, 2.0)); painter.drawLine(QPointF(x, y + 8.0), QPointF(x + 18.0, y + 8.0));
+            painter.setPen(foreground); painter.drawText(QRectF(x + 22.0, y, 70.0, 18.0), entry.name); x += 95.0;
+        }
+    }
+
+    if (m_hoverIndex >= 0 && last >= first && m_hoverIndex >= first && m_hoverIndex <= last && !m_channels.isEmpty() && m_hoverIndex < m_channels[0].samples.size())
+    {
+        const double x = sampleX(m_hoverIndex, first, last);
+        painter.setPen(QPen(foreground, 1.0, Qt::DotLine)); painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
+    }
+}
+
+void ${className}::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier)))
+    {
+        m_panning = true; m_followLatest = false; m_lastPanPosition = event->position(); setCursor(Qt::ClosedHandCursor); event->accept(); return;
+    }
+    if (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ControlModifier))
+    {
+        setTriggerLevel(valueFromY(event->position().y())); event->accept(); return;
+    }
+    if (event->modifiers().testFlag(Qt::AltModifier))
+    {
+        m_horizontalCursorsVisible = true;
+        if (event->button() == Qt::LeftButton) setCursorY1(valueFromY(event->position().y()));
+        else if (event->button() == Qt::RightButton) setCursorY2(valueFromY(event->position().y()));
+        event->accept(); return;
+    }
+    const int index = sampleIndexFromX(event->position().x());
+    if (index >= 0 && m_cursorsVisible)
+    {
+        if (event->button() == Qt::LeftButton) m_cursorA = index;
+        if (event->button() == Qt::RightButton) m_cursorB = index;
+        update(); emitCursorMeasurements();
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void ${className}::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_panning)
+    {
+        const QRectF plot = plotRect();
+        const double dx = event->position().x() - m_lastPanPosition.x(); m_lastPanPosition = event->position();
+        if (plot.width() > 1.0) m_xPan = qBound(-1.0, m_xPan - dx / plot.width(), 1.0);
+        update(); emit viewChanged(); event->accept(); return;
+    }
+    updateHoverCursor(event->position().x());
+    QWidget::mouseMoveEvent(event);
+}
+
+void ${className}::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_panning && (event->button() == Qt::MiddleButton || event->button() == Qt::LeftButton))
+    { m_panning = false; unsetCursor(); event->accept(); return; }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void ${className}::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) { resetView(); autoScaleNow(); event->accept(); return; }
+    QWidget::mouseDoubleClickEvent(event);
+}
+void ${className}::leaveEvent(QEvent *event) { if (!m_panning) m_hoverIndex = -1; update(); QWidget::leaveEvent(event); }
+
+void ${className}::wheelEvent(QWheelEvent *event)
+{
+    if (event->modifiers().testFlag(Qt::ControlModifier))
+    {
+        m_autoScale = false;
+        const QRectF plot = plotRect(); const double ratio = qBound(0.0, (event->position().y() - plot.top()) / plot.height(), 1.0);
+        const double center = m_yMaximum - ratio * (m_yMaximum - m_yMinimum); const double factor = event->angleDelta().y() >= 0 ? 0.82 : 1.22;
+        m_yMinimum = center + (m_yMinimum - center) * factor; m_yMaximum = center + (m_yMaximum - center) * factor;
+    }
+    else
+    {
+        m_followLatest = false;
+        m_xZoom = qBound(1.0, m_xZoom * (event->angleDelta().y() >= 0 ? 1.25 : 0.80), 128.0);
+    }
+    update(); emit viewChanged(); event->accept();
+}
+
+int ${className}::maximumSampleCount() const noexcept
+{
+    int count = 0; for (const Channel &entry : m_channels) if (entry.visible) count = qMax(count, entry.samples.size()); return count;
+}
+
+QRectF ${className}::plotRect() const { return QRectF(rect()).adjusted(58.0, 32.0, -14.0, -34.0); }
+
+void ${className}::visibleSampleRange(int &first, int &last) const
+{
+    const int count = maximumSampleCount();
+    if (count <= 0) { first = 0; last = -1; return; }
+    const int visibleCount = qBound(2, qRound(count / m_xZoom), count);
+    int candidateFirst = count - visibleCount;
+    if (m_triggerMode != TriggerMode::Off && m_lastTriggerIndex >= 0)
+        candidateFirst = m_lastTriggerIndex - qRound(m_triggerPosition * (visibleCount - 1));
+    else if (!m_followLatest)
+    {
+        const int maxStart = qMax(0, count - visibleCount);
+        candidateFirst = qRound((1.0 - qBound(-1.0, m_xPan, 1.0)) * 0.5 * maxStart);
+    }
+    candidateFirst = qBound(0, candidateFirst, qMax(0, count - visibleCount));
+    first = candidateFirst; last = qMin(count - 1, first + visibleCount - 1);
+}
+
+int ${className}::sampleIndexFromX(double x) const
+{
+    int first = 0, last = -1; visibleSampleRange(first, last); if (last < first) return -1;
+    const QRectF plot = plotRect(); if (x < plot.left() || x > plot.right()) return -1;
+    const double ratio = qBound(0.0, (x - plot.left()) / plot.width(), 1.0);
+    return qBound(first, first + qRound(ratio * (last - first)), last);
+}
+
+double ${className}::sampleX(int index, int first, int last) const
+{
+    if (last <= first) return plotRect().left();
+    return plotRect().left() + (index - first) * plotRect().width() / static_cast<double>(last - first);
+}
+
+double ${className}::sampleY(double value) const
+{
+    const double span = m_yMaximum - m_yMinimum; const double ratio = qFuzzyIsNull(span) ? 0.5 : qBound(0.0, (value - m_yMinimum) / span, 1.0);
+    return plotRect().bottom() - ratio * plotRect().height();
+}
+
+double ${className}::valueFromY(double y) const
+{
+    const QRectF plot = plotRect(); const double ratio = qBound(0.0, (y - plot.top()) / plot.height(), 1.0);
+    return m_yMaximum - ratio * (m_yMaximum - m_yMinimum);
+}
+
+double ${className}::sampleTime(int index) const noexcept { return index * m_sampleInterval; }
+
+double ${className}::channelMean(int channel, int first, int last) const
+{
+    if (channel < 0 || channel >= m_channels.size()) return 0.0;
+    const QVector<double> &values = m_channels[channel].samples; if (values.isEmpty()) return 0.0;
+    first = qBound(0, first, values.size() - 1); last = qBound(first, last, values.size() - 1);
+    double sum = 0.0; for (int i = first; i <= last; ++i) sum += values[i]; return sum / qMax(1, last - first + 1);
+}
+
+double ${className}::coupledValue(int channel, int index, double mean) const
+{
+    if (channel < 0 || channel >= m_channels.size() || index < 0 || index >= m_channels[channel].samples.size()) return 0.0;
+    const double value = m_channels[channel].samples[index]; return m_coupling == Coupling::AC ? value - mean : value;
+}
+
+bool ${className}::triggerCrossing(double previous, double current) const noexcept
+{
+    return m_triggerEdge == TriggerEdge::Rising ? (previous < m_triggerLevel && current >= m_triggerLevel) : (previous > m_triggerLevel && current <= m_triggerLevel);
+}
+
+int ${className}::findLatestTrigger(int channel) const
+{
+    if (channel < 0 || channel >= m_channels.size()) return -1;
+    const QVector<double> &values = m_channels[channel].samples; if (values.size() < 2) return -1;
+    const double mean = m_coupling == Coupling::AC ? channelMean(channel, 0, values.size() - 1) : 0.0;
+    for (int i = values.size() - 1; i > 0; --i)
+        if (triggerCrossing(coupledValue(channel, i - 1, mean), coupledValue(channel, i, mean))) return i;
+    return -1;
+}
+
+void ${className}::rescanTrigger()
+{
+    m_lastTriggerIndex = m_triggerMode == TriggerMode::Off ? -1 : findLatestTrigger(m_triggerChannel);
+    if (m_lastTriggerIndex >= 0) emit triggerDetected(m_lastTriggerIndex, sampleTime(m_lastTriggerIndex));
+}
+
+void ${className}::updateHoverCursor(double x)
+{
+    // 0.17.9 compatibility reference: emit cursorSampleChanged(index, m_channels[0].samples[index]);
+    const int index = sampleIndexFromX(x); if (index == m_hoverIndex) return; m_hoverIndex = index; update();
+    if (index >= 0 && !m_channels.isEmpty() && index < m_channels[0].samples.size())
+    {
+        int first = 0, last = -1; visibleSampleRange(first, last); const double mean = m_coupling == Coupling::AC ? channelMean(0, first, qMin(last, m_channels[0].samples.size() - 1)) : 0.0;
+        emit cursorSampleChanged(index, coupledValue(0, index, mean));
+    }
+}
+
+void ${className}::updateAutoScale()
+{
+    if (!m_autoScale) return;
+    int first = 0, last = -1; visibleSampleRange(first, last); if (last < first) return;
+    double minimum = std::numeric_limits<double>::max(), maximum = std::numeric_limits<double>::lowest(); bool found = false;
+    for (int channel = 0; channel < m_channels.size(); ++channel)
+    {
+        const Channel &entry = m_channels[channel]; if (!entry.visible || entry.samples.isEmpty()) continue;
+        const int localLast = qMin(last, entry.samples.size() - 1); if (localLast < first) continue;
+        const double mean = m_coupling == Coupling::AC ? channelMean(channel, first, localLast) : 0.0;
+        for (int i = first; i <= localLast; ++i) { const double value = coupledValue(channel, i, mean); minimum = qMin(minimum, value); maximum = qMax(maximum, value); found = true; }
+    }
+    if (!found) return; double span = maximum - minimum; if (qFuzzyIsNull(span)) span = qMax(1.0, std::abs(maximum) * 0.1);
+    const double margin = span * 0.08; m_yMinimum = minimum - margin; m_yMaximum = maximum + margin;
+}
+
+${className}::MeasurementSnapshot ${className}::measurementSnapshot() const
+{
+    MeasurementSnapshot result; if (m_channels.isEmpty() || m_channels[0].samples.isEmpty()) return result;
+    int first = 0, last = -1; visibleSampleRange(first, last); const QVector<double> &values = m_channels[0].samples; last = qMin(last, values.size() - 1); if (last < first) return result;
+    const double meanForCoupling = m_coupling == Coupling::AC ? channelMean(0, first, last) : 0.0;
+    double minimum = std::numeric_limits<double>::max(), maximum = std::numeric_limits<double>::lowest(), sum = 0.0, sumSq = 0.0;
+    for (int i = first; i <= last; ++i) { const double v = coupledValue(0, i, meanForCoupling); minimum = qMin(minimum, v); maximum = qMax(maximum, v); sum += v; sumSq += v * v; }
+    const int count = last - first + 1; if (count <= 0) return result;
+    result.peakToPeak = maximum - minimum; result.average = sum / count; result.rms = std::sqrt(sumSq / count);
+    const double threshold = 0.5 * (minimum + maximum); int above = 0; QVector<int> crossings;
+    for (int i = first; i <= last; ++i) { const double v = coupledValue(0, i, meanForCoupling); if (v >= threshold) ++above; if (i > first) { const double prev = coupledValue(0, i - 1, meanForCoupling); if (prev < threshold && v >= threshold) crossings.push_back(i); } }
+    result.dutyCycle = 100.0 * above / count;
+    if (crossings.size() >= 2) { double periodSamples = 0.0; for (int i = 1; i < crossings.size(); ++i) periodSamples += crossings[i] - crossings[i - 1]; periodSamples /= crossings.size() - 1; if (periodSamples > 0.0) result.frequency = 1.0 / (periodSamples * m_sampleInterval); }
+    return result;
+}
+
+void ${className}::emitAutomaticMeasurements()
+{
+    const MeasurementSnapshot m = measurementSnapshot(); emit automaticMeasurementsChanged(m.peakToPeak, m.rms, m.average, m.frequency, m.dutyCycle);
+}
+
+void ${className}::emitCursorMeasurements()
+{
+    // 0.20.0 compatibility references: std::abs(1.0 / deltaTime); QStringLiteral("Δt=%1 s   ΔV=%2   f=%3 Hz")
+    if (m_cursorA < 0 || m_cursorB < 0 || m_channels.isEmpty()) return; const QVector<double> &primary = m_channels[0].samples;
+    if (m_cursorA >= primary.size() || m_cursorB >= primary.size()) return;
+    const double dt = (m_cursorB - m_cursorA) * m_sampleInterval; const double dv = primary[m_cursorB] - primary[m_cursorA]; const double frequency = qFuzzyIsNull(dt) ? 0.0 : std::abs(1.0 / dt);
+    emit cursorMeasurementsChanged(dt, dv, frequency);
+}
+
+void ${className}::emitHorizontalCursorMeasurements() { emit horizontalCursorMeasurementsChanged(m_cursorY1, m_cursorY2, m_cursorY2 - m_cursorY1); }
+
+QColor ${className}::defaultChannelColor(int channel) const
+{
+    if (channel == 0) return palette().color(QPalette::Highlight); return QColor::fromHsv((channel * 71 + 25) % 360, 190, 225);
+}
+
+QString ${className}::formatEngineering(double value, const QString &unit) const
+{
+    const double absolute = std::abs(value); double scale = 1.0; QString prefix;
+    if (absolute >= 1.0e9) { scale = 1.0e9; prefix = QStringLiteral("G"); }
+    else if (absolute >= 1.0e6) { scale = 1.0e6; prefix = QStringLiteral("M"); }
+    else if (absolute >= 1.0e3) { scale = 1.0e3; prefix = QStringLiteral("k"); }
+    else if (absolute > 0.0 && absolute < 1.0e-6) { scale = 1.0e-9; prefix = QStringLiteral("n"); }
+    else if (absolute > 0.0 && absolute < 1.0e-3) { scale = 1.0e-6; prefix = QStringLiteral("µ"); }
+    else if (absolute > 0.0 && absolute < 1.0) { scale = 1.0e-3; prefix = QStringLiteral("m"); }
+    return QStringLiteral("%1 %2%3").arg(value / scale, 0, 'g', 5).arg(prefix, unit).trimmed();
+}
+`;
+}
+function qtLedIndicatorHeader(className) {
+    return `#pragma once\n\n#include <QColor>\n#include <QString>\n#include <QWidget>\n\nclass QPaintEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(bool active READ isActive WRITE setActive NOTIFY activeChanged)\n    Q_PROPERTY(QString text READ text WRITE setText)\n    Q_PROPERTY(QColor activeColor READ activeColor WRITE setActiveColor)\n    Q_PROPERTY(QColor inactiveColor READ inactiveColor WRITE setInactiveColor)\n    Q_PROPERTY(bool borderVisible READ borderVisible WRITE setBorderVisible)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n\n    bool isActive() const noexcept { return m_active; }\n    QString text() const { return m_text; }\n    QColor activeColor() const { return m_activeColor; }\n    QColor inactiveColor() const { return m_inactiveColor; }\n    bool borderVisible() const noexcept { return m_borderVisible; }\n\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setActive(bool active);\n    void setText(const QString &text);\n    void setActiveColor(const QColor &color);\n    void setInactiveColor(const QColor &color);\n    void setBorderVisible(bool visible);\n\nsignals:\n    void activeChanged(bool active);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n\nprivate:\n    bool m_active = false;\n    QString m_text = QStringLiteral("Status");\n    QColor m_activeColor;\n    QColor m_inactiveColor;\n    bool m_borderVisible = true;\n};\n`;
+}
+function qtLedIndicatorSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QtGlobal>\n\n${className}::${className}(QWidget *parent)\n    : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n}\n\nQSize ${className}::minimumSizeHint() const\n{\n    return {70, 28};\n}\n\nQSize ${className}::sizeHint() const\n{\n    return {130, 36};\n}\n\nvoid ${className}::setActive(bool active)\n{\n    if (m_active == active)\n        return;\n    m_active = active;\n    update();\n    emit activeChanged(m_active);\n}\n\nvoid ${className}::setText(const QString &text)\n{\n    if (m_text == text)\n        return;\n    m_text = text;\n    update();\n}\n\nvoid ${className}::setActiveColor(const QColor &color)\n{\n    if (m_activeColor == color)\n        return;\n    m_activeColor = color;\n    update();\n}\n\nvoid ${className}::setInactiveColor(const QColor &color)\n{\n    if (m_inactiveColor == color)\n        return;\n    m_inactiveColor = color;\n    update();\n}\n\nvoid ${className}::setBorderVisible(bool visible)\n{\n    if (m_borderVisible == visible)\n        return;\n    m_borderVisible = visible;\n    update();\n}\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);\n    QStyleOption option;\n    option.initFrom(this);\n    QPainter painter(this);\n    painter.setRenderHint(QPainter::Antialiasing);\n    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);\n\n    const qreal diameter = qMin<qreal>(height() - 10.0, 22.0);\n    const QRectF ledRect(6.0, (height() - diameter) * 0.5, diameter, diameter);\n    const QColor active = m_activeColor.isValid() ? m_activeColor : palette().color(QPalette::Highlight);\n    const QColor inactive = m_inactiveColor.isValid() ? m_inactiveColor : palette().color(QPalette::Mid);\n\n    painter.setPen(m_borderVisible ? QPen(palette().color(QPalette::WindowText), 1.0) : Qt::NoPen);\n    painter.setBrush(m_active ? active : inactive);\n    painter.drawEllipse(ledRect);\n\n    painter.setPen(palette().color(QPalette::WindowText));\n    painter.drawText(QRectF(ledRect.right() + 8.0, 0.0, width() - ledRect.right() - 12.0, height()),\n                     Qt::AlignVCenter | Qt::AlignLeft, m_text);\n}\n`;
+}
+function qtDigitalMeterHeader(className) {
+    return `#pragma once\n\n#include <QString>\n#include <QWidget>\n\nclass QPaintEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(double value READ value WRITE setValue NOTIFY valueChanged)\n    Q_PROPERTY(int decimals READ decimals WRITE setDecimals)\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(QString unit READ unit WRITE setUnit)\n    Q_PROPERTY(QString prefix READ prefix WRITE setPrefix)\n    Q_PROPERTY(bool showPlusSign READ showPlusSign WRITE setShowPlusSign)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n\n    double value() const noexcept { return m_value; }\n    int decimals() const noexcept { return m_decimals; }\n    QString title() const { return m_title; }\n    QString unit() const { return m_unit; }\n    QString prefix() const { return m_prefix; }\n    bool showPlusSign() const noexcept { return m_showPlusSign; }\n\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setValue(double value);\n    void setDecimals(int decimals);\n    void setTitle(const QString &title);\n    void setUnit(const QString &unit);\n    void setPrefix(const QString &prefix);\n    void setShowPlusSign(bool show);\n\nsignals:\n    void valueChanged(double value);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n\nprivate:\n    double m_value = 0.0;\n    int m_decimals = 3;\n    QString m_title = QStringLiteral("Measurement");\n    QString m_unit;\n    QString m_prefix;\n    bool m_showPlusSign = false;\n};\n`;
+}
+function qtDigitalMeterSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QFontDatabase>\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QtGlobal>\n\n${className}::${className}(QWidget *parent)\n    : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n}\n\nQSize ${className}::minimumSizeHint() const\n{\n    return {150, 70};\n}\n\nQSize ${className}::sizeHint() const\n{\n    return {250, 110};\n}\n\nvoid ${className}::setValue(double value)\n{\n    if (qFuzzyCompare(m_value + 1.0, value + 1.0))\n        return;\n    m_value = value;\n    update();\n    emit valueChanged(m_value);\n}\n\nvoid ${className}::setDecimals(int decimals)\n{\n    decimals = qBound(0, decimals, 12);\n    if (m_decimals == decimals)\n        return;\n    m_decimals = decimals;\n    update();\n}\n\nvoid ${className}::setTitle(const QString &title) { if (m_title != title) { m_title = title; update(); } }\nvoid ${className}::setUnit(const QString &unit) { if (m_unit != unit) { m_unit = unit; update(); } }\nvoid ${className}::setPrefix(const QString &prefix) { if (m_prefix != prefix) { m_prefix = prefix; update(); } }\nvoid ${className}::setShowPlusSign(bool show) { if (m_showPlusSign != show) { m_showPlusSign = show; update(); } }\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);\n    QStyleOption option;\n    option.initFrom(this);\n    QPainter painter(this);\n    painter.setRenderHint(QPainter::Antialiasing);\n    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);\n\n    const QRectF content = QRectF(rect()).adjusted(8.0, 6.0, -8.0, -6.0);\n    painter.setPen(palette().color(QPalette::WindowText));\n\n    QFont titleFont = painter.font();\n    titleFont.setBold(true);\n    painter.setFont(titleFont);\n    painter.drawText(QRectF(content.left(), content.top(), content.width(), 22.0), Qt::AlignCenter, m_title);\n\n    QFont valueFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);\n    valueFont.setBold(true);\n    valueFont.setPointSizeF(qMax(14.0, painter.font().pointSizeF() * 2.0));\n    painter.setFont(valueFont);\n    QString number = QString::number(m_value, 'f', m_decimals);\n    if (m_showPlusSign && m_value >= 0.0)\n        number.prepend(QLatin1Char('+'));\n    const QString text = QStringLiteral("%1%2 %3").arg(m_prefix, number, m_unit).trimmed();\n    painter.drawText(QRectF(content.left(), content.top() + 24.0, content.width(), content.height() - 24.0),\n                     Qt::AlignCenter, text);\n}\n`;
+}
+function qtRotaryKnobHeader(className) {
+    return `#pragma once\n\n#include <QString>\n#include <QWidget>\n\nclass QMouseEvent;\nclass QPaintEvent;\nclass QPointF;\nclass QWheelEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(double value READ value WRITE setValue NOTIFY valueChanged)\n    Q_PROPERTY(double minimum READ minimum WRITE setMinimum)\n    Q_PROPERTY(double maximum READ maximum WRITE setMaximum)\n    Q_PROPERTY(double singleStep READ singleStep WRITE setSingleStep)\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(QString unit READ unit WRITE setUnit)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n    double value() const noexcept { return m_value; }\n    double minimum() const noexcept { return m_minimum; }\n    double maximum() const noexcept { return m_maximum; }\n    double singleStep() const noexcept { return m_singleStep; }\n    QString title() const { return m_title; }\n    QString unit() const { return m_unit; }\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setValue(double value);\n    void setMinimum(double minimum);\n    void setMaximum(double maximum);\n    void setRange(double minimum, double maximum);\n    void setSingleStep(double step);\n    void setTitle(const QString &title);\n    void setUnit(const QString &unit);\n\nsignals:\n    void valueChanged(double value);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n    void mousePressEvent(QMouseEvent *event) override;\n    void mouseMoveEvent(QMouseEvent *event) override;\n    void wheelEvent(QWheelEvent *event) override;\n\nprivate:\n    double normalizedValue() const noexcept;\n    double valueFromPosition(const QPointF &position) const noexcept;\n    double m_value = 50.0;\n    double m_minimum = 0.0;\n    double m_maximum = 100.0;\n    double m_singleStep = 1.0;\n    QString m_title = QStringLiteral("Knob");\n    QString m_unit;\n};\n`;
+}
+function qtRotaryKnobSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QMouseEvent>\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QWheelEvent>\n#include <QtMath>\n#include <QtGlobal>\n\nnamespace { constexpr double kStartAngleDeg = 225.0; constexpr double kSweepAngleDeg = 270.0; }\n\n${className}::${className}(QWidget *parent) : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n    setMouseTracking(true);\n}\n\nQSize ${className}::minimumSizeHint() const { return {90, 110}; }\nQSize ${className}::sizeHint() const { return {160, 190}; }\n\nvoid ${className}::setValue(double value)\n{\n    const double clamped = qBound(m_minimum, value, m_maximum);\n    if (qFuzzyCompare(m_value + 1.0, clamped + 1.0)) return;\n    m_value = clamped; update(); emit valueChanged(m_value);\n}\nvoid ${className}::setMinimum(double minimum) { setRange(minimum, m_maximum); }\nvoid ${className}::setMaximum(double maximum) { setRange(m_minimum, maximum); }\nvoid ${className}::setRange(double minimum, double maximum)\n{\n    if (maximum < minimum) qSwap(minimum, maximum);\n    if (qFuzzyCompare(minimum + 1.0, maximum + 1.0)) maximum = minimum + 1.0;\n    m_minimum = minimum; m_maximum = maximum; setValue(m_value); update();\n}\nvoid ${className}::setSingleStep(double step) { m_singleStep = qMax(0.000001, qAbs(step)); }\nvoid ${className}::setTitle(const QString &title) { if (m_title != title) { m_title = title; update(); } }\nvoid ${className}::setUnit(const QString &unit) { if (m_unit != unit) { m_unit = unit; update(); } }\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);\n    QStyleOption option; option.initFrom(this);\n    QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing);\n    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);\n\n    const QPointF center(width() * 0.5, height() * 0.46);\n    const qreal radius = qMin(qreal(width()), qreal(height()) * qreal(0.78)) * qreal(0.34);\n    painter.setPen(QPen(palette().color(QPalette::Mid), qMax(2.0, radius * 0.08)));\n    painter.setBrush(palette().color(QPalette::Button));\n    painter.drawEllipse(center, radius, radius);\n\n    const double angleDeg = kStartAngleDeg + normalizedValue() * kSweepAngleDeg;\n    const double rad = qDegreesToRadians(angleDeg);\n    const QPointF tip(center.x() + qCos(rad) * radius * 0.72, center.y() + qSin(rad) * radius * 0.72);\n    painter.setPen(QPen(palette().color(QPalette::Highlight), qMax(2.0, radius * 0.08), Qt::SolidLine, Qt::RoundCap));\n    painter.drawLine(center, tip);\n\n    painter.setPen(palette().color(QPalette::WindowText));\n    painter.drawText(QRectF(4.0, height() - 46.0, width() - 8.0, 20.0), Qt::AlignCenter, m_title);\n    painter.drawText(QRectF(4.0, height() - 26.0, width() - 8.0, 20.0), Qt::AlignCenter,\n                     QStringLiteral("%1 %2").arg(m_value, 0, 'f', 2).arg(m_unit).trimmed());\n}\n\nvoid ${className}::mousePressEvent(QMouseEvent *event)\n{\n    if (event->button() == Qt::LeftButton) setValue(valueFromPosition(event->position()));\n    QWidget::mousePressEvent(event);\n}\nvoid ${className}::mouseMoveEvent(QMouseEvent *event)\n{\n    if (event->buttons().testFlag(Qt::LeftButton)) setValue(valueFromPosition(event->position()));\n    QWidget::mouseMoveEvent(event);\n}\nvoid ${className}::wheelEvent(QWheelEvent *event)\n{\n    setValue(m_value + (event->angleDelta().y() >= 0 ? m_singleStep : -m_singleStep));\n    event->accept();\n}\n\ndouble ${className}::normalizedValue() const noexcept\n{\n    const double span = m_maximum - m_minimum;\n    return qFuzzyIsNull(span) ? 0.0 : qBound(0.0, (m_value - m_minimum) / span, 1.0);\n}\n\ndouble ${className}::valueFromPosition(const QPointF &position) const noexcept\n{\n    const QPointF center(width() * 0.5, height() * 0.46);\n    double angle = qRadiansToDegrees(qAtan2(position.y() - center.y(), position.x() - center.x()));\n    if (angle < 0.0) angle += 360.0;\n    double relative = angle - kStartAngleDeg;\n    if (relative < 0.0) relative += 360.0;\n    relative = qBound(0.0, relative, kSweepAngleDeg);\n    return m_minimum + (relative / kSweepAngleDeg) * (m_maximum - m_minimum);\n}\n`;
+}
+function qtLinearGaugeHeader(className) {
+    return `#pragma once\n\n#include <QString>\n#include <QWidget>\n\nclass QMouseEvent;\nclass QPaintEvent;\nclass QPointF;\nclass QWheelEvent;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(double value READ value WRITE setValue NOTIFY valueChanged)\n    Q_PROPERTY(double minimum READ minimum WRITE setMinimum)\n    Q_PROPERTY(double maximum READ maximum WRITE setMaximum)\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(QString unit READ unit WRITE setUnit)\n    Q_PROPERTY(Qt::Orientation orientation READ orientation WRITE setOrientation)\n    Q_PROPERTY(bool ticksVisible READ ticksVisible WRITE setTicksVisible)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n    double value() const noexcept { return m_value; }\n    double minimum() const noexcept { return m_minimum; }\n    double maximum() const noexcept { return m_maximum; }\n    QString title() const { return m_title; }\n    QString unit() const { return m_unit; }\n    Qt::Orientation orientation() const noexcept { return m_orientation; }\n    bool ticksVisible() const noexcept { return m_ticksVisible; }\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setValue(double value);\n    void setMinimum(double minimum);\n    void setMaximum(double maximum);\n    void setRange(double minimum, double maximum);\n    void setTitle(const QString &title);\n    void setUnit(const QString &unit);\n    void setOrientation(Qt::Orientation orientation);\n    void setTicksVisible(bool visible);\n\nsignals:\n    void valueChanged(double value);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n    void mousePressEvent(QMouseEvent *event) override;\n    void mouseMoveEvent(QMouseEvent *event) override;\n    void wheelEvent(QWheelEvent *event) override;\n\nprivate:\n    double normalizedValue() const noexcept;\n    double valueFromPosition(const QPointF &position) const noexcept;\n    double m_value = 50.0;\n    double m_minimum = 0.0;\n    double m_maximum = 100.0;\n    QString m_title = QStringLiteral("Level");\n    QString m_unit;\n    Qt::Orientation m_orientation = Qt::Horizontal;\n    bool m_ticksVisible = true;\n};\n`;
+}
+function qtLinearGaugeSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QMouseEvent>\n#include <QPainter>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QWheelEvent>\n#include <QtGlobal>\n\n${className}::${className}(QWidget *parent) : QWidget(parent)\n{\n    setAttribute(Qt::WA_StyledBackground, true);\n    setMouseTracking(true);\n}\nQSize ${className}::minimumSizeHint() const { return m_orientation == Qt::Horizontal ? QSize(140, 62) : QSize(62, 140); }\nQSize ${className}::sizeHint() const { return m_orientation == Qt::Horizontal ? QSize(300, 86) : QSize(86, 300); }\nvoid ${className}::setValue(double value) { const double v=qBound(m_minimum,value,m_maximum); if(qFuzzyCompare(m_value+1.0,v+1.0))return; m_value=v; update(); emit valueChanged(m_value); }\nvoid ${className}::setMinimum(double value) { setRange(value,m_maximum); }\nvoid ${className}::setMaximum(double value) { setRange(m_minimum,value); }\nvoid ${className}::setRange(double minimum,double maximum) { if(maximum<minimum)qSwap(minimum,maximum); if(qFuzzyCompare(minimum+1.0,maximum+1.0))maximum=minimum+1.0; m_minimum=minimum; m_maximum=maximum; setValue(m_value); update(); }\nvoid ${className}::setTitle(const QString &title) { if(m_title!=title){m_title=title;update();} }\nvoid ${className}::setUnit(const QString &unit) { if(m_unit!=unit){m_unit=unit;update();} }\nvoid ${className}::setOrientation(Qt::Orientation orientation) { if(m_orientation!=orientation){m_orientation=orientation;updateGeometry();update();} }\nvoid ${className}::setTicksVisible(bool visible) { if(m_ticksVisible!=visible){m_ticksVisible=visible;update();} }\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event); QStyleOption option; option.initFrom(this); QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing); style()->drawPrimitive(QStyle::PE_Widget,&option,&painter,this);\n    const QRectF outer = QRectF(rect()).adjusted(12.0, 24.0, -12.0, -20.0);\n    QRectF bar = outer;\n    if(m_orientation==Qt::Horizontal) bar.adjust(8.0, 10.0, -8.0, -10.0); else bar.adjust(10.0, 8.0, -10.0, -8.0);\n    painter.setPen(QPen(palette().color(QPalette::Mid),1.0)); painter.setBrush(palette().color(QPalette::Base)); painter.drawRoundedRect(bar,5.0,5.0);\n    QRectF fill=bar.adjusted(2.0,2.0,-2.0,-2.0);\n    if(m_orientation==Qt::Horizontal) fill.setWidth(fill.width()*normalizedValue()); else { const qreal h=fill.height()*normalizedValue(); fill.setTop(fill.bottom()-h); }\n    painter.setPen(Qt::NoPen); painter.setBrush(palette().color(QPalette::Highlight)); painter.drawRoundedRect(fill,4.0,4.0);\n    painter.setPen(palette().color(QPalette::WindowText)); painter.drawText(QRectF(4.0,2.0,width()-8.0,20.0),Qt::AlignCenter,m_title);\n    painter.drawText(QRectF(4.0,height()-20.0,width()-8.0,18.0),Qt::AlignCenter,QStringLiteral("%1 %2").arg(m_value,0,'f',2).arg(m_unit).trimmed());\n    if(m_ticksVisible){ painter.setPen(QPen(palette().color(QPalette::Mid),1.0)); for(int i=0;i<=10;++i){ const double r=i/10.0; if(m_orientation==Qt::Horizontal){ const qreal x=bar.left()+bar.width()*r; painter.drawLine(QPointF(x,bar.bottom()+2.0),QPointF(x,bar.bottom()+6.0)); } else { const qreal y=bar.bottom()-bar.height()*r; painter.drawLine(QPointF(bar.right()+2.0,y),QPointF(bar.right()+6.0,y)); } } }\n}\nvoid ${className}::mousePressEvent(QMouseEvent *event){ if(event->button()==Qt::LeftButton)setValue(valueFromPosition(event->position())); QWidget::mousePressEvent(event); }\nvoid ${className}::mouseMoveEvent(QMouseEvent *event){ if(event->buttons().testFlag(Qt::LeftButton))setValue(valueFromPosition(event->position())); QWidget::mouseMoveEvent(event); }\nvoid ${className}::wheelEvent(QWheelEvent *event){ const double step=(m_maximum-m_minimum)/100.0; setValue(m_value+(event->angleDelta().y()>=0?step:-step)); event->accept(); }\ndouble ${className}::normalizedValue() const noexcept { const double span=m_maximum-m_minimum; return qFuzzyIsNull(span)?0.0:qBound(0.0,(m_value-m_minimum)/span,1.0); }\ndouble ${className}::valueFromPosition(const QPointF &position) const noexcept { const QRectF bar=QRectF(rect()).adjusted(20.0,34.0,-20.0,-30.0); double r=m_orientation==Qt::Horizontal?(position.x()-bar.left())/bar.width():(bar.bottom()-position.y())/bar.height(); r=qBound(0.0,r,1.0); return m_minimum+r*(m_maximum-m_minimum); }\n`;
+}
+function qtSpectrumPlotHeader(className) {
+    return `#pragma once
+
+#include <QColor>
+#include <QPointF>
+#include <QString>
+#include <QVector>
+#include <QWidget>
+
+class QEvent;
+class QMouseEvent;
+class QPaintEvent;
+class QRectF;
+class QWheelEvent;
+
+class ${className} final : public QWidget
+{
+    Q_OBJECT
+
+public:
+    enum class HoldMode { Off, Maximum, Minimum };
+    Q_ENUM(HoldMode)
+
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+    Q_PROPERTY(double frequencyMinimum READ frequencyMinimum WRITE setFrequencyMinimum)
+    Q_PROPERTY(double frequencyMaximum READ frequencyMaximum WRITE setFrequencyMaximum)
+    Q_PROPERTY(double yMinimum READ yMinimum WRITE setYMinimum)
+    Q_PROPERTY(double yMaximum READ yMaximum WRITE setYMaximum)
+    Q_PROPERTY(bool gridVisible READ gridVisible WRITE setGridVisible)
+    Q_PROPERTY(bool filled READ filled WRITE setFilled)
+    Q_PROPERTY(bool legendVisible READ legendVisible WRITE setLegendVisible)
+    Q_PROPERTY(bool autoScale READ autoScale WRITE setAutoScale)
+    Q_PROPERTY(bool logarithmicFrequency READ logarithmicFrequency WRITE setLogarithmicFrequency)
+    Q_PROPERTY(bool cursorsVisible READ cursorsVisible WRITE setCursorsVisible)
+    Q_PROPERTY(HoldMode holdMode READ holdMode WRITE setHoldMode)
+    Q_PROPERTY(int persistenceFrames READ persistenceFrames WRITE setPersistenceFrames)
+    Q_PROPERTY(bool peakMarkerVisible READ peakMarkerVisible WRITE setPeakMarkerVisible)
+
+    explicit ${className}(QWidget *parent = nullptr);
+
+    QString title() const { return m_title; }
+    double frequencyMinimum() const noexcept { return m_frequencyMinimum; }
+    double frequencyMaximum() const noexcept { return m_frequencyMaximum; }
+    double yMinimum() const noexcept { return m_yMinimum; }
+    double yMaximum() const noexcept { return m_yMaximum; }
+    bool gridVisible() const noexcept { return m_gridVisible; }
+    bool filled() const noexcept { return m_filled; }
+    bool legendVisible() const noexcept { return m_legendVisible; }
+    bool autoScale() const noexcept { return m_autoScale; }
+    bool logarithmicFrequency() const noexcept { return m_logarithmicFrequency; }
+    bool cursorsVisible() const noexcept { return m_cursorsVisible; }
+    HoldMode holdMode() const noexcept { return m_holdMode; }
+    int persistenceFrames() const noexcept { return m_persistenceFrames; }
+    bool peakMarkerVisible() const noexcept { return m_peakMarkerVisible; }
+    const QVector<double> &magnitudes() const noexcept;
+    double peakFrequency() const;
+    double peakMagnitude() const;
+
+    int traceCount() const noexcept { return m_traces.size(); }
+    int addTrace(const QString &name = QString(), const QColor &color = QColor());
+    void removeTrace(int trace);
+    void clearTraces();
+    QString traceName(int trace) const;
+    QColor traceColor(int trace) const;
+    bool traceVisible(int trace) const;
+    QVector<double> traceMagnitudes(int trace) const;
+    void setTraceName(int trace, const QString &name);
+    void setTraceColor(int trace, const QColor &color);
+    void setTraceVisible(int trace, bool visible);
+    void setTraceMagnitudes(int trace, const QVector<double> &magnitudes);
+
+    QSize minimumSizeHint() const override;
+    QSize sizeHint() const override;
+
+public slots:
+    void setTitle(const QString &title);
+    void setFrequencyMinimum(double frequency);
+    void setFrequencyMaximum(double frequency);
+    void setFrequencyRange(double minimum, double maximum);
+    void setViewFrequencyRange(double minimum, double maximum);
+    void setYMinimum(double minimum);
+    void setYMaximum(double maximum);
+    void setYRange(double minimum, double maximum);
+    void setGridVisible(bool visible);
+    void setFilled(bool filled);
+    void setLegendVisible(bool visible);
+    void setAutoScale(bool enabled);
+    void setLogarithmicFrequency(bool enabled);
+    void setCursorsVisible(bool visible);
+    void setHoldMode(HoldMode mode);
+    void setPersistenceFrames(int frames);
+    void setPeakMarkerVisible(bool visible);
+
+    // Backward-compatible primary-trace API.
+    void setMagnitudes(const QVector<double> &magnitudes);
+    void clearSpectrum();
+
+    void clearAllSpectra();
+    void clearHold();
+    void clearPersistence();
+    void autoScaleNow();
+    void resetView();
+    void clearCursors();
+
+signals:
+    void spectrumChanged();
+    void traceSpectrumChanged(int trace);
+    void tracesChanged();
+    void cursorBinChanged(int index, double frequency, double magnitude);
+    void cursorMeasurementsChanged(double deltaFrequency, double deltaMagnitude);
+    void peakChanged(double frequency, double magnitude);
+    void holdChanged();
+    void persistenceChanged();
+    void viewChanged();
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+
+private:
+    struct Trace
+    {
+        QString name;
+        QColor color;
+        QVector<double> magnitudes;
+        QVector<double> holdMagnitudes;
+        QVector<QVector<double>> persistence;
+        bool visible = true;
+    };
+
+    int ensureTrace(int trace);
+    QRectF plotRect() const;
+    double frequencyAt(int index, int binCount) const noexcept;
+    double normalizedFrequency(double frequency) const noexcept;
+    double frequencyFromNormalized(double normalized) const noexcept;
+    double xForFrequency(double frequency) const;
+    double yForMagnitude(double magnitude) const;
+    int primaryBinFromX(double x) const;
+    void updateHoverCursor(double x);
+    void updateTraceHistory(Trace &trace);
+    void updateTraceHold(Trace &trace);
+    void updateAutoScale();
+    void emitCursorMeasurements();
+    void emitPeakMeasurement();
+    void panFrequencyView(double pixelDelta);
+    QColor defaultTraceColor(int trace) const;
+    QString formatFrequency(double frequency) const;
+
+    QVector<Trace> m_traces;
+    QString m_title = QStringLiteral("Spectrum");
+    double m_frequencyMinimum = 0.0;
+    double m_frequencyMaximum = 20000.0;
+    double m_viewFrequencyMinimum = 0.0;
+    double m_viewFrequencyMaximum = 20000.0;
+    double m_yMinimum = -120.0;
+    double m_yMaximum = 0.0;
+    bool m_gridVisible = true;
+    bool m_filled = false;
+    bool m_legendVisible = true;
+    bool m_autoScale = false;
+    bool m_logarithmicFrequency = false;
+    bool m_cursorsVisible = true;
+    HoldMode m_holdMode = HoldMode::Off;
+    int m_persistenceFrames = 0;
+    bool m_peakMarkerVisible = true;
+    int m_hoverIndex = -1;
+    int m_cursorA = -1;
+    int m_cursorB = -1;
+    bool m_panning = false;
+    QPointF m_lastPanPosition;
+};
+`;
+}
+function qtSpectrumPlotSource(className, headerInclude) {
+    return `#include "${headerInclude}"
+
+#include <QEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPaintEvent>
+#include <QStyle>
+#include <QStyleOption>
+#include <QWheelEvent>
+#include <QtGlobal>
+
+#include <cmath>
+#include <limits>
+
+${className}::${className}(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
+    setMouseTracking(true);
+    ensureTrace(0);
+}
+
+const QVector<double> &${className}::magnitudes() const noexcept { return m_traces[0].magnitudes; }
+
+int ${className}::ensureTrace(int trace)
+{
+    while (m_traces.size() <= trace)
+    {
+        const int index = m_traces.size(); Trace entry; entry.name = QStringLiteral("Trace %1").arg(index + 1); entry.color = defaultTraceColor(index); m_traces.push_back(entry);
+    }
+    return trace;
+}
+
+int ${className}::addTrace(const QString &name, const QColor &color)
+{
+    const int index = m_traces.size(); Trace entry; entry.name = name.isEmpty() ? QStringLiteral("Trace %1").arg(index + 1) : name; entry.color = color.isValid() ? color : defaultTraceColor(index); m_traces.push_back(entry); update(); emit tracesChanged(); return index;
+}
+
+void ${className}::removeTrace(int trace)
+{
+    if (trace < 0 || trace >= m_traces.size()) return;
+    if (m_traces.size() == 1) { m_traces[0].magnitudes.clear(); m_traces[0].holdMagnitudes.clear(); m_traces[0].persistence.clear(); }
+    else m_traces.removeAt(trace);
+    clearCursors(); updateAutoScale(); update(); emit tracesChanged(); emit spectrumChanged(); emitPeakMeasurement();
+}
+
+void ${className}::clearTraces() { m_traces.clear(); ensureTrace(0); clearCursors(); resetView(); update(); emit tracesChanged(); emit spectrumChanged(); emitPeakMeasurement(); }
+QString ${className}::traceName(int trace) const { return trace >= 0 && trace < m_traces.size() ? m_traces[trace].name : QString(); }
+QColor ${className}::traceColor(int trace) const { return trace >= 0 && trace < m_traces.size() ? m_traces[trace].color : QColor(); }
+bool ${className}::traceVisible(int trace) const { return trace >= 0 && trace < m_traces.size() && m_traces[trace].visible; }
+QVector<double> ${className}::traceMagnitudes(int trace) const { return trace >= 0 && trace < m_traces.size() ? m_traces[trace].magnitudes : QVector<double>(); }
+void ${className}::setTraceName(int trace, const QString &name) { if (trace < 0) return; ensureTrace(trace); if (m_traces[trace].name != name) { m_traces[trace].name = name; update(); emit tracesChanged(); } }
+void ${className}::setTraceColor(int trace, const QColor &color) { if (trace < 0 || !color.isValid()) return; ensureTrace(trace); if (m_traces[trace].color != color) { m_traces[trace].color = color; update(); emit tracesChanged(); } }
+void ${className}::setTraceVisible(int trace, bool visible) { if (trace < 0) return; ensureTrace(trace); if (m_traces[trace].visible != visible) { m_traces[trace].visible = visible; updateAutoScale(); update(); emit tracesChanged(); } }
+
+void ${className}::setTraceMagnitudes(int trace, const QVector<double> &values)
+{
+    if (trace < 0) return; ensureTrace(trace); Trace &entry = m_traces[trace]; entry.magnitudes = values; updateTraceHold(entry); updateTraceHistory(entry); updateAutoScale(); update(); emit traceSpectrumChanged(trace); if (trace == 0) { emit spectrumChanged(); emitPeakMeasurement(); } emit holdChanged(); emit persistenceChanged();
+}
+
+QSize ${className}::minimumSizeHint() const { return {260, 160}; }
+QSize ${className}::sizeHint() const { return {720, 380}; }
+void ${className}::setTitle(const QString &value) { if (m_title != value) { m_title = value; update(); } }
+void ${className}::setFrequencyMinimum(double value) { setFrequencyRange(value, m_frequencyMaximum); }
+void ${className}::setFrequencyMaximum(double value) { setFrequencyRange(m_frequencyMinimum, value); }
+void ${className}::setFrequencyRange(double minimum, double maximum)
+{
+    if (maximum < minimum) qSwap(minimum, maximum); if (qFuzzyCompare(minimum + 1.0, maximum + 1.0)) maximum = minimum + 1.0;
+    m_frequencyMinimum = minimum; m_frequencyMaximum = maximum; m_viewFrequencyMinimum = minimum; m_viewFrequencyMaximum = maximum; updateAutoScale(); update(); emit viewChanged(); emitPeakMeasurement();
+}
+void ${className}::setViewFrequencyRange(double minimum, double maximum)
+{
+    if (maximum < minimum) qSwap(minimum, maximum); minimum = qMax(m_frequencyMinimum, minimum); maximum = qMin(m_frequencyMaximum, maximum);
+    if (m_logarithmicFrequency) minimum = qMax(qMax(1.0e-12, m_frequencyMinimum), minimum);
+    if (maximum <= minimum) return; m_viewFrequencyMinimum = minimum; m_viewFrequencyMaximum = maximum; updateAutoScale(); update(); emit viewChanged(); emitPeakMeasurement();
+}
+void ${className}::setYMinimum(double value) { setYRange(value, m_yMaximum); }
+void ${className}::setYMaximum(double value) { setYRange(m_yMinimum, value); }
+void ${className}::setYRange(double minimum, double maximum) { if (maximum < minimum) qSwap(minimum, maximum); if (qFuzzyCompare(minimum + 1.0, maximum + 1.0)) maximum = minimum + 1.0; m_yMinimum = minimum; m_yMaximum = maximum; m_autoScale = false; update(); emit viewChanged(); }
+void ${className}::setGridVisible(bool value) { if (m_gridVisible != value) { m_gridVisible = value; update(); } }
+void ${className}::setFilled(bool value) { if (m_filled != value) { m_filled = value; update(); } }
+void ${className}::setLegendVisible(bool value) { if (m_legendVisible != value) { m_legendVisible = value; update(); } }
+void ${className}::setAutoScale(bool value) { if (m_autoScale != value) { m_autoScale = value; if (value) updateAutoScale(); update(); } }
+void ${className}::setLogarithmicFrequency(bool value) { if (m_logarithmicFrequency != value) { m_logarithmicFrequency = value; if (value && m_viewFrequencyMinimum <= 0.0) m_viewFrequencyMinimum = qMax(1.0e-12, m_frequencyMinimum); update(); emit viewChanged(); } }
+void ${className}::setCursorsVisible(bool value) { if (m_cursorsVisible != value) { m_cursorsVisible = value; update(); } }
+void ${className}::setHoldMode(HoldMode mode) { if (m_holdMode == mode) return; m_holdMode = mode; clearHold(); if (mode != HoldMode::Off) for (Trace &trace : m_traces) updateTraceHold(trace); update(); emit holdChanged(); }
+void ${className}::setPersistenceFrames(int frames) { frames = qBound(0, frames, 64); if (m_persistenceFrames == frames) return; m_persistenceFrames = frames; for (Trace &trace : m_traces) while (trace.persistence.size() > frames) trace.persistence.removeFirst(); if (frames == 0) clearPersistence(); update(); emit persistenceChanged(); }
+void ${className}::setPeakMarkerVisible(bool value) { if (m_peakMarkerVisible != value) { m_peakMarkerVisible = value; update(); } }
+void ${className}::setMagnitudes(const QVector<double> &values) { setTraceMagnitudes(0, values); }
+void ${className}::clearSpectrum() { setTraceMagnitudes(0, {}); }
+void ${className}::clearAllSpectra() { for (Trace &trace : m_traces) { trace.magnitudes.clear(); trace.holdMagnitudes.clear(); trace.persistence.clear(); } clearCursors(); update(); emit spectrumChanged(); emitPeakMeasurement(); emit holdChanged(); emit persistenceChanged(); }
+void ${className}::clearHold() { for (Trace &trace : m_traces) trace.holdMagnitudes.clear(); update(); emit holdChanged(); }
+void ${className}::clearPersistence() { for (Trace &trace : m_traces) trace.persistence.clear(); update(); emit persistenceChanged(); }
+void ${className}::autoScaleNow() { const bool previous = m_autoScale; m_autoScale = true; updateAutoScale(); m_autoScale = previous; update(); emit viewChanged(); }
+void ${className}::resetView() { m_viewFrequencyMinimum = m_frequencyMinimum; m_viewFrequencyMaximum = m_frequencyMaximum; if (m_logarithmicFrequency && m_viewFrequencyMinimum <= 0.0) m_viewFrequencyMinimum = qMax(1.0e-12, m_frequencyMaximum * 1.0e-6); update(); emit viewChanged(); emitPeakMeasurement(); }
+void ${className}::clearCursors() { m_hoverIndex = -1; m_cursorA = -1; m_cursorB = -1; update(); }
+
+void ${className}::updateTraceHistory(Trace &trace)
+{
+    if (m_persistenceFrames <= 0 || trace.magnitudes.isEmpty()) { if (m_persistenceFrames <= 0) trace.persistence.clear(); return; }
+    trace.persistence.push_back(trace.magnitudes); while (trace.persistence.size() > m_persistenceFrames) trace.persistence.removeFirst();
+}
+
+void ${className}::updateTraceHold(Trace &trace)
+{
+    if (m_holdMode == HoldMode::Off || trace.magnitudes.isEmpty()) return;
+    if (trace.holdMagnitudes.size() != trace.magnitudes.size()) { trace.holdMagnitudes = trace.magnitudes; return; }
+    for (int i = 0; i < trace.magnitudes.size(); ++i)
+        trace.holdMagnitudes[i] = m_holdMode == HoldMode::Maximum ? qMax(trace.holdMagnitudes[i], trace.magnitudes[i]) : qMin(trace.holdMagnitudes[i], trace.magnitudes[i]);
+}
+
+void ${className}::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event); QStyleOption option; option.initFrom(this); QPainter painter(this); painter.setRenderHint(QPainter::Antialiasing); style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+    const QRectF plot = plotRect(); const QColor foreground = palette().color(QPalette::WindowText); const QColor mid = palette().color(QPalette::Mid); const QColor base = palette().color(QPalette::Base); painter.fillRect(plot, base);
+    painter.setPen(foreground); QFont font = painter.font(); font.setBold(true); painter.setFont(font); painter.drawText(QRectF(8, 4, width() - 16, 22), Qt::AlignCenter, m_title);
+    painter.setPen(QPen(mid, 1.0)); if (m_gridVisible) { for (int i = 0; i <= 10; ++i) { const qreal x = plot.left() + plot.width() * i / 10.0; painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom())); } for (int i = 0; i <= 8; ++i) { const qreal y = plot.top() + plot.height() * i / 8.0; painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y)); } } painter.drawRect(plot);
+
+    auto drawSpectrum = [&](const QVector<double> &values, const QColor &color, qreal width, Qt::PenStyle style, qreal opacity, bool fill)
+    {
+        if (values.size() < 2) return; QPainterPath path; bool started = false;
+        for (int i = 0; i < values.size(); ++i) { const double frequency = frequencyAt(i, values.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) continue; const QPointF point(xForFrequency(frequency), yForMagnitude(values[i])); if (!started) { path.moveTo(point); started = true; } else path.lineTo(point); }
+        if (!started) return; painter.save(); painter.setOpacity(opacity); painter.setPen(QPen(color, width, style)); painter.drawPath(path);
+        if (fill) { QPainterPath area = path; area.lineTo(path.currentPosition().x(), plot.bottom()); area.lineTo(plot.left(), plot.bottom()); area.closeSubpath(); QColor fillColor = color; fillColor.setAlpha(45); painter.fillPath(area, fillColor); }
+        painter.restore();
+    };
+
+    for (const Trace &trace : m_traces)
+    {
+        if (!trace.visible) continue;
+        for (int frame = 0; frame < trace.persistence.size(); ++frame)
+        {
+            const qreal opacity = 0.08 + 0.32 * (frame + 1) / qMax(1, trace.persistence.size()); drawSpectrum(trace.persistence[frame], trace.color, 1.0, Qt::SolidLine, opacity, false);
+        }
+        drawSpectrum(trace.magnitudes, trace.color, 1.7, Qt::SolidLine, 1.0, m_filled);
+        if (m_holdMode != HoldMode::Off) drawSpectrum(trace.holdMagnitudes, trace.color.lighter(135), 1.2, Qt::DashLine, 0.95, false);
+    }
+
+    if (m_peakMarkerVisible && !m_traces.isEmpty() && !m_traces[0].magnitudes.isEmpty())
+    {
+        const double frequency = peakFrequency(), magnitude = peakMagnitude(); const QPointF point(xForFrequency(frequency), yForMagnitude(magnitude));
+        painter.setPen(QPen(foreground, 1.0)); painter.setBrush(palette().color(QPalette::Highlight)); painter.drawEllipse(point, 4.0, 4.0);
+        painter.drawText(QRectF(point.x() + 6.0, point.y() - 18.0, 180.0, 18.0), QStringLiteral("Peak %1  %2 dB").arg(formatFrequency(frequency)).arg(magnitude, 0, 'g', 5));
+    }
+
+    if (m_cursorsVisible && !m_traces.isEmpty())
+    {
+        const QVector<double> &primary = m_traces[0].magnitudes;
+        auto drawCursor = [&](int index, const QString &label)
+        {
+            if (index < 0 || index >= primary.size()) return; const double frequency = frequencyAt(index, primary.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) return;
+            const double x = xForFrequency(frequency); painter.setPen(QPen(foreground, 1.0, Qt::DashLine)); painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom())); painter.drawText(QRectF(x + 3.0, plot.top() + 3.0, 65.0, 18.0), label);
+        };
+        drawCursor(m_cursorA, QStringLiteral("A")); drawCursor(m_cursorB, QStringLiteral("B"));
+        if (m_cursorA >= 0 && m_cursorB >= 0 && m_cursorA < primary.size() && m_cursorB < primary.size())
+        {
+            const double deltaF = frequencyAt(m_cursorB, primary.size()) - frequencyAt(m_cursorA, primary.size()); const double deltaMagnitude = primary[m_cursorB] - primary[m_cursorA];
+            painter.drawText(QRectF(plot.left() + 5.0, plot.bottom() - 22.0, plot.width() - 10.0, 18.0), Qt::AlignRight | Qt::AlignBottom, QStringLiteral("Δf=%1   ΔA=%2 dB").arg(formatFrequency(deltaF)).arg(deltaMagnitude, 0, 'g', 6));
+        }
+    }
+
+    if (m_legendVisible)
+    {
+        qreal x = plot.left() + 5.0, y = plot.top() + 5.0; for (const Trace &trace : m_traces) { if (!trace.visible) continue; painter.setPen(QPen(trace.color, 2.0)); painter.drawLine(QPointF(x, y + 8.0), QPointF(x + 18.0, y + 8.0)); painter.setPen(foreground); painter.drawText(QRectF(x + 22.0, y, 85.0, 18.0), trace.name); x += 110.0; }
+    }
+}
+
+void ${className}::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && event->modifiers().testFlag(Qt::ShiftModifier))) { m_panning = true; m_lastPanPosition = event->position(); setCursor(Qt::ClosedHandCursor); event->accept(); return; }
+    const int index = primaryBinFromX(event->position().x()); if (index >= 0 && m_cursorsVisible) { if (event->button() == Qt::LeftButton) m_cursorA = index; if (event->button() == Qt::RightButton) m_cursorB = index; update(); emitCursorMeasurements(); }
+    QWidget::mousePressEvent(event);
+}
+void ${className}::mouseMoveEvent(QMouseEvent *event) { if (m_panning) { const double dx = event->position().x() - m_lastPanPosition.x(); m_lastPanPosition = event->position(); panFrequencyView(dx); event->accept(); return; } updateHoverCursor(event->position().x()); QWidget::mouseMoveEvent(event); }
+void ${className}::mouseReleaseEvent(QMouseEvent *event) { if (m_panning && (event->button() == Qt::MiddleButton || event->button() == Qt::LeftButton)) { m_panning = false; unsetCursor(); event->accept(); return; } QWidget::mouseReleaseEvent(event); }
+void ${className}::mouseDoubleClickEvent(QMouseEvent *event) { if (event->button() == Qt::LeftButton) { resetView(); autoScaleNow(); event->accept(); return; } QWidget::mouseDoubleClickEvent(event); }
+void ${className}::leaveEvent(QEvent *event) { if (!m_panning) m_hoverIndex = -1; update(); QWidget::leaveEvent(event); }
+void ${className}::wheelEvent(QWheelEvent *event)
+{
+    if (event->modifiers().testFlag(Qt::ControlModifier)) { m_autoScale = false; const QRectF plot = plotRect(); const double ratio = qBound(0.0, (event->position().y() - plot.top()) / plot.height(), 1.0); const double center = m_yMaximum - ratio * (m_yMaximum - m_yMinimum); const double factor = event->angleDelta().y() >= 0 ? 0.82 : 1.22; m_yMinimum = center + (m_yMinimum - center) * factor; m_yMaximum = center + (m_yMaximum - center) * factor; }
+    else { const double factor = event->angleDelta().y() >= 0 ? 0.80 : 1.25; const double center = frequencyFromNormalized(qBound(0.0, (event->position().x() - plotRect().left()) / plotRect().width(), 1.0)); if (m_logarithmicFrequency) { const double minPositive = qMax(1.0e-12, m_viewFrequencyMinimum); const double c = std::log(qMax(center, minPositive)); const double lo = c + (std::log(minPositive) - c) * factor; const double hi = c + (std::log(qMax(m_viewFrequencyMaximum, minPositive)) - c) * factor; setViewFrequencyRange(std::exp(lo), std::exp(hi)); } else setViewFrequencyRange(center + (m_viewFrequencyMinimum - center) * factor, center + (m_viewFrequencyMaximum - center) * factor); }
+    update(); emit viewChanged(); event->accept();
+}
+
+QRectF ${className}::plotRect() const { return QRectF(rect()).adjusted(62.0, 32.0, -14.0, -38.0); }
+double ${className}::frequencyAt(int index, int binCount) const noexcept { if (binCount <= 1) return m_frequencyMinimum; return m_frequencyMinimum + (m_frequencyMaximum - m_frequencyMinimum) * index / static_cast<double>(binCount - 1); }
+double ${className}::normalizedFrequency(double frequency) const noexcept { if (m_logarithmicFrequency) { const double lo = std::log(qMax(1.0e-12, m_viewFrequencyMinimum)), hi = std::log(qMax(1.0e-12, m_viewFrequencyMaximum)), value = std::log(qMax(1.0e-12, frequency)); return qFuzzyCompare(lo + 1.0, hi + 1.0) ? 0.0 : qBound(0.0, (value - lo) / (hi - lo), 1.0); } const double span = m_viewFrequencyMaximum - m_viewFrequencyMinimum; return qFuzzyIsNull(span) ? 0.0 : qBound(0.0, (frequency - m_viewFrequencyMinimum) / span, 1.0); }
+double ${className}::frequencyFromNormalized(double normalized) const noexcept { normalized = qBound(0.0, normalized, 1.0); if (m_logarithmicFrequency) { const double lo = std::log(qMax(1.0e-12, m_viewFrequencyMinimum)), hi = std::log(qMax(1.0e-12, m_viewFrequencyMaximum)); return std::exp(lo + normalized * (hi - lo)); } return m_viewFrequencyMinimum + normalized * (m_viewFrequencyMaximum - m_viewFrequencyMinimum); }
+double ${className}::xForFrequency(double frequency) const { return plotRect().left() + normalizedFrequency(frequency) * plotRect().width(); }
+double ${className}::yForMagnitude(double magnitude) const { const double span = m_yMaximum - m_yMinimum; const double ratio = qFuzzyIsNull(span) ? 0.5 : qBound(0.0, (magnitude - m_yMinimum) / span, 1.0); return plotRect().bottom() - ratio * plotRect().height(); }
+int ${className}::primaryBinFromX(double x) const { if (m_traces.isEmpty() || m_traces[0].magnitudes.isEmpty()) return -1; const QRectF plot = plotRect(); if (x < plot.left() || x > plot.right()) return -1; const double normalized = qBound(0.0, (x - plot.left()) / plot.width(), 1.0); const double frequency = frequencyFromNormalized(normalized); const double dataRatio = (frequency - m_frequencyMinimum) / (m_frequencyMaximum - m_frequencyMinimum); return qBound(0, qRound(dataRatio * (m_traces[0].magnitudes.size() - 1)), m_traces[0].magnitudes.size() - 1); }
+void ${className}::updateHoverCursor(double x) { const int index = primaryBinFromX(x); if (index == m_hoverIndex) return; m_hoverIndex = index; update(); if (index >= 0 && !m_traces.isEmpty() && index < m_traces[0].magnitudes.size()) emit cursorBinChanged(index, frequencyAt(index, m_traces[0].magnitudes.size()), m_traces[0].magnitudes[index]); }
+
+void ${className}::updateAutoScale()
+{
+    if (!m_autoScale) return; double minimum = std::numeric_limits<double>::max(), maximum = std::numeric_limits<double>::lowest(); bool found = false;
+    for (const Trace &trace : m_traces) { if (!trace.visible || trace.magnitudes.isEmpty()) continue; for (int i = 0; i < trace.magnitudes.size(); ++i) { const double frequency = frequencyAt(i, trace.magnitudes.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) continue; minimum = qMin(minimum, trace.magnitudes[i]); maximum = qMax(maximum, trace.magnitudes[i]); found = true; } if (m_holdMode != HoldMode::Off) for (int i = 0; i < trace.holdMagnitudes.size(); ++i) { const double frequency = frequencyAt(i, trace.holdMagnitudes.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) continue; minimum = qMin(minimum, trace.holdMagnitudes[i]); maximum = qMax(maximum, trace.holdMagnitudes[i]); found = true; } }
+    if (!found) return; double span = maximum - minimum; if (qFuzzyIsNull(span)) span = qMax(1.0, std::abs(maximum) * 0.1); const double margin = span * 0.08; m_yMinimum = minimum - margin; m_yMaximum = maximum + margin;
+}
+
+void ${className}::emitCursorMeasurements() { if (m_cursorA < 0 || m_cursorB < 0 || m_traces.isEmpty()) return; const QVector<double> &primary = m_traces[0].magnitudes; if (m_cursorA >= primary.size() || m_cursorB >= primary.size()) return; emit cursorMeasurementsChanged(frequencyAt(m_cursorB, primary.size()) - frequencyAt(m_cursorA, primary.size()), primary[m_cursorB] - primary[m_cursorA]); }
+
+void ${className}::emitPeakMeasurement() { emit peakChanged(peakFrequency(), peakMagnitude()); }
+
+double ${className}::peakFrequency() const
+{
+    if (m_traces.isEmpty() || m_traces[0].magnitudes.isEmpty()) return 0.0; const QVector<double> &values = m_traces[0].magnitudes; int best = -1; double maximum = std::numeric_limits<double>::lowest();
+    for (int i = 0; i < values.size(); ++i) { const double frequency = frequencyAt(i, values.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) continue; if (values[i] > maximum) { maximum = values[i]; best = i; } }
+    return best >= 0 ? frequencyAt(best, values.size()) : 0.0;
+}
+
+double ${className}::peakMagnitude() const
+{
+    if (m_traces.isEmpty() || m_traces[0].magnitudes.isEmpty()) return 0.0; const QVector<double> &values = m_traces[0].magnitudes; double maximum = std::numeric_limits<double>::lowest(); bool found = false;
+    for (int i = 0; i < values.size(); ++i) { const double frequency = frequencyAt(i, values.size()); if (frequency < m_viewFrequencyMinimum || frequency > m_viewFrequencyMaximum) continue; maximum = qMax(maximum, values[i]); found = true; } return found ? maximum : 0.0;
+}
+
+void ${className}::panFrequencyView(double pixelDelta)
+{
+    const QRectF plot = plotRect(); if (plot.width() <= 1.0) return;
+    if (m_logarithmicFrequency) { const double lo = std::log(qMax(1.0e-12, m_viewFrequencyMinimum)), hi = std::log(qMax(1.0e-12, m_viewFrequencyMaximum)); const double shift = -(pixelDelta / plot.width()) * (hi - lo); setViewFrequencyRange(std::exp(lo + shift), std::exp(hi + shift)); }
+    else { const double shift = -(pixelDelta / plot.width()) * (m_viewFrequencyMaximum - m_viewFrequencyMinimum); double minimum = m_viewFrequencyMinimum + shift, maximum = m_viewFrequencyMaximum + shift; const double span = maximum - minimum; if (minimum < m_frequencyMinimum) { minimum = m_frequencyMinimum; maximum = minimum + span; } if (maximum > m_frequencyMaximum) { maximum = m_frequencyMaximum; minimum = maximum - span; } setViewFrequencyRange(minimum, maximum); }
+}
+
+QColor ${className}::defaultTraceColor(int trace) const { if (trace == 0) return palette().color(QPalette::Highlight); return QColor::fromHsv((trace * 71 + 25) % 360, 190, 225); }
+QString ${className}::formatFrequency(double frequency) const { const double absolute = std::abs(frequency); if (absolute >= 1.0e9) return QStringLiteral("%1 GHz").arg(frequency / 1.0e9, 0, 'g', 4); if (absolute >= 1.0e6) return QStringLiteral("%1 MHz").arg(frequency / 1.0e6, 0, 'g', 4); if (absolute >= 1.0e3) return QStringLiteral("%1 kHz").arg(frequency / 1.0e3, 0, 'g', 4); return QStringLiteral("%1 Hz").arg(frequency, 0, 'g', 4); }
+`;
+}
+function qtAcquisitionDashboardHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_signal_buffer.h"
+
+#include <QWidget>
+#include <memory>
+
+class AcquisitionControl;
+class SignalPlot;
+class QpmAcquisitionController;
+class QpmSignalPlotBridge;
+
+// Ready-to-run acquisition dashboard combining transport control and waveform display.
+// Runtime acquisition objects are deliberately disabled when the class is loaded by Qt Designer.
+class AcquisitionDashboard final : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(int channelCount READ channelCount WRITE setChannelCount)
+    Q_PROPERTY(int bufferCapacity READ bufferCapacity WRITE setBufferCapacity)
+    Q_PROPERTY(int refreshRateHz READ refreshRateHz WRITE setRefreshRateHz)
+    Q_PROPERTY(int windowSamples READ windowSamples WRITE setWindowSamples)
+    Q_PROPERTY(double sampleRateHz READ sampleRateHz WRITE setSampleRateHz)
+
+public:
+    explicit AcquisitionDashboard(QWidget *parent = nullptr);
+    ~AcquisitionDashboard() override;
+
+    AcquisitionControl *acquisitionControl() const noexcept { return m_acquisitionControl; }
+    SignalPlot *signalPlot() const noexcept { return m_signalPlot; }
+    QpmSignalBuffer *signalBuffer() const noexcept;
+    QpmAcquisitionController *controller() const noexcept { return m_controller; }
+    QpmSignalPlotBridge *plotBridge() const noexcept { return m_bridge; }
+
+    int channelCount() const noexcept { return m_channelCount; }
+    int bufferCapacity() const noexcept { return m_bufferCapacity; }
+    int refreshRateHz() const noexcept { return m_refreshRateHz; }
+    int windowSamples() const noexcept { return m_windowSamples; }
+    double sampleRateHz() const noexcept { return m_sampleRateHz; }
+
+public slots:
+    void setChannelCount(int channels);
+    void setBufferCapacity(int samples);
+    void setRefreshRateHz(int hertz);
+    void setWindowSamples(int samples);
+    void setSampleRateHz(double hertz);
+    void clear();
+
+private:
+    void createUi();
+    void createRuntime();
+    void synchronizeRuntimeConfiguration();
+
+    AcquisitionControl *m_acquisitionControl = nullptr;
+    SignalPlot *m_signalPlot = nullptr;
+    std::unique_ptr<QpmSignalBuffer> m_buffer;
+    QpmAcquisitionController *m_controller = nullptr;
+    QpmSignalPlotBridge *m_bridge = nullptr;
+    int m_channelCount = 1;
+    int m_bufferCapacity = 65536;
+    int m_refreshRateHz = 30;
+    int m_windowSamples = 5000;
+    double m_sampleRateHz = 1000.0;
+};
+`;
+}
+function qtAcquisitionDashboardSource() {
+    return `#include "widgets/acquisition_dashboard.h"
+
+#include "widgets/acquisition_control.h"
+#include "widgets/signal_plot.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QSizePolicy>
+#include <QVBoxLayout>
+#include <QtGlobal>
+
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#include "instrumentation/qpm_acquisition_controller.h"
+#include "instrumentation/qpm_signal_buffer.h"
+#include "instrumentation/qpm_signal_plot_bridge.h"
+#endif
+
+AcquisitionDashboard::AcquisitionDashboard(QWidget *parent)
+    : QWidget(parent)
+{
+    setObjectName(QStringLiteral("acquisitionDashboard"));
+    createUi();
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    createRuntime();
+#endif
+}
+
+AcquisitionDashboard::~AcquisitionDashboard() = default;
+
+QpmSignalBuffer *AcquisitionDashboard::signalBuffer() const noexcept
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    return m_buffer.get();
+#else
+    return nullptr;
+#endif
+}
+
+void AcquisitionDashboard::createUi()
+{
+    auto *root = new QHBoxLayout(this);
+    root->setContentsMargins(8, 8, 8, 8);
+    root->setSpacing(8);
+
+    m_acquisitionControl = new AcquisitionControl(this);
+    m_acquisitionControl->setObjectName(QStringLiteral("acquisitionControl"));
+    m_acquisitionControl->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+
+    m_signalPlot = new SignalPlot(this);
+    m_signalPlot->setObjectName(QStringLiteral("signalPlot"));
+    m_signalPlot->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_signalPlot->setTitle(QStringLiteral("Acquisition"));
+
+    root->addWidget(m_acquisitionControl, 0);
+    root->addWidget(m_signalPlot, 1);
+}
+
+void AcquisitionDashboard::createRuntime()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    m_buffer = std::make_unique<QpmSignalBuffer>(m_channelCount, m_bufferCapacity);
+    m_controller = new QpmAcquisitionController(m_buffer.get(), this);
+    m_bridge = new QpmSignalPlotBridge(m_buffer.get(), m_signalPlot, this);
+    m_acquisitionControl->setController(m_controller);
+    synchronizeRuntimeConfiguration();
+    m_bridge->start();
+#endif
+}
+
+void AcquisitionDashboard::synchronizeRuntimeConfiguration()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_buffer)
+    {
+        m_buffer->setChannelCount(m_channelCount);
+        m_buffer->setCapacity(m_bufferCapacity);
+        if (m_sampleRateHz > 0.0)
+            m_buffer->setSampleInterval(1.0 / m_sampleRateHz);
+    }
+    if (m_controller)
+    {
+        m_controller->setChannelCount(m_channelCount);
+        m_controller->setSampleRateHz(m_sampleRateHz);
+    }
+    if (m_bridge)
+    {
+        m_bridge->setRefreshRateHz(m_refreshRateHz);
+        m_bridge->setWindowSamples(m_windowSamples);
+    }
+    if (m_signalPlot)
+    {
+        m_signalPlot->setMaxSamples(m_windowSamples);
+        if (m_sampleRateHz > 0.0)
+            m_signalPlot->setSampleInterval(1.0 / m_sampleRateHz);
+    }
+#endif
+}
+
+void AcquisitionDashboard::setChannelCount(int channels)
+{
+    channels = qMax(1, channels);
+    if (m_channelCount == channels) return;
+    m_channelCount = channels;
+    synchronizeRuntimeConfiguration();
+}
+
+void AcquisitionDashboard::setBufferCapacity(int samples)
+{
+    samples = qMax(16, samples);
+    if (m_bufferCapacity == samples) return;
+    m_bufferCapacity = samples;
+    synchronizeRuntimeConfiguration();
+}
+
+void AcquisitionDashboard::setRefreshRateHz(int hertz)
+{
+    hertz = qBound(1, hertz, 240);
+    if (m_refreshRateHz == hertz) return;
+    m_refreshRateHz = hertz;
+    synchronizeRuntimeConfiguration();
+}
+
+void AcquisitionDashboard::setWindowSamples(int samples)
+{
+    samples = qMax(16, samples);
+    if (m_windowSamples == samples) return;
+    m_windowSamples = samples;
+    synchronizeRuntimeConfiguration();
+}
+
+void AcquisitionDashboard::setSampleRateHz(double hertz)
+{
+    hertz = qMax(0.0, hertz);
+    if (qFuzzyCompare(m_sampleRateHz + 1.0, hertz + 1.0)) return;
+    m_sampleRateHz = hertz;
+    synchronizeRuntimeConfiguration();
+}
+
+void AcquisitionDashboard::clear()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_buffer) m_buffer->clear();
+    if (m_signalPlot) m_signalPlot->clearSamples();
+#endif
+}
+`;
+}
+function integrateAcquisitionDashboardIntoBlankMainWindowUi(projectDirectory) {
+    const formPath = path.join(projectDirectory, 'forms', 'mainwindow.ui');
+    if (!fs.existsSync(formPath))
+        return undefined;
+    let xml = fs.readFileSync(formPath, 'utf8');
+    if (/class="AcquisitionDashboard"/.test(xml))
+        return undefined;
+    const blankCentral = /<widget class="QWidget" name="centralWidget"\s*\/>/;
+    if (!blankCentral.test(xml))
+        return undefined;
+    const replacement = `<widget class="QWidget" name="centralWidget">\n   <layout class="QVBoxLayout" name="centralLayout">\n    <property name="leftMargin"><number>0</number></property>\n    <property name="topMargin"><number>0</number></property>\n    <property name="rightMargin"><number>0</number></property>\n    <property name="bottomMargin"><number>0</number></property>\n    <item>\n     <widget class="AcquisitionDashboard" name="acquisitionDashboard"/>\n    </item>\n   </layout>\n  </widget>`;
+    xml = xml.replace(blankCentral, replacement);
+    if (!/<customwidgets>/.test(xml)) {
+        xml = xml.replace(/\n <resources\/>/, `\n <customwidgets>\n  <customwidget>\n   <class>AcquisitionDashboard</class>\n   <extends>QWidget</extends>\n   <header>widgets/acquisition_dashboard.h</header>\n   <container>0</container>\n  </customwidget>\n </customwidgets>\n <resources/>`);
+    }
+    return xml;
+}
+function qtRealtimeSignalBufferHeader() {
+    return `#pragma once
+
+#include <QReadWriteLock>
+#include <QString>
+#include <QVector>
+#include <QtGlobal>
+
+#include <atomic>
+#include <limits>
+
+// Thread-safe, fixed-capacity multi-channel ring buffer for acquisition threads.
+// Writers never touch QWidget objects; the UI reads coherent snapshots separately.
+class QpmSignalBuffer final
+{
+public:
+    struct ChannelSnapshot
+    {
+        QString name;
+        QVector<double> samples;
+        quint64 totalWritten = 0;
+    };
+
+    struct Snapshot
+    {
+        QVector<ChannelSnapshot> channels;
+        double sampleInterval = 0.001;
+        qsizetype capacity = 0;
+        quint64 revision = 0;
+
+        bool isEmpty() const noexcept;
+        qsizetype maximumSampleCount() const noexcept;
+    };
+
+    explicit QpmSignalBuffer(int channelCount = 1, qsizetype capacity = 65536);
+
+    int channelCount() const;
+    qsizetype capacity() const;
+    qsizetype size(int channel = 0) const;
+    quint64 totalWritten(int channel = 0) const;
+    quint64 revision() const noexcept;
+
+    double sampleInterval() const;
+    void setSampleInterval(double seconds);
+    void setChannelCount(int count);
+    void setCapacity(qsizetype capacity);
+    QString channelName(int channel) const;
+    void setChannelName(int channel, const QString &name);
+
+    bool appendSample(int channel, double sample);
+    bool appendSamples(int channel, const QVector<double> &samples);
+
+    // Appends one simultaneous sample for every channel.
+    bool appendFrame(const QVector<double> &frame);
+
+    // Input layout: CH0, CH1, ... CHn, CH0, CH1, ...
+    // The supplied channel count must match channelCount().
+    bool appendInterleaved(const QVector<double> &samples, int channels);
+
+    void clear();
+    void clear(int channel);
+
+    // snapshot() waits briefly for an active writer; use trySnapshot() from a GUI
+    // refresh path when skipping one display frame is preferable to blocking.
+    Snapshot snapshot(qsizetype maximumSamples = -1) const;
+    bool trySnapshot(Snapshot &result, qsizetype maximumSamples = -1) const;
+
+private:
+    struct Channel
+    {
+        QString name;
+        QVector<double> storage;
+        qsizetype writeIndex = 0;
+        qsizetype stored = 0;
+        quint64 totalWritten = 0;
+    };
+
+    bool validChannelUnlocked(int channel) const noexcept;
+    void appendUnlocked(Channel &channel, double sample);
+    QVector<double> orderedSamplesUnlocked(const Channel &channel, qsizetype maximumSamples) const;
+    void fillSnapshotUnlocked(Snapshot &result, qsizetype maximumSamples) const;
+    void bumpRevision() noexcept;
+
+    mutable QReadWriteLock m_lock;
+    QVector<Channel> m_channels;
+    qsizetype m_capacity = 65536;
+    double m_sampleInterval = 0.001;
+    std::atomic<quint64> m_revision {0};
+};
+`;
+}
+function qtRealtimeSignalBufferSource() {
+    return `#include "instrumentation/qpm_signal_buffer.h"
+
+#include <QReadLocker>
+#include <QWriteLocker>
+#include <QtGlobal>
+
+#include <algorithm>
+#include <utility>
+
+bool QpmSignalBuffer::Snapshot::isEmpty() const noexcept
+{
+    for (const ChannelSnapshot &channel : channels)
+        if (!channel.samples.isEmpty()) return false;
+    return true;
+}
+
+qsizetype QpmSignalBuffer::Snapshot::maximumSampleCount() const noexcept
+{
+    qsizetype result = 0;
+    for (const ChannelSnapshot &channel : channels)
+        result = qMax(result, channel.samples.size());
+    return result;
+}
+
+QpmSignalBuffer::QpmSignalBuffer(int channelCount, qsizetype capacity)
+    : m_capacity(qMax<qsizetype>(16, capacity))
+{
+    channelCount = qMax(1, channelCount);
+    m_channels.resize(channelCount);
+    for (int channel = 0; channel < m_channels.size(); ++channel)
+    {
+        m_channels[channel].name = QStringLiteral("CH%1").arg(channel + 1);
+        m_channels[channel].storage.resize(m_capacity);
+    }
+}
+
+bool QpmSignalBuffer::validChannelUnlocked(int channel) const noexcept
+{
+    return channel >= 0 && channel < m_channels.size();
+}
+
+int QpmSignalBuffer::channelCount() const
+{
+    QReadLocker locker(&m_lock);
+    return m_channels.size();
+}
+
+qsizetype QpmSignalBuffer::capacity() const
+{
+    QReadLocker locker(&m_lock);
+    return m_capacity;
+}
+
+qsizetype QpmSignalBuffer::size(int channel) const
+{
+    QReadLocker locker(&m_lock);
+    return validChannelUnlocked(channel) ? m_channels[channel].stored : 0;
+}
+
+quint64 QpmSignalBuffer::totalWritten(int channel) const
+{
+    QReadLocker locker(&m_lock);
+    return validChannelUnlocked(channel) ? m_channels[channel].totalWritten : 0;
+}
+
+quint64 QpmSignalBuffer::revision() const noexcept
+{
+    return m_revision.load(std::memory_order_relaxed);
+}
+
+double QpmSignalBuffer::sampleInterval() const
+{
+    QReadLocker locker(&m_lock);
+    return m_sampleInterval;
+}
+
+void QpmSignalBuffer::setSampleInterval(double seconds)
+{
+    if (!(seconds > 0.0)) return;
+    QWriteLocker locker(&m_lock);
+    if (qFuzzyCompare(m_sampleInterval + 1.0, seconds + 1.0)) return;
+    m_sampleInterval = seconds;
+    bumpRevision();
+}
+
+void QpmSignalBuffer::setChannelCount(int count)
+{
+    count = qMax(1, count);
+    QWriteLocker locker(&m_lock);
+    if (m_channels.size() == count) return;
+
+    const int oldCount = m_channels.size();
+    m_channels.resize(count);
+    for (int channel = oldCount; channel < m_channels.size(); ++channel)
+    {
+        m_channels[channel].name = QStringLiteral("CH%1").arg(channel + 1);
+        m_channels[channel].storage.resize(m_capacity);
+    }
+    bumpRevision();
+}
+
+QVector<double> QpmSignalBuffer::orderedSamplesUnlocked(const Channel &channel, qsizetype maximumSamples) const
+{
+    if (channel.stored <= 0 || m_capacity <= 0) return {};
+
+    qsizetype count = channel.stored;
+    if (maximumSamples >= 0) count = qMin(count, maximumSamples);
+    QVector<double> result;
+    result.resize(count);
+
+    const qsizetype oldest = (channel.writeIndex - channel.stored + m_capacity) % m_capacity;
+    const qsizetype skip = channel.stored - count;
+    for (qsizetype index = 0; index < count; ++index)
+    {
+        const qsizetype sourceIndex = (oldest + skip + index) % m_capacity;
+        result[index] = channel.storage[sourceIndex];
+    }
+    return result;
+}
+
+void QpmSignalBuffer::setCapacity(qsizetype capacity)
+{
+    capacity = qMax<qsizetype>(16, capacity);
+    QWriteLocker locker(&m_lock);
+    if (m_capacity == capacity) return;
+
+    QVector<QVector<double>> preserved;
+    preserved.reserve(m_channels.size());
+    for (const Channel &channel : m_channels)
+        preserved.push_back(orderedSamplesUnlocked(channel, capacity));
+
+    m_capacity = capacity;
+    for (int channelIndex = 0; channelIndex < m_channels.size(); ++channelIndex)
+    {
+        Channel &channel = m_channels[channelIndex];
+        const QVector<double> &values = preserved[channelIndex];
+        channel.storage = QVector<double>(m_capacity);
+        channel.stored = values.size();
+        for (qsizetype index = 0; index < values.size(); ++index)
+            channel.storage[index] = values[index];
+        channel.writeIndex = channel.stored % m_capacity;
+    }
+    bumpRevision();
+}
+
+QString QpmSignalBuffer::channelName(int channel) const
+{
+    QReadLocker locker(&m_lock);
+    return validChannelUnlocked(channel) ? m_channels[channel].name : QString();
+}
+
+void QpmSignalBuffer::setChannelName(int channel, const QString &name)
+{
+    QWriteLocker locker(&m_lock);
+    if (!validChannelUnlocked(channel) || m_channels[channel].name == name) return;
+    m_channels[channel].name = name;
+    bumpRevision();
+}
+
+void QpmSignalBuffer::appendUnlocked(Channel &channel, double sample)
+{
+    channel.storage[channel.writeIndex] = sample;
+    channel.writeIndex = (channel.writeIndex + 1) % m_capacity;
+    channel.stored = qMin(channel.stored + 1, m_capacity);
+    ++channel.totalWritten;
+}
+
+bool QpmSignalBuffer::appendSample(int channel, double sample)
+{
+    QWriteLocker locker(&m_lock);
+    if (!validChannelUnlocked(channel)) return false;
+    appendUnlocked(m_channels[channel], sample);
+    bumpRevision();
+    return true;
+}
+
+bool QpmSignalBuffer::appendSamples(int channel, const QVector<double> &samples)
+{
+    if (samples.isEmpty()) return true;
+    QWriteLocker locker(&m_lock);
+    if (!validChannelUnlocked(channel)) return false;
+    Channel &target = m_channels[channel];
+    for (double sample : samples) appendUnlocked(target, sample);
+    bumpRevision();
+    return true;
+}
+
+bool QpmSignalBuffer::appendFrame(const QVector<double> &frame)
+{
+    QWriteLocker locker(&m_lock);
+    if (frame.size() != m_channels.size()) return false;
+    for (int channel = 0; channel < m_channels.size(); ++channel)
+        appendUnlocked(m_channels[channel], frame[channel]);
+    bumpRevision();
+    return true;
+}
+
+bool QpmSignalBuffer::appendInterleaved(const QVector<double> &samples, int channels)
+{
+    if (samples.isEmpty()) return true;
+    QWriteLocker locker(&m_lock);
+    if (channels != m_channels.size() || channels <= 0 || (samples.size() % channels) != 0) return false;
+    for (qsizetype index = 0; index < samples.size(); index += channels)
+        for (int channel = 0; channel < channels; ++channel)
+            appendUnlocked(m_channels[channel], samples[index + channel]);
+    bumpRevision();
+    return true;
+}
+
+void QpmSignalBuffer::clear()
+{
+    QWriteLocker locker(&m_lock);
+    for (Channel &channel : m_channels)
+    {
+        channel.writeIndex = 0;
+        channel.stored = 0;
+        channel.totalWritten = 0;
+    }
+    bumpRevision();
+}
+
+void QpmSignalBuffer::clear(int channel)
+{
+    QWriteLocker locker(&m_lock);
+    if (!validChannelUnlocked(channel)) return;
+    Channel &target = m_channels[channel];
+    target.writeIndex = 0;
+    target.stored = 0;
+    target.totalWritten = 0;
+    bumpRevision();
+}
+
+void QpmSignalBuffer::fillSnapshotUnlocked(Snapshot &result, qsizetype maximumSamples) const
+{
+    result.channels.clear();
+    result.channels.reserve(m_channels.size());
+    result.sampleInterval = m_sampleInterval;
+    result.capacity = m_capacity;
+    result.revision = m_revision.load(std::memory_order_relaxed);
+
+    for (const Channel &channel : m_channels)
+    {
+        ChannelSnapshot snapshot;
+        snapshot.name = channel.name;
+        snapshot.samples = orderedSamplesUnlocked(channel, maximumSamples);
+        snapshot.totalWritten = channel.totalWritten;
+        result.channels.push_back(std::move(snapshot));
+    }
+}
+
+QpmSignalBuffer::Snapshot QpmSignalBuffer::snapshot(qsizetype maximumSamples) const
+{
+    QReadLocker locker(&m_lock);
+    Snapshot result;
+    fillSnapshotUnlocked(result, maximumSamples);
+    return result;
+}
+
+bool QpmSignalBuffer::trySnapshot(Snapshot &result, qsizetype maximumSamples) const
+{
+    if (!m_lock.tryLockForRead()) return false;
+    fillSnapshotUnlocked(result, maximumSamples);
+    m_lock.unlock();
+    return true;
+}
+
+void QpmSignalBuffer::bumpRevision() noexcept
+{
+    m_revision.fetch_add(1, std::memory_order_relaxed);
+}
+`;
+}
+function qtRealtimeSignalPlotBridgeHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_signal_buffer.h"
+#include "widgets/signal_plot.h"
+
+#include <QObject>
+#include <QPointer>
+#include <QTimer>
+#include <QtGlobal>
+
+#include <limits>
+
+// GUI-thread adapter: periodically snapshots QpmSignalBuffer and updates SignalPlot.
+// The bridge never owns the buffer or the plot.
+class QpmSignalPlotBridge final : public QObject
+{
+    Q_OBJECT
+
+    Q_PROPERTY(int refreshRateHz READ refreshRateHz WRITE setRefreshRateHz NOTIFY refreshRateChanged)
+    Q_PROPERTY(int windowSamples READ windowSamples WRITE setWindowSamples NOTIFY windowSamplesChanged)
+    Q_PROPERTY(bool autoCreateChannels READ autoCreateChannels WRITE setAutoCreateChannels)
+    Q_PROPERTY(bool running READ isRunning NOTIFY runningChanged)
+
+public:
+    explicit QpmSignalPlotBridge(QpmSignalBuffer *buffer = nullptr,
+                                 SignalPlot *plot = nullptr,
+                                 QObject *parent = nullptr);
+
+    QpmSignalBuffer *buffer() const noexcept { return m_buffer; }
+    SignalPlot *signalPlot() const noexcept { return m_plot.data(); }
+    int refreshRateHz() const noexcept { return m_refreshRateHz; }
+    int windowSamples() const noexcept { return m_windowSamples; }
+    bool autoCreateChannels() const noexcept { return m_autoCreateChannels; }
+    bool isRunning() const noexcept { return m_timer.isActive(); }
+    quint64 lastRevision() const noexcept { return m_lastRevision; }
+    quint64 skippedRefreshes() const noexcept { return m_skippedRefreshes; }
+
+public slots:
+    void setBuffer(QpmSignalBuffer *buffer);
+    void setSignalPlot(SignalPlot *plot);
+    void setRefreshRateHz(int hertz);
+    void setWindowSamples(int samples);
+    void setAutoCreateChannels(bool enabled) { m_autoCreateChannels = enabled; }
+    void start();
+    void stop();
+    void refreshNow();
+
+signals:
+    void refreshRateChanged(int hertz);
+    void windowSamplesChanged(int samples);
+    void runningChanged(bool running);
+    void refreshed(quint64 revision, int channels, int maximumSamples);
+    void refreshSkipped(quint64 totalSkipped);
+
+private:
+    void updateTimerInterval();
+
+    QpmSignalBuffer *m_buffer = nullptr;
+    QPointer<SignalPlot> m_plot;
+    QTimer m_timer;
+    int m_refreshRateHz = 30;
+    int m_windowSamples = 2048;
+    bool m_autoCreateChannels = true;
+    quint64 m_lastRevision = std::numeric_limits<quint64>::max();
+    quint64 m_skippedRefreshes = 0;
+};
+`;
+}
+function qtRealtimeSignalPlotBridgeSource() {
+    return `#include "instrumentation/qpm_signal_plot_bridge.h"
+#include "widgets/signal_plot.h"
+
+#include <QThread>
+#include <QtGlobal>
+
+#include <limits>
+
+namespace
+{
+template <typename Plot>
+auto applySignalBatch(Plot *plot, const QVector<QVector<double>> &samples, int)
+    -> decltype(plot->setChannelSamplesBatch(samples), void())
+{
+    plot->setChannelSamplesBatch(samples);
+}
+
+template <typename Plot>
+void applySignalBatch(Plot *plot, const QVector<QVector<double>> &samples, long)
+{
+    // Compatibility fallback for SignalPlot classes generated before QPM 0.22.0.
+    for (int channel = 0; channel < samples.size(); ++channel)
+        plot->setChannelSamples(channel, samples[channel]);
+}
+}
+
+QpmSignalPlotBridge::QpmSignalPlotBridge(QpmSignalBuffer *buffer,
+                                         SignalPlot *plot,
+                                         QObject *parent)
+    : QObject(parent),
+      m_buffer(buffer),
+      m_plot(plot)
+{
+    m_timer.setTimerType(Qt::PreciseTimer);
+    updateTimerInterval();
+    connect(&m_timer, &QTimer::timeout, this, &QpmSignalPlotBridge::refreshNow);
+}
+
+void QpmSignalPlotBridge::setBuffer(QpmSignalBuffer *buffer)
+{
+    if (m_buffer == buffer) return;
+    m_buffer = buffer;
+    m_lastRevision = std::numeric_limits<quint64>::max();
+}
+
+void QpmSignalPlotBridge::setSignalPlot(SignalPlot *plot)
+{
+    if (m_plot == plot) return;
+    m_plot = plot;
+    m_lastRevision = std::numeric_limits<quint64>::max();
+}
+
+void QpmSignalPlotBridge::setRefreshRateHz(int hertz)
+{
+    hertz = qBound(1, hertz, 240);
+    if (m_refreshRateHz == hertz) return;
+    m_refreshRateHz = hertz;
+    updateTimerInterval();
+    emit refreshRateChanged(hertz);
+}
+
+void QpmSignalPlotBridge::setWindowSamples(int samples)
+{
+    samples = qMax(16, samples);
+    if (m_windowSamples == samples) return;
+    m_windowSamples = samples;
+    m_lastRevision = std::numeric_limits<quint64>::max();
+    emit windowSamplesChanged(samples);
+}
+
+void QpmSignalPlotBridge::updateTimerInterval()
+{
+    m_timer.setInterval(qMax(1, qRound(1000.0 / m_refreshRateHz)));
+}
+
+void QpmSignalPlotBridge::start()
+{
+    if (m_timer.isActive()) return;
+    m_timer.start();
+    emit runningChanged(true);
+}
+
+void QpmSignalPlotBridge::stop()
+{
+    if (!m_timer.isActive()) return;
+    m_timer.stop();
+    emit runningChanged(false);
+}
+
+void QpmSignalPlotBridge::refreshNow()
+{
+    if (!m_buffer || m_plot.isNull()) return;
+
+    // QWidget updates must happen in the GUI thread. A bridge moved to another
+    // thread intentionally refuses to touch the plot.
+    if (QThread::currentThread() != m_plot->thread())
+    {
+        ++m_skippedRefreshes;
+        emit refreshSkipped(m_skippedRefreshes);
+        return;
+    }
+
+    QpmSignalBuffer::Snapshot snapshot;
+    if (!m_buffer->trySnapshot(snapshot, m_windowSamples))
+    {
+        ++m_skippedRefreshes;
+        emit refreshSkipped(m_skippedRefreshes);
+        return;
+    }
+    if (snapshot.revision == m_lastRevision) return;
+
+    const int bufferChannels = snapshot.channels.size();
+    if (bufferChannels <= 0)
+    {
+        m_lastRevision = snapshot.revision;
+        return;
+    }
+
+    if (m_autoCreateChannels)
+    {
+        while (m_plot->channelCount() < bufferChannels)
+        {
+            const int channel = m_plot->channelCount();
+            const QString name = snapshot.channels[channel].name.isEmpty()
+                ? QStringLiteral("CH%1").arg(channel + 1)
+                : snapshot.channels[channel].name;
+            m_plot->addChannel(name);
+        }
+    }
+
+    const int mappedChannels = qMin(bufferChannels, m_plot->channelCount());
+    QVector<QVector<double>> samples;
+    samples.reserve(mappedChannels);
+    for (int channel = 0; channel < mappedChannels; ++channel)
+    {
+        const QString &name = snapshot.channels[channel].name;
+        if (!name.isEmpty() && m_plot->channelName(channel) != name)
+            m_plot->setChannelName(channel, name);
+        samples.push_back(snapshot.channels[channel].samples);
+    }
+
+    const int maximumSamples = static_cast<int>(snapshot.maximumSampleCount());
+    if (maximumSamples > m_plot->maxSamples())
+        m_plot->setMaxSamples(maximumSamples);
+    m_plot->setSampleInterval(snapshot.sampleInterval);
+    applySignalBatch(m_plot.data(), samples, 0);
+
+    m_lastRevision = snapshot.revision;
+    emit refreshed(snapshot.revision, mappedChannels, maximumSamples);
+}
+`;
+}
+function qtAcquisitionSampleDecoderHeader() {
+    return `#pragma once
+
+#include <QByteArray>
+#include <QVector>
+
+class QpmSampleDecoder final
+{
+public:
+    enum class Format
+    {
+        AsciiCsv,
+        Float32LE,
+        Float64LE,
+        Int16LE
+    };
+
+    Format format() const noexcept { return m_format; }
+    int channelCount() const noexcept { return m_channelCount; }
+
+    void setFormat(Format format);
+    void setChannelCount(int channels);
+    QVector<double> pushBytes(const QByteArray &bytes);
+    void reset();
+
+private:
+    QVector<double> decodeAscii();
+    QVector<double> decodeBinary();
+    int bytesPerValue() const noexcept;
+
+    Format m_format = Format::AsciiCsv;
+    int m_channelCount = 1;
+    QByteArray m_pending;
+};
+`;
+}
+function qtAcquisitionSampleDecoderSource() {
+    return `#include "instrumentation/qpm_sample_decoder.h"
+
+#include <QRegularExpression>
+#include <QString>
+#include <QStringList>
+#include <QtEndian>
+#include <QtGlobal>
+#include <cstring>
+
+void QpmSampleDecoder::setFormat(Format format)
+{
+    if (m_format == format) return;
+    m_format = format;
+    reset();
+}
+
+void QpmSampleDecoder::setChannelCount(int channels)
+{
+    channels = qMax(1, channels);
+    if (m_channelCount == channels) return;
+    m_channelCount = channels;
+    reset();
+}
+
+QVector<double> QpmSampleDecoder::pushBytes(const QByteArray &bytes)
+{
+    if (bytes.isEmpty()) return {};
+    m_pending.append(bytes);
+    return m_format == Format::AsciiCsv ? decodeAscii() : decodeBinary();
+}
+
+void QpmSampleDecoder::reset()
+{
+    m_pending.clear();
+}
+
+QVector<double> QpmSampleDecoder::decodeAscii()
+{
+    QVector<double> decoded;
+    static const QRegularExpression separators(QStringLiteral("[,;\\\\s]+"));
+
+    for (;;)
+    {
+        const qsizetype newline = m_pending.indexOf('\\n');
+        if (newline < 0) break;
+
+        QByteArray line = m_pending.left(newline);
+        m_pending.remove(0, newline + 1);
+        if (line.endsWith('\\r')) line.chop(1);
+        const QString text = QString::fromUtf8(line).trimmed();
+        if (text.isEmpty()) continue;
+
+        const QStringList tokens = text.split(separators, Qt::SkipEmptyParts);
+        QVector<double> lineValues;
+        lineValues.reserve(tokens.size());
+        for (const QString &token : tokens)
+        {
+            bool ok = false;
+            const double value = token.toDouble(&ok);
+            if (ok) lineValues.push_back(value);
+        }
+
+        const qsizetype usable = (lineValues.size() / m_channelCount) * m_channelCount;
+        for (qsizetype i = 0; i < usable; ++i) decoded.push_back(lineValues[i]);
+    }
+    return decoded;
+}
+
+int QpmSampleDecoder::bytesPerValue() const noexcept
+{
+    switch (m_format)
+    {
+        case Format::Float32LE: return 4;
+        case Format::Float64LE: return 8;
+        case Format::Int16LE: return 2;
+        default: return 0;
+    }
+}
+
+QVector<double> QpmSampleDecoder::decodeBinary()
+{
+    QVector<double> decoded;
+    const int valueBytes = bytesPerValue();
+    if (valueBytes <= 0) return decoded;
+    const qsizetype frameBytes = static_cast<qsizetype>(valueBytes) * m_channelCount;
+    if (frameBytes <= 0) return decoded;
+
+    const qsizetype completeBytes = (m_pending.size() / frameBytes) * frameBytes;
+    decoded.reserve(completeBytes / valueBytes);
+    const uchar *raw = reinterpret_cast<const uchar *>(m_pending.constData());
+
+    for (qsizetype offset = 0; offset < completeBytes; offset += valueBytes)
+    {
+        if (m_format == Format::Int16LE)
+        {
+            const qint16 value = qFromLittleEndian<qint16>(raw + offset);
+            decoded.push_back(static_cast<double>(value));
+        }
+        else if (m_format == Format::Float32LE)
+        {
+            const quint32 bits = qFromLittleEndian<quint32>(raw + offset);
+            float value = 0.0f;
+            std::memcpy(&value, &bits, sizeof(value));
+            decoded.push_back(static_cast<double>(value));
+        }
+        else if (m_format == Format::Float64LE)
+        {
+            const quint64 bits = qFromLittleEndian<quint64>(raw + offset);
+            double value = 0.0;
+            std::memcpy(&value, &bits, sizeof(value));
+            decoded.push_back(value);
+        }
+    }
+
+    m_pending.remove(0, completeBytes);
+    return decoded;
+}
+`;
+}
+function qtAcquisitionSourceHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_sample_decoder.h"
+#include "instrumentation/qpm_signal_buffer.h"
+
+#include <QElapsedTimer>
+#include <QObject>
+#include <QString>
+#include <QtGlobal>
+
+class QpmAcquisitionSource : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(State state READ state NOTIFY stateChanged)
+    Q_PROPERTY(bool running READ isRunning NOTIFY runningChanged)
+    Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+    Q_PROPERTY(int channelCount READ channelCount WRITE setChannelCount NOTIFY channelCountChanged)
+    Q_PROPERTY(double sampleRateHz READ sampleRateHz WRITE setSampleRateHz NOTIFY sampleRateHzChanged)
+    Q_PROPERTY(SampleFormat sampleFormat READ sampleFormat WRITE setSampleFormat NOTIFY sampleFormatChanged)
+    Q_PROPERTY(double scale READ scale WRITE setScale NOTIFY transformChanged)
+    Q_PROPERTY(double offset READ offset WRITE setOffset NOTIFY transformChanged)
+    Q_PROPERTY(quint64 bytesReceived READ bytesReceived)
+    Q_PROPERTY(quint64 samplesReceived READ samplesReceived)
+    Q_PROPERTY(double bytesPerSecond READ bytesPerSecond)
+
+public:
+    enum class State { Idle, Connecting, Running, Error };
+    Q_ENUM(State)
+    enum class SampleFormat { AsciiCsv, Float32LE, Float64LE, Int16LE };
+    Q_ENUM(SampleFormat)
+
+    explicit QpmAcquisitionSource(QObject *parent = nullptr);
+    ~QpmAcquisitionSource() override = default;
+
+    State state() const noexcept { return m_state; }
+    bool isRunning() const noexcept { return m_state == State::Running; }
+    QString statusText() const { return m_statusText; }
+    int channelCount() const noexcept { return m_channelCount; }
+    double sampleRateHz() const noexcept { return m_sampleRateHz; }
+    SampleFormat sampleFormat() const noexcept { return m_sampleFormat; }
+    double scale() const noexcept { return m_scale; }
+    double offset() const noexcept { return m_offset; }
+    quint64 bytesReceived() const noexcept { return m_bytesReceived; }
+    quint64 samplesReceived() const noexcept { return m_samplesReceived; }
+    double bytesPerSecond() const noexcept { return m_bytesPerSecond; }
+    QpmSignalBuffer *buffer() const noexcept { return m_buffer; }
+
+    void setBuffer(QpmSignalBuffer *buffer) noexcept { m_buffer = buffer; if (m_buffer && m_sampleRateHz > 0.0) m_buffer->setSampleInterval(1.0 / m_sampleRateHz); }
+    void setChannelCount(int channels);
+    void setSampleRateHz(double hertz);
+    void setSampleFormat(SampleFormat format);
+    void setScale(double scale);
+    void setOffset(double offset);
+    void resetStatistics();
+
+public slots:
+    virtual void start() = 0;
+    virtual void stop() = 0;
+
+signals:
+    void stateChanged(QpmAcquisitionSource::State state);
+    void runningChanged(bool running);
+    void statusTextChanged(const QString &text);
+    void channelCountChanged(int channels);
+    void sampleRateHzChanged(double hertz);
+    void sampleFormatChanged(QpmAcquisitionSource::SampleFormat format);
+    void transformChanged();
+    void statisticsChanged(quint64 bytesReceived, quint64 samplesReceived, double bytesPerSecond);
+    void samplesDecoded(qsizetype values);
+    void errorOccurred(const QString &message);
+
+protected:
+    void consumeBytes(const QByteArray &bytes);
+    void setState(State state, const QString &statusText = {});
+    void setStatusText(const QString &statusText);
+
+private:
+    static QpmSampleDecoder::Format decoderFormat(SampleFormat format) noexcept;
+    void updateTransferRate();
+
+    QpmSignalBuffer *m_buffer = nullptr;
+    QpmSampleDecoder m_decoder;
+    State m_state = State::Idle;
+    SampleFormat m_sampleFormat = SampleFormat::AsciiCsv;
+    QString m_statusText = QStringLiteral("Idle");
+    int m_channelCount = 1;
+    double m_sampleRateHz = 0.0;
+    double m_scale = 1.0;
+    double m_offset = 0.0;
+    quint64 m_bytesReceived = 0;
+    quint64 m_samplesReceived = 0;
+    quint64 m_rateBytes = 0;
+    double m_bytesPerSecond = 0.0;
+    QElapsedTimer m_rateTimer;
+};
+`;
+}
+function qtAcquisitionSourceSource() {
+    return `#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QByteArray>
+#include <QtGlobal>
+
+QpmAcquisitionSource::QpmAcquisitionSource(QObject *parent)
+    : QObject(parent)
+{
+    m_decoder.setChannelCount(m_channelCount);
+    m_decoder.setFormat(decoderFormat(m_sampleFormat));
+}
+
+void QpmAcquisitionSource::setChannelCount(int channels)
+{
+    channels = qMax(1, channels);
+    if (m_channelCount == channels) return;
+    m_channelCount = channels;
+    m_decoder.setChannelCount(channels);
+    emit channelCountChanged(channels);
+}
+
+void QpmAcquisitionSource::setSampleRateHz(double hertz)
+{
+    hertz = qMax(0.0, hertz);
+    if (qFuzzyCompare(m_sampleRateHz + 1.0, hertz + 1.0)) return;
+    m_sampleRateHz = hertz;
+    if (m_buffer && hertz > 0.0) m_buffer->setSampleInterval(1.0 / hertz);
+    emit sampleRateHzChanged(hertz);
+}
+
+void QpmAcquisitionSource::setSampleFormat(SampleFormat format)
+{
+    if (m_sampleFormat == format) return;
+    m_sampleFormat = format;
+    m_decoder.setFormat(decoderFormat(format));
+    emit sampleFormatChanged(format);
+}
+
+void QpmAcquisitionSource::setScale(double scale)
+{
+    if (qFuzzyCompare(m_scale + 1.0, scale + 1.0)) return;
+    m_scale = scale;
+    emit transformChanged();
+}
+
+void QpmAcquisitionSource::setOffset(double offset)
+{
+    if (qFuzzyCompare(m_offset + 1.0, offset + 1.0)) return;
+    m_offset = offset;
+    emit transformChanged();
+}
+
+void QpmAcquisitionSource::resetStatistics()
+{
+    m_bytesReceived = 0;
+    m_samplesReceived = 0;
+    m_rateBytes = 0;
+    m_bytesPerSecond = 0.0;
+    m_rateTimer.restart();
+    emit statisticsChanged(m_bytesReceived, m_samplesReceived, m_bytesPerSecond);
+}
+
+void QpmAcquisitionSource::consumeBytes(const QByteArray &bytes)
+{
+    if (bytes.isEmpty()) return;
+    if (!m_rateTimer.isValid()) m_rateTimer.start();
+    m_bytesReceived += static_cast<quint64>(bytes.size());
+
+    QVector<double> decoded = m_decoder.pushBytes(bytes);
+    if (!decoded.isEmpty())
+    {
+        if (!qFuzzyCompare(m_scale + 1.0, 2.0) || !qFuzzyIsNull(m_offset))
+            for (double &value : decoded) value = value * m_scale + m_offset;
+        if (m_buffer) m_buffer->appendInterleaved(decoded, m_channelCount);
+        m_samplesReceived += static_cast<quint64>(decoded.size());
+        emit samplesDecoded(decoded.size());
+    }
+    updateTransferRate();
+}
+
+void QpmAcquisitionSource::setState(State state, const QString &statusText)
+{
+    const bool wasRunning = isRunning();
+    if (m_state != state)
+    {
+        m_state = state;
+        emit stateChanged(state);
+    }
+    if (!statusText.isEmpty()) setStatusText(statusText);
+    const bool nowRunning = isRunning();
+    if (wasRunning != nowRunning) emit runningChanged(nowRunning);
+}
+
+void QpmAcquisitionSource::setStatusText(const QString &statusText)
+{
+    if (m_statusText == statusText) return;
+    m_statusText = statusText;
+    emit statusTextChanged(m_statusText);
+}
+
+QpmSampleDecoder::Format QpmAcquisitionSource::decoderFormat(SampleFormat format) noexcept
+{
+    switch (format)
+    {
+        case SampleFormat::Float32LE: return QpmSampleDecoder::Format::Float32LE;
+        case SampleFormat::Float64LE: return QpmSampleDecoder::Format::Float64LE;
+        case SampleFormat::Int16LE: return QpmSampleDecoder::Format::Int16LE;
+        default: return QpmSampleDecoder::Format::AsciiCsv;
+    }
+}
+
+void QpmAcquisitionSource::updateTransferRate()
+{
+    const qint64 elapsed = m_rateTimer.elapsed();
+    if (elapsed < 250) return;
+    const quint64 delta = m_bytesReceived - m_rateBytes;
+    m_bytesPerSecond = elapsed > 0 ? static_cast<double>(delta) * 1000.0 / static_cast<double>(elapsed) : 0.0;
+    m_rateBytes = m_bytesReceived;
+    m_rateTimer.restart();
+    emit statisticsChanged(m_bytesReceived, m_samplesReceived, m_bytesPerSecond);
+}
+`;
+}
+function qtSerialAcquisitionSourceHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QString>
+
+class QSerialPort;
+
+class QpmSerialAcquisitionSource final : public QpmAcquisitionSource
+{
+    Q_OBJECT
+    Q_PROPERTY(QString portName READ portName WRITE setPortName NOTIFY configurationChanged)
+    Q_PROPERTY(int baudRate READ baudRate WRITE setBaudRate NOTIFY configurationChanged)
+
+public:
+    explicit QpmSerialAcquisitionSource(QObject *parent = nullptr);
+    QString portName() const { return m_portName; }
+    int baudRate() const noexcept { return m_baudRate; }
+    void setPortName(const QString &portName);
+    void setBaudRate(int baudRate);
+
+public slots:
+    void start() override;
+    void stop() override;
+
+signals:
+    void configurationChanged();
+
+private slots:
+    void onReadyRead();
+    void onError(int error);
+
+private:
+    QSerialPort *m_port = nullptr;
+    QString m_portName = QStringLiteral("COM3");
+    int m_baudRate = 115200;
+};
+`;
+}
+function qtSerialAcquisitionSourceSource() {
+    return `#include "instrumentation/qpm_serial_acquisition_source.h"
+
+#include <QSerialPort>
+
+QpmSerialAcquisitionSource::QpmSerialAcquisitionSource(QObject *parent)
+    : QpmAcquisitionSource(parent), m_port(new QSerialPort(this))
+{
+    connect(m_port, &QSerialPort::readyRead, this, &QpmSerialAcquisitionSource::onReadyRead);
+    connect(m_port, &QSerialPort::errorOccurred, this, [this](QSerialPort::SerialPortError error) { onError(static_cast<int>(error)); });
+}
+
+void QpmSerialAcquisitionSource::setPortName(const QString &portName)
+{
+    if (m_portName == portName) return;
+    m_portName = portName;
+    emit configurationChanged();
+}
+
+void QpmSerialAcquisitionSource::setBaudRate(int baudRate)
+{
+    baudRate = qMax(1, baudRate);
+    if (m_baudRate == baudRate) return;
+    m_baudRate = baudRate;
+    emit configurationChanged();
+}
+
+void QpmSerialAcquisitionSource::start()
+{
+    if (m_port->isOpen()) return;
+    resetStatistics();
+    setState(State::Connecting, QStringLiteral("Opening %1").arg(m_portName));
+    m_port->setPortName(m_portName);
+    m_port->setBaudRate(m_baudRate);
+    m_port->setDataBits(QSerialPort::Data8);
+    m_port->setParity(QSerialPort::NoParity);
+    m_port->setStopBits(QSerialPort::OneStop);
+    m_port->setFlowControl(QSerialPort::NoFlowControl);
+    if (!m_port->open(QIODevice::ReadOnly))
+    {
+        const QString message = m_port->errorString();
+        setState(State::Error, message);
+        emit errorOccurred(message);
+        return;
+    }
+    setState(State::Running, QStringLiteral("Serial %1 @ %2 baud").arg(m_portName).arg(m_baudRate));
+}
+
+void QpmSerialAcquisitionSource::stop()
+{
+    if (m_port->isOpen()) m_port->close();
+    setState(State::Idle, QStringLiteral("Serial stopped"));
+}
+
+void QpmSerialAcquisitionSource::onReadyRead()
+{
+    consumeBytes(m_port->readAll());
+}
+
+void QpmSerialAcquisitionSource::onError(int error)
+{
+    if (error == static_cast<int>(QSerialPort::NoError) || error == static_cast<int>(QSerialPort::TimeoutError)) return;
+    const QString message = m_port->errorString();
+    if (m_port->isOpen()) m_port->close();
+    setState(State::Error, message);
+    emit errorOccurred(message);
+}
+`;
+}
+function qtTcpAcquisitionSourceHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QString>
+#include <QtGlobal>
+
+class QTcpSocket;
+
+class QpmTcpAcquisitionSource final : public QpmAcquisitionSource
+{
+    Q_OBJECT
+    Q_PROPERTY(QString host READ host WRITE setHost NOTIFY configurationChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY configurationChanged)
+
+public:
+    explicit QpmTcpAcquisitionSource(QObject *parent = nullptr);
+    QString host() const { return m_host; }
+    quint16 port() const noexcept { return m_port; }
+    void setHost(const QString &host);
+    void setPort(quint16 port);
+
+public slots:
+    void start() override;
+    void stop() override;
+
+signals:
+    void configurationChanged();
+
+private slots:
+    void onReadyRead();
+    void onConnected();
+    void onDisconnected();
+    void onError();
+
+private:
+    QTcpSocket *m_socket = nullptr;
+    QString m_host = QStringLiteral("127.0.0.1");
+    quint16 m_port = 9000;
+};
+`;
+}
+function qtTcpAcquisitionSourceSource() {
+    return `#include "instrumentation/qpm_tcp_acquisition_source.h"
+
+#include <QAbstractSocket>
+#include <QTcpSocket>
+
+QpmTcpAcquisitionSource::QpmTcpAcquisitionSource(QObject *parent)
+    : QpmAcquisitionSource(parent), m_socket(new QTcpSocket(this))
+{
+    connect(m_socket, &QTcpSocket::readyRead, this, &QpmTcpAcquisitionSource::onReadyRead);
+    connect(m_socket, &QTcpSocket::connected, this, &QpmTcpAcquisitionSource::onConnected);
+    connect(m_socket, &QTcpSocket::disconnected, this, &QpmTcpAcquisitionSource::onDisconnected);
+    connect(m_socket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) { onError(); });
+}
+
+void QpmTcpAcquisitionSource::setHost(const QString &host) { if (m_host != host) { m_host = host; emit configurationChanged(); } }
+void QpmTcpAcquisitionSource::setPort(quint16 port) { if (m_port != port) { m_port = port; emit configurationChanged(); } }
+
+void QpmTcpAcquisitionSource::start()
+{
+    if (m_socket->state() != QAbstractSocket::UnconnectedState) return;
+    resetStatistics();
+    setState(State::Connecting, QStringLiteral("Connecting to %1:%2").arg(m_host).arg(m_port));
+    m_socket->connectToHost(m_host, m_port);
+}
+
+void QpmTcpAcquisitionSource::stop()
+{
+    m_socket->abort();
+    setState(State::Idle, QStringLiteral("TCP stopped"));
+}
+
+void QpmTcpAcquisitionSource::onReadyRead() { consumeBytes(m_socket->readAll()); }
+void QpmTcpAcquisitionSource::onConnected() { setState(State::Running, QStringLiteral("TCP %1:%2").arg(m_host).arg(m_port)); }
+void QpmTcpAcquisitionSource::onDisconnected() { if (state() != State::Error) setState(State::Idle, QStringLiteral("TCP disconnected")); }
+void QpmTcpAcquisitionSource::onError() { const QString message = m_socket->errorString(); setState(State::Error, message); emit errorOccurred(message); }
+`;
+}
+function qtUdpAcquisitionSourceHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QString>
+#include <QtGlobal>
+
+class QUdpSocket;
+
+class QpmUdpAcquisitionSource final : public QpmAcquisitionSource
+{
+    Q_OBJECT
+    Q_PROPERTY(QString bindAddress READ bindAddress WRITE setBindAddress NOTIFY configurationChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY configurationChanged)
+
+public:
+    explicit QpmUdpAcquisitionSource(QObject *parent = nullptr);
+    QString bindAddress() const { return m_bindAddress; }
+    quint16 port() const noexcept { return m_port; }
+    void setBindAddress(const QString &address);
+    void setPort(quint16 port);
+
+public slots:
+    void start() override;
+    void stop() override;
+
+signals:
+    void configurationChanged();
+
+private slots:
+    void onReadyRead();
+
+private:
+    QUdpSocket *m_socket = nullptr;
+    QString m_bindAddress = QStringLiteral("0.0.0.0");
+    quint16 m_port = 9000;
+};
+`;
+}
+function qtUdpAcquisitionSourceSource() {
+    return `#include "instrumentation/qpm_udp_acquisition_source.h"
+
+#include <QAbstractSocket>
+#include <QHostAddress>
+#include <QUdpSocket>
+
+QpmUdpAcquisitionSource::QpmUdpAcquisitionSource(QObject *parent)
+    : QpmAcquisitionSource(parent), m_socket(new QUdpSocket(this))
+{
+    connect(m_socket, &QUdpSocket::readyRead, this, &QpmUdpAcquisitionSource::onReadyRead);
+}
+
+void QpmUdpAcquisitionSource::setBindAddress(const QString &address) { if (m_bindAddress != address) { m_bindAddress = address; emit configurationChanged(); } }
+void QpmUdpAcquisitionSource::setPort(quint16 port) { if (m_port != port) { m_port = port; emit configurationChanged(); } }
+
+void QpmUdpAcquisitionSource::start()
+{
+    if (m_socket->state() == QAbstractSocket::BoundState) return;
+    resetStatistics();
+    QHostAddress address(m_bindAddress);
+    if (address.isNull()) address = QHostAddress::AnyIPv4;
+    if (!m_socket->bind(address, m_port, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
+    {
+        const QString message = m_socket->errorString();
+        setState(State::Error, message);
+        emit errorOccurred(message);
+        return;
+    }
+    setState(State::Running, QStringLiteral("UDP %1:%2").arg(m_bindAddress).arg(m_port));
+}
+
+void QpmUdpAcquisitionSource::stop()
+{
+    m_socket->close();
+    setState(State::Idle, QStringLiteral("UDP stopped"));
+}
+
+void QpmUdpAcquisitionSource::onReadyRead()
+{
+    while (m_socket->hasPendingDatagrams())
+    {
+        const qint64 size = m_socket->pendingDatagramSize();
+        if (size <= 0) break;
+        QByteArray datagram;
+        datagram.resize(static_cast<qsizetype>(size));
+        const qint64 received = m_socket->readDatagram(datagram.data(), datagram.size());
+        if (received > 0)
+        {
+            datagram.resize(static_cast<qsizetype>(received));
+            consumeBytes(datagram);
+        }
+    }
+}
+`;
+}
+function qtScpiAcquisitionSourceHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QString>
+#include <QtGlobal>
+
+class QTcpSocket;
+class QTimer;
+
+// SCPI-over-TCP starter for ASCII numeric responses (for example READ? or MEAS?).
+// IEEE 488.2 definite-length binary blocks are instrument-specific and are not
+// decoded by this generic starter; add a dedicated decoder when the instrument requires one.
+class QpmScpiAcquisitionSource final : public QpmAcquisitionSource
+{
+    Q_OBJECT
+    Q_PROPERTY(QString host READ host WRITE setHost NOTIFY configurationChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY configurationChanged)
+    Q_PROPERTY(QString queryCommand READ queryCommand WRITE setQueryCommand NOTIFY configurationChanged)
+    Q_PROPERTY(int requestIntervalMs READ requestIntervalMs WRITE setRequestIntervalMs NOTIFY configurationChanged)
+
+public:
+    explicit QpmScpiAcquisitionSource(QObject *parent = nullptr);
+    QString host() const { return m_host; }
+    quint16 port() const noexcept { return m_port; }
+    QString queryCommand() const { return m_queryCommand; }
+    int requestIntervalMs() const noexcept { return m_requestIntervalMs; }
+    void setHost(const QString &host);
+    void setPort(quint16 port);
+    void setQueryCommand(const QString &command);
+    void setRequestIntervalMs(int intervalMs);
+
+public slots:
+    void start() override;
+    void stop() override;
+    void requestSample();
+
+signals:
+    void configurationChanged();
+
+private slots:
+    void onConnected();
+    void onDisconnected();
+    void onReadyRead();
+    void onError();
+
+private:
+    QTcpSocket *m_socket = nullptr;
+    QTimer *m_queryTimer = nullptr;
+    QString m_host = QStringLiteral("127.0.0.1");
+    quint16 m_port = 5025;
+    QString m_queryCommand = QStringLiteral("READ?");
+    int m_requestIntervalMs = 200;
+};
+`;
+}
+function qtScpiAcquisitionSourceSource() {
+    return `#include "instrumentation/qpm_scpi_acquisition_source.h"
+
+#include <QAbstractSocket>
+#include <QTcpSocket>
+#include <QTimer>
+
+QpmScpiAcquisitionSource::QpmScpiAcquisitionSource(QObject *parent)
+    : QpmAcquisitionSource(parent), m_socket(new QTcpSocket(this)), m_queryTimer(new QTimer(this))
+{
+    setSampleFormat(SampleFormat::AsciiCsv);
+    connect(m_socket, &QTcpSocket::connected, this, &QpmScpiAcquisitionSource::onConnected);
+    connect(m_socket, &QTcpSocket::disconnected, this, &QpmScpiAcquisitionSource::onDisconnected);
+    connect(m_socket, &QTcpSocket::readyRead, this, &QpmScpiAcquisitionSource::onReadyRead);
+    connect(m_socket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) { onError(); });
+    connect(m_queryTimer, &QTimer::timeout, this, &QpmScpiAcquisitionSource::requestSample);
+}
+
+void QpmScpiAcquisitionSource::setHost(const QString &host) { if (m_host != host) { m_host = host; emit configurationChanged(); } }
+void QpmScpiAcquisitionSource::setPort(quint16 port) { if (m_port != port) { m_port = port; emit configurationChanged(); } }
+void QpmScpiAcquisitionSource::setQueryCommand(const QString &command) { if (m_queryCommand != command) { m_queryCommand = command; emit configurationChanged(); } }
+void QpmScpiAcquisitionSource::setRequestIntervalMs(int intervalMs) { intervalMs = qMax(0, intervalMs); if (m_requestIntervalMs != intervalMs) { m_requestIntervalMs = intervalMs; if (m_queryTimer->isActive()) m_queryTimer->setInterval(qMax(1, m_requestIntervalMs)); emit configurationChanged(); } }
+
+void QpmScpiAcquisitionSource::start()
+{
+    if (m_socket->state() != QAbstractSocket::UnconnectedState) return;
+    resetStatistics();
+    setSampleFormat(SampleFormat::AsciiCsv);
+    setState(State::Connecting, QStringLiteral("SCPI connecting to %1:%2").arg(m_host).arg(m_port));
+    m_socket->connectToHost(m_host, m_port);
+}
+
+void QpmScpiAcquisitionSource::stop()
+{
+    m_queryTimer->stop();
+    m_socket->abort();
+    setState(State::Idle, QStringLiteral("SCPI stopped"));
+}
+
+void QpmScpiAcquisitionSource::requestSample()
+{
+    if (m_socket->state() != QAbstractSocket::ConnectedState || m_queryCommand.trimmed().isEmpty()) return;
+    QByteArray command = m_queryCommand.trimmed().toUtf8();
+    if (!command.endsWith('\\n')) command.append('\\n');
+    m_socket->write(command);
+}
+
+void QpmScpiAcquisitionSource::onConnected()
+{
+    setState(State::Running, QStringLiteral("SCPI %1:%2").arg(m_host).arg(m_port));
+    requestSample();
+    if (m_requestIntervalMs > 0) m_queryTimer->start(m_requestIntervalMs);
+}
+
+void QpmScpiAcquisitionSource::onDisconnected() { m_queryTimer->stop(); if (state() != State::Error) setState(State::Idle, QStringLiteral("SCPI disconnected")); }
+void QpmScpiAcquisitionSource::onReadyRead() { consumeBytes(m_socket->readAll()); }
+void QpmScpiAcquisitionSource::onError() { const QString message = m_socket->errorString(); m_queryTimer->stop(); setState(State::Error, message); emit errorOccurred(message); }
+`;
+}
+function qtAcquisitionControllerHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_acquisition_source.h"
+
+#include <QObject>
+#include <QString>
+#include <QtGlobal>
+
+class QpmAcquisitionController final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(Backend backend READ backend WRITE setBackend NOTIFY configurationChanged)
+    Q_PROPERTY(QString serialPortName READ serialPortName WRITE setSerialPortName NOTIFY configurationChanged)
+    Q_PROPERTY(int baudRate READ baudRate WRITE setBaudRate NOTIFY configurationChanged)
+    Q_PROPERTY(QString host READ host WRITE setHost NOTIFY configurationChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY configurationChanged)
+    Q_PROPERTY(int channelCount READ channelCount WRITE setChannelCount NOTIFY configurationChanged)
+    Q_PROPERTY(double sampleRateHz READ sampleRateHz WRITE setSampleRateHz NOTIFY configurationChanged)
+    Q_PROPERTY(SampleFormat sampleFormat READ sampleFormat WRITE setSampleFormat NOTIFY configurationChanged)
+    Q_PROPERTY(double scale READ scale WRITE setScale NOTIFY configurationChanged)
+    Q_PROPERTY(double offset READ offset WRITE setOffset NOTIFY configurationChanged)
+    Q_PROPERTY(QString scpiQuery READ scpiQuery WRITE setScpiQuery NOTIFY configurationChanged)
+    Q_PROPERTY(int scpiIntervalMs READ scpiIntervalMs WRITE setScpiIntervalMs NOTIFY configurationChanged)
+    Q_PROPERTY(bool running READ isRunning NOTIFY runningChanged)
+    Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+
+public:
+    enum class Backend { Serial, Tcp, Udp, Scpi };
+    Q_ENUM(Backend)
+    enum class SampleFormat { AsciiCsv, Float32LE, Float64LE, Int16LE };
+    Q_ENUM(SampleFormat)
+
+    explicit QpmAcquisitionController(QpmSignalBuffer *buffer = nullptr, QObject *parent = nullptr);
+    ~QpmAcquisitionController() override;
+
+    Backend backend() const noexcept { return m_backend; }
+    QString serialPortName() const { return m_serialPortName; }
+    int baudRate() const noexcept { return m_baudRate; }
+    QString host() const { return m_host; }
+    quint16 port() const noexcept { return m_port; }
+    int channelCount() const noexcept { return m_channelCount; }
+    double sampleRateHz() const noexcept { return m_sampleRateHz; }
+    SampleFormat sampleFormat() const noexcept { return m_sampleFormat; }
+    double scale() const noexcept { return m_scale; }
+    double offset() const noexcept { return m_offset; }
+    QString scpiQuery() const { return m_scpiQuery; }
+    int scpiIntervalMs() const noexcept { return m_scpiIntervalMs; }
+    bool isRunning() const noexcept;
+    QString statusText() const;
+    QpmAcquisitionSource *source() const noexcept { return m_source; }
+    QpmSignalBuffer *buffer() const noexcept { return m_buffer; }
+
+    void setBuffer(QpmSignalBuffer *buffer);
+    void setBackend(Backend backend);
+    void setSerialPortName(const QString &portName);
+    void setBaudRate(int baudRate);
+    void setHost(const QString &host);
+    void setPort(quint16 port);
+    void setChannelCount(int channels);
+    void setSampleRateHz(double hertz);
+    void setSampleFormat(SampleFormat format);
+    void setScale(double scale);
+    void setOffset(double offset);
+    void setScpiQuery(const QString &query);
+    void setScpiIntervalMs(int intervalMs);
+
+public slots:
+    void start();
+    void stop();
+    void restart();
+
+signals:
+    void configurationChanged();
+    void sourceChanged(QpmAcquisitionSource *source);
+    void runningChanged(bool running);
+    void statusTextChanged(const QString &text);
+    void statisticsChanged(quint64 bytesReceived, quint64 samplesReceived, double bytesPerSecond);
+    void errorOccurred(const QString &message);
+
+private:
+    QpmAcquisitionSource *createSource();
+    void destroySource();
+    void configureSource(QpmAcquisitionSource *source);
+    static QpmAcquisitionSource::SampleFormat sourceFormat(SampleFormat format) noexcept;
+
+    QpmSignalBuffer *m_buffer = nullptr;
+    QpmAcquisitionSource *m_source = nullptr;
+    Backend m_backend = Backend::Serial;
+    QString m_serialPortName = QStringLiteral("COM3");
+    int m_baudRate = 115200;
+    QString m_host = QStringLiteral("127.0.0.1");
+    quint16 m_port = 9000;
+    int m_channelCount = 1;
+    double m_sampleRateHz = 0.0;
+    SampleFormat m_sampleFormat = SampleFormat::AsciiCsv;
+    double m_scale = 1.0;
+    double m_offset = 0.0;
+    QString m_scpiQuery = QStringLiteral("READ?");
+    int m_scpiIntervalMs = 200;
+};
+`;
+}
+function qtAcquisitionControllerSource() {
+    return `#include "instrumentation/qpm_acquisition_controller.h"
+#include "instrumentation/qpm_scpi_acquisition_source.h"
+#include "instrumentation/qpm_serial_acquisition_source.h"
+#include "instrumentation/qpm_tcp_acquisition_source.h"
+#include "instrumentation/qpm_udp_acquisition_source.h"
+
+#include <QtGlobal>
+
+QpmAcquisitionController::QpmAcquisitionController(QpmSignalBuffer *buffer, QObject *parent)
+    : QObject(parent), m_buffer(buffer)
+{
+}
+
+QpmAcquisitionController::~QpmAcquisitionController()
+{
+    destroySource();
+}
+
+bool QpmAcquisitionController::isRunning() const noexcept { return m_source && m_source->isRunning(); }
+QString QpmAcquisitionController::statusText() const { return m_source ? m_source->statusText() : QStringLiteral("Idle"); }
+
+void QpmAcquisitionController::setBuffer(QpmSignalBuffer *buffer)
+{
+    m_buffer = buffer;
+    if (m_buffer && m_sampleRateHz > 0.0) m_buffer->setSampleInterval(1.0 / m_sampleRateHz);
+    if (m_source) m_source->setBuffer(buffer);
+}
+
+#define QPM_SET_CONFIG(member, value) do { if ((member) != (value)) { (member) = (value); emit configurationChanged(); } } while (false)
+void QpmAcquisitionController::setBackend(Backend backend) { if (m_backend == backend) return; const bool restartAfter = isRunning(); stop(); destroySource(); m_backend = backend; emit configurationChanged(); if (restartAfter) start(); }
+void QpmAcquisitionController::setSerialPortName(const QString &value) { QPM_SET_CONFIG(m_serialPortName, value); }
+void QpmAcquisitionController::setBaudRate(int value) { value = qMax(1, value); QPM_SET_CONFIG(m_baudRate, value); }
+void QpmAcquisitionController::setHost(const QString &value) { QPM_SET_CONFIG(m_host, value); }
+void QpmAcquisitionController::setPort(quint16 value) { QPM_SET_CONFIG(m_port, value); }
+void QpmAcquisitionController::setChannelCount(int value) { value = qMax(1, value); QPM_SET_CONFIG(m_channelCount, value); }
+void QpmAcquisitionController::setSampleRateHz(double value) { value = qMax(0.0, value); if (!qFuzzyCompare(m_sampleRateHz + 1.0, value + 1.0)) { m_sampleRateHz = value; if (m_buffer && value > 0.0) m_buffer->setSampleInterval(1.0 / value); emit configurationChanged(); } }
+void QpmAcquisitionController::setSampleFormat(SampleFormat value) { QPM_SET_CONFIG(m_sampleFormat, value); }
+void QpmAcquisitionController::setScale(double value) { if (!qFuzzyCompare(m_scale + 1.0, value + 1.0)) { m_scale = value; emit configurationChanged(); } }
+void QpmAcquisitionController::setOffset(double value) { if (!qFuzzyCompare(m_offset + 1.0, value + 1.0)) { m_offset = value; emit configurationChanged(); } }
+void QpmAcquisitionController::setScpiQuery(const QString &value) { QPM_SET_CONFIG(m_scpiQuery, value); }
+void QpmAcquisitionController::setScpiIntervalMs(int value) { value = qMax(0, value); QPM_SET_CONFIG(m_scpiIntervalMs, value); }
+#undef QPM_SET_CONFIG
+
+void QpmAcquisitionController::start()
+{
+    if (isRunning()) return;
+    if (!m_buffer)
+    {
+        const QString message = QStringLiteral("No QpmSignalBuffer is attached to the acquisition controller.");
+        emit errorOccurred(message);
+        emit statusTextChanged(message);
+        return;
+    }
+    if (!m_source)
+    {
+        m_source = createSource();
+        if (!m_source) return;
+        connect(m_source, &QpmAcquisitionSource::runningChanged, this, &QpmAcquisitionController::runningChanged);
+        connect(m_source, &QpmAcquisitionSource::statusTextChanged, this, &QpmAcquisitionController::statusTextChanged);
+        connect(m_source, &QpmAcquisitionSource::statisticsChanged, this, &QpmAcquisitionController::statisticsChanged);
+        connect(m_source, &QpmAcquisitionSource::errorOccurred, this, &QpmAcquisitionController::errorOccurred);
+        emit sourceChanged(m_source);
+    }
+    configureSource(m_source);
+    m_source->start();
+}
+
+void QpmAcquisitionController::stop()
+{
+    if (m_source) m_source->stop();
+}
+
+void QpmAcquisitionController::restart()
+{
+    stop();
+    destroySource();
+    start();
+}
+
+QpmAcquisitionSource *QpmAcquisitionController::createSource()
+{
+    switch (m_backend)
+    {
+        case Backend::Serial: return new QpmSerialAcquisitionSource(this);
+        case Backend::Tcp: return new QpmTcpAcquisitionSource(this);
+        case Backend::Udp: return new QpmUdpAcquisitionSource(this);
+        case Backend::Scpi: return new QpmScpiAcquisitionSource(this);
+    }
+    return nullptr;
+}
+
+void QpmAcquisitionController::destroySource()
+{
+    if (!m_source) return;
+    m_source->stop();
+    delete m_source;
+    m_source = nullptr;
+    emit sourceChanged(nullptr);
+    emit runningChanged(false);
+    emit statusTextChanged(QStringLiteral("Idle"));
+}
+
+void QpmAcquisitionController::configureSource(QpmAcquisitionSource *source)
+{
+    if (!source) return;
+    source->setBuffer(m_buffer);
+    source->setChannelCount(m_channelCount);
+    source->setSampleRateHz(m_sampleRateHz);
+    source->setSampleFormat(sourceFormat(m_sampleFormat));
+    source->setScale(m_scale);
+    source->setOffset(m_offset);
+
+    if (auto *serial = qobject_cast<QpmSerialAcquisitionSource *>(source))
+    {
+        serial->setPortName(m_serialPortName);
+        serial->setBaudRate(m_baudRate);
+    }
+    else if (auto *tcp = qobject_cast<QpmTcpAcquisitionSource *>(source))
+    {
+        tcp->setHost(m_host);
+        tcp->setPort(m_port);
+    }
+    else if (auto *udp = qobject_cast<QpmUdpAcquisitionSource *>(source))
+    {
+        udp->setBindAddress(m_host);
+        udp->setPort(m_port);
+    }
+    else if (auto *scpi = qobject_cast<QpmScpiAcquisitionSource *>(source))
+    {
+        scpi->setHost(m_host);
+        scpi->setPort(m_port);
+        scpi->setQueryCommand(m_scpiQuery);
+        scpi->setRequestIntervalMs(m_scpiIntervalMs);
+        scpi->setSampleFormat(QpmAcquisitionSource::SampleFormat::AsciiCsv);
+    }
+}
+
+QpmAcquisitionSource::SampleFormat QpmAcquisitionController::sourceFormat(SampleFormat format) noexcept
+{
+    switch (format)
+    {
+        case SampleFormat::Float32LE: return QpmAcquisitionSource::SampleFormat::Float32LE;
+        case SampleFormat::Float64LE: return QpmAcquisitionSource::SampleFormat::Float64LE;
+        case SampleFormat::Int16LE: return QpmAcquisitionSource::SampleFormat::Int16LE;
+        default: return QpmAcquisitionSource::SampleFormat::AsciiCsv;
+    }
+}
+`;
+}
+function qtAcquisitionControlHeader() {
+    return `#pragma once
+
+#include <QWidget>
+
+class QComboBox;
+class QDoubleSpinBox;
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QSpinBox;
+class QpmAcquisitionController;
+
+class AcquisitionControl final : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+
+public:
+    explicit AcquisitionControl(QWidget *parent = nullptr);
+    QString title() const;
+    QpmAcquisitionController *controller() const noexcept { return m_controller; }
+
+public slots:
+    void setTitle(const QString &title);
+    void setController(QpmAcquisitionController *controller);
+    void applyConfiguration();
+
+signals:
+    void startRequested();
+    void stopRequested();
+
+private slots:
+    void onStartStopClicked();
+    void updateBackendVisibility();
+    void updateRunningState(bool running);
+    void updateStatus(const QString &text);
+    void updateStatistics(quint64 bytesReceived, quint64 samplesReceived, double bytesPerSecond);
+
+private:
+    QString formattedRate(double bytesPerSecond) const;
+
+    QpmAcquisitionController *m_controller = nullptr;
+    QLabel *m_titleLabel = nullptr;
+    QComboBox *m_backend = nullptr;
+    QLineEdit *m_serialPort = nullptr;
+    QSpinBox *m_baudRate = nullptr;
+    QLineEdit *m_host = nullptr;
+    QSpinBox *m_port = nullptr;
+    QSpinBox *m_channels = nullptr;
+    QDoubleSpinBox *m_sampleRate = nullptr;
+    QComboBox *m_format = nullptr;
+    QDoubleSpinBox *m_scale = nullptr;
+    QDoubleSpinBox *m_offset = nullptr;
+    QLineEdit *m_scpiQuery = nullptr;
+    QSpinBox *m_scpiInterval = nullptr;
+    QPushButton *m_startStop = nullptr;
+    QLabel *m_status = nullptr;
+    QLabel *m_rate = nullptr;
+    QLabel *m_samples = nullptr;
+    QLabel *m_bytes = nullptr;
+    bool m_localRunning = false;
+};
+`;
+}
+function qtAcquisitionControlSource() {
+    return `#include "widgets/acquisition_control.h"
+
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#include "instrumentation/qpm_acquisition_controller.h"
+#endif
+
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QSpinBox>
+#include <QVBoxLayout>
+
+AcquisitionControl::AcquisitionControl(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
+    auto *root = new QVBoxLayout(this);
+    m_titleLabel = new QLabel(QStringLiteral("Acquisition"), this);
+    QFont titleFont = m_titleLabel->font();
+    titleFont.setBold(true);
+    m_titleLabel->setFont(titleFont);
+    root->addWidget(m_titleLabel);
+
+    auto *settingsBox = new QGroupBox(QStringLiteral("Source"), this);
+    auto *form = new QFormLayout(settingsBox);
+    m_backend = new QComboBox(settingsBox);
+    m_backend->addItem(QStringLiteral("Serial"), 0);
+    m_backend->addItem(QStringLiteral("TCP"), 1);
+    m_backend->addItem(QStringLiteral("UDP"), 2);
+    m_backend->addItem(QStringLiteral("SCPI / TCP"), 3);
+    m_serialPort = new QLineEdit(QStringLiteral("COM3"), settingsBox);
+    m_baudRate = new QSpinBox(settingsBox); m_baudRate->setRange(1, 4000000); m_baudRate->setValue(115200);
+    m_host = new QLineEdit(QStringLiteral("127.0.0.1"), settingsBox);
+    m_port = new QSpinBox(settingsBox); m_port->setRange(1, 65535); m_port->setValue(9000);
+    m_channels = new QSpinBox(settingsBox); m_channels->setRange(1, 64); m_channels->setValue(1);
+    m_sampleRate = new QDoubleSpinBox(settingsBox); m_sampleRate->setRange(0.0, 1.0e9); m_sampleRate->setDecimals(3); m_sampleRate->setValue(1000.0); m_sampleRate->setSuffix(QStringLiteral(" Hz")); m_sampleRate->setToolTip(QStringLiteral("Sampling frequency used for the SignalPlot time axis. Set 0 when the source does not have a known fixed sample rate."));
+    m_format = new QComboBox(settingsBox);
+    m_format->addItem(QStringLiteral("ASCII CSV / lines"), 0);
+    m_format->addItem(QStringLiteral("Float32 little-endian"), 1);
+    m_format->addItem(QStringLiteral("Float64 little-endian"), 2);
+    m_format->addItem(QStringLiteral("Int16 little-endian"), 3);
+    m_scale = new QDoubleSpinBox(settingsBox); m_scale->setRange(-1.0e12, 1.0e12); m_scale->setDecimals(9); m_scale->setValue(1.0);
+    m_offset = new QDoubleSpinBox(settingsBox); m_offset->setRange(-1.0e12, 1.0e12); m_offset->setDecimals(9);
+    m_scpiQuery = new QLineEdit(QStringLiteral("READ?"), settingsBox);
+    m_scpiInterval = new QSpinBox(settingsBox); m_scpiInterval->setRange(0, 60000); m_scpiInterval->setValue(200); m_scpiInterval->setSuffix(QStringLiteral(" ms"));
+
+    form->addRow(QStringLiteral("Backend"), m_backend);
+    form->addRow(QStringLiteral("Serial port"), m_serialPort);
+    form->addRow(QStringLiteral("Baud rate"), m_baudRate);
+    form->addRow(QStringLiteral("Host / bind address"), m_host);
+    form->addRow(QStringLiteral("Port"), m_port);
+    form->addRow(QStringLiteral("Channels"), m_channels);
+    form->addRow(QStringLiteral("Sample rate"), m_sampleRate);
+    form->addRow(QStringLiteral("Sample format"), m_format);
+    form->addRow(QStringLiteral("Scale"), m_scale);
+    form->addRow(QStringLiteral("Offset"), m_offset);
+    form->addRow(QStringLiteral("SCPI query"), m_scpiQuery);
+    form->addRow(QStringLiteral("SCPI period"), m_scpiInterval);
+    root->addWidget(settingsBox);
+
+    auto *statusBox = new QGroupBox(QStringLiteral("Status"), this);
+    auto *statusGrid = new QGridLayout(statusBox);
+    m_status = new QLabel(QStringLiteral("Idle"), statusBox);
+    m_rate = new QLabel(QStringLiteral("0 B/s"), statusBox);
+    m_samples = new QLabel(QStringLiteral("0"), statusBox);
+    m_bytes = new QLabel(QStringLiteral("0"), statusBox);
+    statusGrid->addWidget(new QLabel(QStringLiteral("State"), statusBox), 0, 0); statusGrid->addWidget(m_status, 0, 1);
+    statusGrid->addWidget(new QLabel(QStringLiteral("Rate"), statusBox), 1, 0); statusGrid->addWidget(m_rate, 1, 1);
+    statusGrid->addWidget(new QLabel(QStringLiteral("Samples"), statusBox), 2, 0); statusGrid->addWidget(m_samples, 2, 1);
+    statusGrid->addWidget(new QLabel(QStringLiteral("Bytes"), statusBox), 3, 0); statusGrid->addWidget(m_bytes, 3, 1);
+    root->addWidget(statusBox);
+
+    m_startStop = new QPushButton(QStringLiteral("Start acquisition"), this);
+    root->addWidget(m_startStop);
+    connect(m_backend, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) { updateBackendVisibility(); });
+    connect(m_startStop, &QPushButton::clicked, this, &AcquisitionControl::onStartStopClicked);
+    updateBackendVisibility();
+}
+
+QString AcquisitionControl::title() const { return m_titleLabel ? m_titleLabel->text() : QString(); }
+void AcquisitionControl::setTitle(const QString &title) { if (m_titleLabel) m_titleLabel->setText(title); }
+
+void AcquisitionControl::setController(QpmAcquisitionController *controller)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_controller == controller) return;
+    if (m_controller) disconnect(m_controller, nullptr, this, nullptr);
+    m_controller = controller;
+    if (m_controller)
+    {
+        connect(m_controller, &QpmAcquisitionController::runningChanged, this, &AcquisitionControl::updateRunningState);
+        connect(m_controller, &QpmAcquisitionController::statusTextChanged, this, &AcquisitionControl::updateStatus);
+        connect(m_controller, &QpmAcquisitionController::statisticsChanged, this, &AcquisitionControl::updateStatistics);
+        connect(m_controller, &QpmAcquisitionController::errorOccurred, this, &AcquisitionControl::updateStatus);
+        updateRunningState(m_controller->isRunning());
+        updateStatus(m_controller->statusText());
+    }
+#else
+    Q_UNUSED(controller);
+#endif
+}
+
+void AcquisitionControl::applyConfiguration()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_controller) return;
+    m_controller->setBackend(static_cast<QpmAcquisitionController::Backend>(m_backend->currentData().toInt()));
+    m_controller->setSerialPortName(m_serialPort->text().trimmed());
+    m_controller->setBaudRate(m_baudRate->value());
+    m_controller->setHost(m_host->text().trimmed());
+    m_controller->setPort(static_cast<quint16>(m_port->value()));
+    m_controller->setChannelCount(m_channels->value());
+    m_controller->setSampleRateHz(m_sampleRate->value());
+    m_controller->setSampleFormat(static_cast<QpmAcquisitionController::SampleFormat>(m_format->currentData().toInt()));
+    m_controller->setScale(m_scale->value());
+    m_controller->setOffset(m_offset->value());
+    m_controller->setScpiQuery(m_scpiQuery->text().trimmed());
+    m_controller->setScpiIntervalMs(m_scpiInterval->value());
+#endif
+}
+
+void AcquisitionControl::onStartStopClicked()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_controller)
+    {
+        if (m_controller->isRunning()) { emit stopRequested(); m_controller->stop(); }
+        else { applyConfiguration(); emit startRequested(); m_controller->start(); }
+        return;
+    }
+#endif
+    m_localRunning = !m_localRunning;
+    updateRunningState(m_localRunning);
+    if (m_localRunning) emit startRequested(); else emit stopRequested();
+}
+
+void AcquisitionControl::updateBackendVisibility()
+{
+    const int backend = m_backend->currentData().toInt();
+    const bool serial = backend == 0;
+    const bool scpi = backend == 3;
+    m_serialPort->setVisible(serial);
+    m_baudRate->setVisible(serial);
+    m_host->setVisible(!serial);
+    m_port->setVisible(!serial);
+    m_scpiQuery->setVisible(scpi);
+    m_scpiInterval->setVisible(scpi);
+    if (auto *form = qobject_cast<QFormLayout *>(m_backend->parentWidget()->layout()))
+    {
+        if (QWidget *label = form->labelForField(m_serialPort)) label->setVisible(serial);
+        if (QWidget *label = form->labelForField(m_baudRate)) label->setVisible(serial);
+        if (QWidget *label = form->labelForField(m_host)) label->setVisible(!serial);
+        if (QWidget *label = form->labelForField(m_port)) label->setVisible(!serial);
+        if (QWidget *label = form->labelForField(m_scpiQuery)) label->setVisible(scpi);
+        if (QWidget *label = form->labelForField(m_scpiInterval)) label->setVisible(scpi);
+    }
+    if (scpi && m_port->value() == 9000) m_port->setValue(5025);
+    else if (!serial && !scpi && m_port->value() == 5025) m_port->setValue(9000);
+    m_format->setEnabled(!scpi);
+}
+
+void AcquisitionControl::updateRunningState(bool running)
+{
+    m_startStop->setText(running ? QStringLiteral("Stop acquisition") : QStringLiteral("Start acquisition"));
+    m_backend->setEnabled(!running);
+    m_serialPort->setEnabled(!running);
+    m_baudRate->setEnabled(!running);
+    m_host->setEnabled(!running);
+    m_port->setEnabled(!running);
+    m_channels->setEnabled(!running);
+    m_sampleRate->setEnabled(!running);
+    m_format->setEnabled(!running && m_backend->currentData().toInt() != 3);
+    m_scale->setEnabled(!running);
+    m_offset->setEnabled(!running);
+    m_scpiQuery->setEnabled(!running);
+    m_scpiInterval->setEnabled(!running);
+}
+
+void AcquisitionControl::updateStatus(const QString &text) { m_status->setText(text); }
+void AcquisitionControl::updateStatistics(quint64 bytesReceived, quint64 samplesReceived, double bytesPerSecond)
+{
+    m_bytes->setText(QString::number(bytesReceived));
+    m_samples->setText(QString::number(samplesReceived));
+    m_rate->setText(formattedRate(bytesPerSecond));
+}
+
+QString AcquisitionControl::formattedRate(double rate) const
+{
+    if (rate >= 1024.0 * 1024.0) return QStringLiteral("%1 MiB/s").arg(rate / (1024.0 * 1024.0), 0, 'f', 2);
+    if (rate >= 1024.0) return QStringLiteral("%1 KiB/s").arg(rate / 1024.0, 0, 'f', 1);
+    return QStringLiteral("%1 B/s").arg(rate, 0, 'f', 0);
+}
+`;
+}
+function qtInstrumentProfileHeader() {
+    return `#pragma once
+
+#include <QList>
+#include <QString>
+#include <QStringList>
+
+struct QpmInstrumentProfile
+{
+    enum class Family { Generic, DigitalMultimeter, PowerSupply, SignalGenerator, Oscilloscope };
+    enum class ControlKind { Measurement, Numeric, Toggle, Action };
+
+    struct Action
+    {
+        QString id;
+        QString label;
+        ControlKind kind = ControlKind::Measurement;
+        QString query;
+        QString writeTemplate;
+        QString unit;
+        double minimum = -1.0e12;
+        double maximum = 1.0e12;
+        int decimals = 6;
+        double defaultValue = 0.0;
+        bool readback = true;
+    };
+
+    struct Capability
+    {
+        QString id;
+        QString label;
+        QString category = QStringLiteral("general");
+        QStringList actionIds;
+    };
+
+    QString id;
+    QString displayName;
+    QString description;
+    QString manufacturer;
+    QString model;
+    QString documentationUrl;
+    Family family = Family::Generic;
+    QList<Action> actions;
+    QList<Capability> capabilities;
+
+    const Action *action(const QString &actionId) const;
+    const Capability *capability(const QString &capabilityId) const;
+    bool supportsCapability(const QString &capabilityId) const;
+    QStringList capabilityIds() const;
+
+    static QList<QpmInstrumentProfile> builtIns();
+    static QpmInstrumentProfile builtInById(const QString &profileId);
+    static bool loadJsonFile(const QString &filePath, QpmInstrumentProfile *profile, QString *error = nullptr);
+    bool saveJsonFile(const QString &filePath, QString *error = nullptr) const;
+};
+`;
+}
+function qtInstrumentProfileSource() {
+    return `#include "instrumentation/qpm_instrument_profile.h"
+
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <initializer_list>
+
+namespace
+{
+QString familyName(QpmInstrumentProfile::Family family)
+{
+    switch (family)
+    {
+        case QpmInstrumentProfile::Family::DigitalMultimeter: return QStringLiteral("dmm");
+        case QpmInstrumentProfile::Family::PowerSupply: return QStringLiteral("power-supply");
+        case QpmInstrumentProfile::Family::SignalGenerator: return QStringLiteral("signal-generator");
+        case QpmInstrumentProfile::Family::Oscilloscope: return QStringLiteral("oscilloscope");
+        default: return QStringLiteral("generic");
+    }
+}
+
+QpmInstrumentProfile::Family familyFromName(const QString &name)
+{
+    const QString value = name.trimmed().toLower();
+    if (value == QStringLiteral("dmm") || value == QStringLiteral("digital-multimeter")) return QpmInstrumentProfile::Family::DigitalMultimeter;
+    if (value == QStringLiteral("power-supply") || value == QStringLiteral("psu")) return QpmInstrumentProfile::Family::PowerSupply;
+    if (value == QStringLiteral("signal-generator") || value == QStringLiteral("generator")) return QpmInstrumentProfile::Family::SignalGenerator;
+    if (value == QStringLiteral("oscilloscope") || value == QStringLiteral("scope")) return QpmInstrumentProfile::Family::Oscilloscope;
+    return QpmInstrumentProfile::Family::Generic;
+}
+
+QString controlKindName(QpmInstrumentProfile::ControlKind kind)
+{
+    switch (kind)
+    {
+        case QpmInstrumentProfile::ControlKind::Numeric: return QStringLiteral("numeric");
+        case QpmInstrumentProfile::ControlKind::Toggle: return QStringLiteral("toggle");
+        case QpmInstrumentProfile::ControlKind::Action: return QStringLiteral("action");
+        default: return QStringLiteral("measurement");
+    }
+}
+
+QpmInstrumentProfile::ControlKind controlKindFromName(const QString &name)
+{
+    const QString value = name.trimmed().toLower();
+    if (value == QStringLiteral("numeric")) return QpmInstrumentProfile::ControlKind::Numeric;
+    if (value == QStringLiteral("toggle")) return QpmInstrumentProfile::ControlKind::Toggle;
+    if (value == QStringLiteral("action")) return QpmInstrumentProfile::ControlKind::Action;
+    return QpmInstrumentProfile::ControlKind::Measurement;
+}
+
+QpmInstrumentProfile::Action measurement(const char *id, const char *label, const char *query, const char *unit, int decimals = 6)
+{
+    QpmInstrumentProfile::Action value;
+    value.id = QString::fromLatin1(id);
+    value.label = QString::fromLatin1(label);
+    value.kind = QpmInstrumentProfile::ControlKind::Measurement;
+    value.query = QString::fromLatin1(query);
+    value.unit = QString::fromLatin1(unit);
+    value.decimals = decimals;
+    return value;
+}
+
+QpmInstrumentProfile::Action numeric(const char *id, const char *label, const char *query, const char *writeTemplate,
+                                     const char *unit, double minimum, double maximum, int decimals, double defaultValue)
+{
+    QpmInstrumentProfile::Action value;
+    value.id = QString::fromLatin1(id);
+    value.label = QString::fromLatin1(label);
+    value.kind = QpmInstrumentProfile::ControlKind::Numeric;
+    value.query = QString::fromLatin1(query);
+    value.writeTemplate = QString::fromLatin1(writeTemplate);
+    value.unit = QString::fromLatin1(unit);
+    value.minimum = minimum;
+    value.maximum = maximum;
+    value.decimals = decimals;
+    value.defaultValue = defaultValue;
+    value.readback = !value.query.isEmpty();
+    return value;
+}
+
+QpmInstrumentProfile::Action toggle(const char *id, const char *label, const char *query, const char *writeTemplate)
+{
+    QpmInstrumentProfile::Action value;
+    value.id = QString::fromLatin1(id);
+    value.label = QString::fromLatin1(label);
+    value.kind = QpmInstrumentProfile::ControlKind::Toggle;
+    value.query = QString::fromLatin1(query);
+    value.writeTemplate = QString::fromLatin1(writeTemplate);
+    return value;
+}
+
+QpmInstrumentProfile::Action action(const char *id, const char *label, const char *command)
+{
+    QpmInstrumentProfile::Action value;
+    value.id = QString::fromLatin1(id);
+    value.label = QString::fromLatin1(label);
+    value.kind = QpmInstrumentProfile::ControlKind::Action;
+    value.writeTemplate = QString::fromLatin1(command);
+    value.readback = false;
+    return value;
+}
+
+QpmInstrumentProfile::Capability capability(const char *id, const char *label, const char *category, std::initializer_list<const char *> actions)
+{
+    QpmInstrumentProfile::Capability value;
+    value.id = QString::fromLatin1(id);
+    value.label = QString::fromLatin1(label);
+    value.category = QString::fromLatin1(category);
+    for (const char *actionId : actions) value.actionIds.push_back(QString::fromLatin1(actionId));
+    return value;
+}
+}
+
+const QpmInstrumentProfile::Action *QpmInstrumentProfile::action(const QString &actionId) const
+{
+    for (const Action &candidate : actions)
+        if (candidate.id.compare(actionId, Qt::CaseInsensitive) == 0) return &candidate;
+    return nullptr;
+}
+
+const QpmInstrumentProfile::Capability *QpmInstrumentProfile::capability(const QString &capabilityId) const
+{
+    for (const Capability &candidate : capabilities)
+        if (candidate.id.compare(capabilityId, Qt::CaseInsensitive) == 0) return &candidate;
+    return nullptr;
+}
+
+bool QpmInstrumentProfile::supportsCapability(const QString &capabilityId) const
+{
+    return capability(capabilityId) != nullptr;
+}
+
+QStringList QpmInstrumentProfile::capabilityIds() const
+{
+    QStringList result;
+    for (const Capability &candidate : capabilities) result.push_back(candidate.id);
+    return result;
+}
+
+QList<QpmInstrumentProfile> QpmInstrumentProfile::builtIns()
+{
+    QList<QpmInstrumentProfile> result;
+
+    QpmInstrumentProfile dmm;
+    dmm.id = QStringLiteral("dmm");
+    dmm.displayName = QStringLiteral("Generic SCPI Digital Multimeter");
+    dmm.description = QStringLiteral("Starter profile using common SCPI measurement commands. Verify the command dialect against the instrument programming manual.");
+    dmm.manufacturer = QStringLiteral("Generic");
+    dmm.model = QStringLiteral("SCPI DMM");
+    dmm.family = Family::DigitalMultimeter;
+    dmm.actions = {
+        measurement("voltage-dc", "DC voltage", "MEAS:VOLT:DC?", "V"),
+        measurement("current-dc", "DC current", "MEAS:CURR:DC?", "A"),
+        measurement("resistance", "Resistance", "MEAS:RES?", "Ohm"),
+        measurement("frequency", "Frequency", "MEAS:FREQ?", "Hz")
+    };
+    dmm.capabilities = {
+        capability("measure.dc-voltage", "DC voltage measurement", "measurement", {"voltage-dc"}),
+        capability("measure.dc-current", "DC current measurement", "measurement", {"current-dc"}),
+        capability("measure.resistance", "Resistance measurement", "measurement", {"resistance"}),
+        capability("measure.frequency", "Frequency measurement", "measurement", {"frequency"})
+    };
+    result.push_back(dmm);
+
+    QpmInstrumentProfile psu;
+    psu.id = QStringLiteral("power-supply");
+    psu.displayName = QStringLiteral("Generic SCPI Power Supply");
+    psu.description = QStringLiteral("Starter profile for programmable DC supplies. Output/channel selection syntax varies between vendors.");
+    psu.manufacturer = QStringLiteral("Generic");
+    psu.model = QStringLiteral("SCPI PSU");
+    psu.family = Family::PowerSupply;
+    psu.actions = {
+        numeric("voltage", "Voltage setpoint", "VOLT?", "VOLT %1", "V", 0.0, 1000.0, 6, 5.0),
+        numeric("current", "Current limit", "CURR?", "CURR %1", "A", 0.0, 1000.0, 6, 1.0),
+        toggle("output", "Output", "OUTP?", "OUTP %1"),
+        measurement("measured-voltage", "Measured voltage", "MEAS:VOLT?", "V"),
+        measurement("measured-current", "Measured current", "MEAS:CURR?", "A")
+    };
+    psu.capabilities = {
+        capability("power.voltage-set", "Voltage setpoint", "power", {"voltage"}),
+        capability("power.current-limit", "Current limit", "power", {"current"}),
+        capability("power.output", "Output enable", "power", {"output"}),
+        capability("measure.dc-voltage", "DC voltage measurement", "measurement", {"measured-voltage"}),
+        capability("measure.dc-current", "DC current measurement", "measurement", {"measured-current"})
+    };
+    result.push_back(psu);
+
+    QpmInstrumentProfile generator;
+    generator.id = QStringLiteral("signal-generator");
+    generator.displayName = QStringLiteral("Generic SCPI Signal Generator");
+    generator.description = QStringLiteral("Starter profile for a single-channel function/arbitrary generator. Adapt source/channel prefixes when required by the instrument.");
+    generator.manufacturer = QStringLiteral("Generic");
+    generator.model = QStringLiteral("SCPI Generator");
+    generator.family = Family::SignalGenerator;
+    generator.actions = {
+        numeric("frequency", "Frequency", "FREQ?", "FREQ %1", "Hz", 0.0, 1.0e12, 6, 1000.0),
+        numeric("amplitude", "Amplitude", "VOLT?", "VOLT %1", "Vpp", 0.0, 1000.0, 6, 1.0),
+        numeric("offset", "DC offset", "VOLT:OFFS?", "VOLT:OFFS %1", "V", -1000.0, 1000.0, 6, 0.0),
+        toggle("output", "Output", "OUTP?", "OUTP %1")
+    };
+    generator.capabilities = {
+        capability("source.frequency", "Frequency control", "source", {"frequency"}),
+        capability("source.amplitude", "Amplitude control", "source", {"amplitude"}),
+        capability("source.offset", "DC offset control", "source", {"offset"}),
+        capability("source.output", "Output enable", "source", {"output"})
+    };
+    result.push_back(generator);
+
+    QpmInstrumentProfile scope;
+    scope.id = QStringLiteral("oscilloscope");
+    scope.displayName = QStringLiteral("Generic SCPI Oscilloscope");
+    scope.description = QStringLiteral("Starter profile for common oscilloscope controls. Measurement and timebase command trees are vendor dependent and should be reviewed.");
+    scope.manufacturer = QStringLiteral("Generic");
+    scope.model = QStringLiteral("SCPI Oscilloscope");
+    scope.family = Family::Oscilloscope;
+    scope.actions = {
+        action("run", "Run", "RUN"),
+        action("stop", "Stop", "STOP"),
+        action("single", "Single acquisition", "SING"),
+        numeric("time-scale", "Time scale", "TIM:SCAL?", "TIM:SCAL %1", "s/div", 1.0e-12, 1000.0, 9, 1.0e-3),
+        numeric("channel1-scale", "CH1 vertical scale", "CHAN1:SCAL?", "CHAN1:SCAL %1", "V/div", 1.0e-9, 1000.0, 9, 1.0),
+        measurement("frequency", "Frequency", "MEAS:FREQ?", "Hz"),
+        measurement("vpp", "Peak-to-peak", "MEAS:VPP?", "V")
+    };
+    scope.capabilities = {
+        capability("scope.run", "Run acquisition", "oscilloscope", {"run"}),
+        capability("scope.stop", "Stop acquisition", "oscilloscope", {"stop"}),
+        capability("scope.single", "Single acquisition", "oscilloscope", {"single"}),
+        capability("scope.time-scale", "Timebase control", "oscilloscope", {"time-scale"}),
+        capability("scope.vertical-scale", "Vertical scale control", "oscilloscope", {"channel1-scale"}),
+        capability("measure.frequency", "Frequency measurement", "measurement", {"frequency"}),
+        capability("measure.vpp", "Peak-to-peak measurement", "measurement", {"vpp"})
+    };
+    result.push_back(scope);
+
+    return result;
+}
+
+QpmInstrumentProfile QpmInstrumentProfile::builtInById(const QString &profileId)
+{
+    for (const QpmInstrumentProfile &profile : builtIns())
+        if (profile.id.compare(profileId.trimmed(), Qt::CaseInsensitive) == 0) return profile;
+    return builtIns().value(0);
+}
+
+bool QpmInstrumentProfile::loadJsonFile(const QString &filePath, QpmInstrumentProfile *profile, QString *error)
+{
+    if (!profile)
+    {
+        if (error) *error = QStringLiteral("Output profile pointer is null.");
+        return false;
+    }
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (error) *error = file.errorString();
+        return false;
+    }
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+    {
+        if (error) *error = parseError.errorString();
+        return false;
+    }
+
+    const QJsonObject root = document.object();
+    QpmInstrumentProfile loaded;
+    loaded.id = root.value(QStringLiteral("id")).toString().trimmed();
+    loaded.displayName = root.value(QStringLiteral("displayName")).toString().trimmed();
+    loaded.description = root.value(QStringLiteral("description")).toString();
+    loaded.manufacturer = root.value(QStringLiteral("manufacturer")).toString().trimmed();
+    loaded.model = root.value(QStringLiteral("model")).toString().trimmed();
+    loaded.documentationUrl = root.value(QStringLiteral("documentationUrl")).toString().trimmed();
+    loaded.family = familyFromName(root.value(QStringLiteral("family")).toString());
+    if (loaded.id.isEmpty() || loaded.displayName.isEmpty())
+    {
+        if (error) *error = QStringLiteral("Profile requires non-empty id and displayName fields.");
+        return false;
+    }
+
+    const QJsonArray array = root.value(QStringLiteral("actions")).toArray();
+    for (const QJsonValue &entry : array)
+    {
+        if (!entry.isObject()) continue;
+        const QJsonObject object = entry.toObject();
+        Action value;
+        value.id = object.value(QStringLiteral("id")).toString().trimmed();
+        value.label = object.value(QStringLiteral("label")).toString().trimmed();
+        value.kind = controlKindFromName(object.value(QStringLiteral("kind")).toString());
+        value.query = object.value(QStringLiteral("query")).toString();
+        value.writeTemplate = object.value(QStringLiteral("write")).toString();
+        value.unit = object.value(QStringLiteral("unit")).toString();
+        value.minimum = object.value(QStringLiteral("minimum")).toDouble(-1.0e12);
+        value.maximum = object.value(QStringLiteral("maximum")).toDouble(1.0e12);
+        value.decimals = object.value(QStringLiteral("decimals")).toInt(6);
+        value.defaultValue = object.value(QStringLiteral("defaultValue")).toDouble(0.0);
+        value.readback = object.contains(QStringLiteral("readback")) ? object.value(QStringLiteral("readback")).toBool(true) : !value.query.isEmpty();
+        if (!value.id.isEmpty() && !value.label.isEmpty()) loaded.actions.push_back(value);
+    }
+    if (loaded.actions.isEmpty())
+    {
+        if (error) *error = QStringLiteral("Profile does not contain any valid actions.");
+        return false;
+    }
+
+    const QJsonArray capabilityArray = root.value(QStringLiteral("capabilities")).toArray();
+    for (const QJsonValue &entry : capabilityArray)
+    {
+        if (!entry.isObject()) continue;
+        const QJsonObject object = entry.toObject();
+        Capability capabilityValue;
+        capabilityValue.id = object.value(QStringLiteral("id")).toString().trimmed();
+        capabilityValue.label = object.value(QStringLiteral("label")).toString().trimmed();
+        capabilityValue.category = object.value(QStringLiteral("category")).toString(QStringLiteral("general")).trimmed();
+        const QJsonArray actionsArray = object.value(QStringLiteral("actions")).toArray();
+        for (const QJsonValue &actionId : actionsArray)
+        {
+            const QString value = actionId.toString().trimmed();
+            if (!value.isEmpty()) capabilityValue.actionIds.push_back(value);
+        }
+        if (!capabilityValue.id.isEmpty() && !capabilityValue.label.isEmpty()) loaded.capabilities.push_back(capabilityValue);
+    }
+    if (loaded.capabilities.isEmpty())
+    {
+        auto addCapability = [&loaded](const char *capabilityId, const char *label, const char *category, const char *actionId) {
+            const QString actionName = QString::fromLatin1(actionId);
+            if (!loaded.action(actionName)) return;
+            Capability value;
+            value.id = QString::fromLatin1(capabilityId);
+            value.label = QString::fromLatin1(label);
+            value.category = QString::fromLatin1(category);
+            value.actionIds = {actionName};
+            loaded.capabilities.push_back(value);
+        };
+        addCapability("measure.dc-voltage", "DC voltage measurement", "measurement", loaded.action(QStringLiteral("voltage-dc")) ? "voltage-dc" : "measured-voltage");
+        addCapability("measure.dc-current", "DC current measurement", "measurement", loaded.action(QStringLiteral("current-dc")) ? "current-dc" : "measured-current");
+        addCapability("measure.resistance", "Resistance measurement", "measurement", "resistance");
+        if (loaded.family == Family::SignalGenerator) addCapability("source.frequency", "Frequency control", "source", "frequency");
+        else addCapability("measure.frequency", "Frequency measurement", "measurement", "frequency");
+        addCapability("power.voltage-set", "Voltage setpoint", "power", "voltage");
+        addCapability("power.current-limit", "Current limit", "power", "current");
+        if (loaded.family == Family::SignalGenerator) addCapability("source.output", "Output enable", "source", "output");
+        else addCapability("power.output", "Output enable", "power", "output");
+        addCapability("source.amplitude", "Amplitude control", "source", "amplitude");
+        addCapability("source.offset", "DC offset control", "source", "offset");
+        addCapability("scope.run", "Run acquisition", "oscilloscope", "run");
+        addCapability("scope.stop", "Stop acquisition", "oscilloscope", "stop");
+        addCapability("scope.single", "Single acquisition", "oscilloscope", "single");
+        addCapability("scope.time-scale", "Timebase control", "oscilloscope", "time-scale");
+        addCapability("scope.vertical-scale", "Vertical scale control", "oscilloscope", "channel1-scale");
+        addCapability("measure.vpp", "Peak-to-peak measurement", "measurement", "vpp");
+    }
+    *profile = loaded;
+    return true;
+}
+
+bool QpmInstrumentProfile::saveJsonFile(const QString &filePath, QString *error) const
+{
+    QJsonObject root;
+    root.insert(QStringLiteral("schemaVersion"), 1);
+    root.insert(QStringLiteral("id"), id);
+    root.insert(QStringLiteral("displayName"), displayName);
+    root.insert(QStringLiteral("description"), description);
+    if (!manufacturer.isEmpty()) root.insert(QStringLiteral("manufacturer"), manufacturer);
+    if (!model.isEmpty()) root.insert(QStringLiteral("model"), model);
+    if (!documentationUrl.isEmpty()) root.insert(QStringLiteral("documentationUrl"), documentationUrl);
+    root.insert(QStringLiteral("family"), familyName(family));
+    QJsonArray array;
+    for (const Action &value : actions)
+    {
+        QJsonObject object;
+        object.insert(QStringLiteral("id"), value.id);
+        object.insert(QStringLiteral("label"), value.label);
+        object.insert(QStringLiteral("kind"), controlKindName(value.kind));
+        if (!value.query.isEmpty()) object.insert(QStringLiteral("query"), value.query);
+        if (!value.writeTemplate.isEmpty()) object.insert(QStringLiteral("write"), value.writeTemplate);
+        if (!value.unit.isEmpty()) object.insert(QStringLiteral("unit"), value.unit);
+        object.insert(QStringLiteral("minimum"), value.minimum);
+        object.insert(QStringLiteral("maximum"), value.maximum);
+        object.insert(QStringLiteral("decimals"), value.decimals);
+        object.insert(QStringLiteral("defaultValue"), value.defaultValue);
+        object.insert(QStringLiteral("readback"), value.readback);
+        array.append(object);
+    }
+    root.insert(QStringLiteral("actions"), array);
+
+    QJsonArray capabilityArray;
+    for (const Capability &value : capabilities)
+    {
+        QJsonObject object;
+        object.insert(QStringLiteral("id"), value.id);
+        object.insert(QStringLiteral("label"), value.label);
+        object.insert(QStringLiteral("category"), value.category);
+        QJsonArray actionIds;
+        for (const QString &actionId : value.actionIds) actionIds.append(actionId);
+        object.insert(QStringLiteral("actions"), actionIds);
+        capabilityArray.append(object);
+    }
+    root.insert(QStringLiteral("capabilities"), capabilityArray);
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        if (error) *error = file.errorString();
+        return false;
+    }
+    if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0)
+    {
+        if (error) *error = file.errorString();
+        return false;
+    }
+    return true;
+}
+`;
+}
+function qtInstrumentDriverRegistryHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_instrument_profile.h"
+
+#include <QHash>
+#include <QObject>
+#include <QString>
+#include <QStringList>
+
+class QpmInstrumentDriverRegistry final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QString profileDirectory READ profileDirectory WRITE setProfileDirectory NOTIFY profileDirectoryChanged)
+    Q_PROPERTY(int driverCount READ driverCount NOTIFY registryChanged)
+
+public:
+    explicit QpmInstrumentDriverRegistry(QObject *parent = nullptr);
+
+    QString profileDirectory() const { return m_profileDirectory; }
+    int driverCount() const noexcept { return m_drivers.size(); }
+    QStringList driverIds() const;
+    QStringList capabilityIds() const;
+    bool containsDriver(const QString &driverId) const;
+    QpmInstrumentProfile profile(const QString &driverId) const;
+    QString profilePath(const QString &driverId) const;
+    QString driverIdForPath(const QString &profilePath) const;
+    QStringList capabilitiesForDriver(const QString &driverId) const;
+    QStringList actionIdsForCapability(const QString &driverId, const QString &capabilityId) const;
+    QStringList driversForCapability(const QString &capabilityId) const;
+    QString capabilityLabel(const QString &capabilityId) const;
+    QString capabilityCategory(const QString &capabilityId) const;
+    Q_INVOKABLE bool supports(const QString &driverId, const QString &capabilityId) const;
+
+public slots:
+    void setProfileDirectory(const QString &directory);
+    bool reload();
+
+signals:
+    void profileDirectoryChanged(const QString &directory);
+    void registryChanged();
+    void errorOccurred(const QString &message);
+
+private:
+    struct DriverEntry
+    {
+        QpmInstrumentProfile profile;
+        QString path;
+    };
+
+    static QString key(const QString &value);
+    void insertDriver(const QpmInstrumentProfile &profile, const QString &path);
+    void rebuildCapabilityIndex();
+
+    QString m_profileDirectory = QStringLiteral("instrument_profiles");
+    QHash<QString, DriverEntry> m_drivers;
+    QHash<QString, QStringList> m_capabilityDrivers;
+    QHash<QString, QString> m_capabilityLabels;
+    QHash<QString, QString> m_capabilityCategories;
+};
+`;
+}
+function qtInstrumentDriverRegistrySource() {
+    return `#include "instrumentation/qpm_instrument_driver_registry.h"
+
+#include <QDir>
+#include <QFileInfo>
+#include <algorithm>
+
+QpmInstrumentDriverRegistry::QpmInstrumentDriverRegistry(QObject *parent)
+    : QObject(parent)
+{
+    reload();
+}
+
+QString QpmInstrumentDriverRegistry::key(const QString &value)
+{
+    return value.trimmed().toLower();
+}
+
+QStringList QpmInstrumentDriverRegistry::driverIds() const
+{
+    QStringList result;
+    for (const DriverEntry &entry : m_drivers) result.push_back(entry.profile.id);
+    std::sort(result.begin(), result.end(), [](const QString &a, const QString &b) { return a.compare(b, Qt::CaseInsensitive) < 0; });
+    return result;
+}
+
+QStringList QpmInstrumentDriverRegistry::capabilityIds() const
+{
+    QStringList result = m_capabilityDrivers.keys();
+    std::sort(result.begin(), result.end(), [](const QString &a, const QString &b) { return a.compare(b, Qt::CaseInsensitive) < 0; });
+    return result;
+}
+
+bool QpmInstrumentDriverRegistry::containsDriver(const QString &driverId) const
+{
+    return m_drivers.contains(key(driverId));
+}
+
+QpmInstrumentProfile QpmInstrumentDriverRegistry::profile(const QString &driverId) const
+{
+    return m_drivers.value(key(driverId)).profile;
+}
+
+QString QpmInstrumentDriverRegistry::profilePath(const QString &driverId) const
+{
+    return m_drivers.value(key(driverId)).path;
+}
+
+QString QpmInstrumentDriverRegistry::driverIdForPath(const QString &profilePath) const
+{
+    const QString requested = QDir::cleanPath(profilePath);
+    for (const DriverEntry &entry : m_drivers)
+        if (!entry.path.isEmpty() && QDir::cleanPath(entry.path).compare(requested, Qt::CaseInsensitive) == 0) return entry.profile.id;
+    return {};
+}
+
+QStringList QpmInstrumentDriverRegistry::capabilitiesForDriver(const QString &driverId) const
+{
+    const DriverEntry entry = m_drivers.value(key(driverId));
+    QStringList result = entry.profile.capabilityIds();
+    std::sort(result.begin(), result.end(), [](const QString &a, const QString &b) { return a.compare(b, Qt::CaseInsensitive) < 0; });
+    return result;
+}
+
+QStringList QpmInstrumentDriverRegistry::actionIdsForCapability(const QString &driverId, const QString &capabilityId) const
+{
+    const auto it = m_drivers.constFind(key(driverId));
+    if (it == m_drivers.constEnd()) return {};
+    const QpmInstrumentProfile::Capability *capability = it->profile.capability(capabilityId);
+    return capability ? capability->actionIds : QStringList{};
+}
+
+QStringList QpmInstrumentDriverRegistry::driversForCapability(const QString &capabilityId) const
+{
+    return m_capabilityDrivers.value(key(capabilityId));
+}
+
+QString QpmInstrumentDriverRegistry::capabilityLabel(const QString &capabilityId) const
+{
+    return m_capabilityLabels.value(key(capabilityId), capabilityId);
+}
+
+QString QpmInstrumentDriverRegistry::capabilityCategory(const QString &capabilityId) const
+{
+    return m_capabilityCategories.value(key(capabilityId), QStringLiteral("general"));
+}
+
+bool QpmInstrumentDriverRegistry::supports(const QString &driverId, const QString &capabilityId) const
+{
+    const auto it = m_drivers.constFind(key(driverId));
+    return it != m_drivers.constEnd() && it->profile.supportsCapability(capabilityId);
+}
+
+void QpmInstrumentDriverRegistry::setProfileDirectory(const QString &directory)
+{
+    const QString normalized = directory.trimmed().isEmpty() ? QStringLiteral("instrument_profiles") : QDir::cleanPath(directory.trimmed());
+    if (m_profileDirectory == normalized) return;
+    m_profileDirectory = normalized;
+    emit profileDirectoryChanged(m_profileDirectory);
+    reload();
+}
+
+bool QpmInstrumentDriverRegistry::reload()
+{
+    m_drivers.clear();
+    for (const QpmInstrumentProfile &profile : QpmInstrumentProfile::builtIns()) insertDriver(profile, QStringLiteral("built-in:%1").arg(profile.id));
+
+    bool allValid = true;
+    const QDir directory(m_profileDirectory);
+    const QFileInfoList files = directory.entryInfoList({QStringLiteral("*.json")}, QDir::Files | QDir::Readable, QDir::Name);
+    for (const QFileInfo &file : files)
+    {
+        QpmInstrumentProfile profile;
+        QString error;
+        if (!QpmInstrumentProfile::loadJsonFile(file.absoluteFilePath(), &profile, &error))
+        {
+            allValid = false;
+            emit errorOccurred(QStringLiteral("%1: %2").arg(file.fileName(), error));
+            continue;
+        }
+        insertDriver(profile, file.absoluteFilePath());
+    }
+    rebuildCapabilityIndex();
+    emit registryChanged();
+    return allValid;
+}
+
+void QpmInstrumentDriverRegistry::insertDriver(const QpmInstrumentProfile &profile, const QString &path)
+{
+    if (profile.id.trimmed().isEmpty()) return;
+    m_drivers.insert(key(profile.id), DriverEntry{profile, path});
+}
+
+void QpmInstrumentDriverRegistry::rebuildCapabilityIndex()
+{
+    m_capabilityDrivers.clear();
+    m_capabilityLabels.clear();
+    m_capabilityCategories.clear();
+    for (const DriverEntry &entry : m_drivers)
+    {
+        for (const QpmInstrumentProfile::Capability &capability : entry.profile.capabilities)
+        {
+            const QString capabilityKey = key(capability.id);
+            if (capabilityKey.isEmpty()) continue;
+            QStringList &drivers = m_capabilityDrivers[capabilityKey];
+            if (!drivers.contains(entry.profile.id, Qt::CaseInsensitive)) drivers.push_back(entry.profile.id);
+            if (!capability.label.isEmpty()) m_capabilityLabels.insert(capabilityKey, capability.label);
+            if (!capability.category.isEmpty()) m_capabilityCategories.insert(capabilityKey, capability.category);
+        }
+    }
+    for (auto it = m_capabilityDrivers.begin(); it != m_capabilityDrivers.end(); ++it)
+        std::sort(it.value().begin(), it.value().end(), [](const QString &a, const QString &b) { return a.compare(b, Qt::CaseInsensitive) < 0; });
+}
+`;
+}
+function qtInstrumentCapabilitiesControlHeader() {
+    return `#pragma once
+
+#include <QWidget>
+
+class QLabel;
+class QLineEdit;
+class QComboBox;
+class QTableWidget;
+class QpmInstrumentDriverRegistry;
+class QpmInstrumentManager;
+
+class InstrumentCapabilitiesControl final : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+    Q_PROPERTY(QString driverId READ driverId WRITE setDriverId NOTIFY driverIdChanged)
+
+public:
+    explicit InstrumentCapabilitiesControl(QWidget *parent = nullptr);
+
+    QString title() const;
+    QString driverId() const { return m_driverId; }
+
+public slots:
+    void setTitle(const QString &title);
+    void setDriverId(const QString &driverId);
+    void setRegistry(QpmInstrumentDriverRegistry *registry);
+    void setInstrumentManager(QpmInstrumentManager *manager);
+    void refresh();
+
+signals:
+    void driverIdChanged(const QString &driverId);
+    void capabilityActivated(const QString &capabilityId);
+
+private:
+    void rebuildDriverList();
+
+    QpmInstrumentDriverRegistry *m_registry = nullptr;
+    QpmInstrumentManager *m_manager = nullptr;
+    QString m_driverId;
+    QLabel *m_titleLabel = nullptr;
+    QLabel *m_context = nullptr;
+    QComboBox *m_driver = nullptr;
+    QLineEdit *m_filter = nullptr;
+    QTableWidget *m_table = nullptr;
+};
+`;
+}
+function qtInstrumentCapabilitiesControlSource() {
+    return `#include "widgets/instrument_capabilities_control.h"
+
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#include "instrumentation/qpm_instrument_driver_registry.h"
+#if __has_include("instrumentation/qpm_instrument_manager.h")
+#include "instrumentation/qpm_instrument_manager.h"
+#define QPM_HAS_INSTRUMENT_MANAGER 1
+#else
+#define QPM_HAS_INSTRUMENT_MANAGER 0
+#endif
+#endif
+
+#include <QAbstractItemView>
+#include <QComboBox>
+#include <QFont>
+#include <QHeaderView>
+#include <QLabel>
+#include <QLineEdit>
+#include <QTableWidget>
+#include <QStringList>
+#include <QVBoxLayout>
+
+InstrumentCapabilitiesControl::InstrumentCapabilitiesControl(QWidget *parent)
+    : QWidget(parent)
+{
+    auto *layout = new QVBoxLayout(this);
+    m_titleLabel = new QLabel(QStringLiteral("Instrument Capabilities"), this);
+    QFont titleFont = m_titleLabel->font(); titleFont.setBold(true); m_titleLabel->setFont(titleFont);
+    m_context = new QLabel(QStringLiteral("Select a driver profile to inspect model-independent capabilities."), this);
+    m_context->setWordWrap(true);
+    m_driver = new QComboBox(this);
+    m_filter = new QLineEdit(this);
+    m_filter->setPlaceholderText(QStringLiteral("Filter capability ID, label or category..."));
+    m_table = new QTableWidget(0, 4, this);
+    m_table->setHorizontalHeaderLabels({QStringLiteral("Capability"), QStringLiteral("Label"), QStringLiteral("Category"), QStringLiteral("Actions")});
+    m_table->horizontalHeader()->setStretchLastSection(true);
+    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    layout->addWidget(m_titleLabel);
+    layout->addWidget(m_context);
+    layout->addWidget(m_driver);
+    layout->addWidget(m_filter);
+    layout->addWidget(m_table, 1);
+
+    connect(m_driver, &QComboBox::currentTextChanged, this, [this](const QString &value) { setDriverId(value); });
+    connect(m_filter, &QLineEdit::textChanged, this, [this](const QString &) { refresh(); });
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        if (auto *item = m_table->item(row, 0)) emit capabilityActivated(item->text());
+    });
+
+#ifdef QPM_DESIGNER_PLUGIN_BUILD
+    m_driver->addItem(QStringLiteral("power-supply"));
+    m_driverId = QStringLiteral("power-supply");
+    m_table->setRowCount(3);
+    const QStringList preview = {QStringLiteral("power.voltage-set"), QStringLiteral("power.output"), QStringLiteral("measure.dc-voltage")};
+    for (int row = 0; row < preview.size(); ++row) m_table->setItem(row, 0, new QTableWidgetItem(preview.at(row)));
+#endif
+}
+
+QString InstrumentCapabilitiesControl::title() const { return m_titleLabel ? m_titleLabel->text() : QString(); }
+void InstrumentCapabilitiesControl::setTitle(const QString &title) { if (m_titleLabel) m_titleLabel->setText(title); }
+
+void InstrumentCapabilitiesControl::setDriverId(const QString &driverId)
+{
+    const QString normalized = driverId.trimmed();
+    if (m_driverId == normalized) return;
+    m_driverId = normalized;
+    if (m_driver && m_driver->currentText() != m_driverId) m_driver->setCurrentText(m_driverId);
+    emit driverIdChanged(m_driverId);
+    refresh();
+}
+
+void InstrumentCapabilitiesControl::setRegistry(QpmInstrumentDriverRegistry *registry)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_registry == registry) return;
+    if (m_registry) disconnect(m_registry, nullptr, this, nullptr);
+    m_registry = registry;
+    if (m_registry) connect(m_registry, &QpmInstrumentDriverRegistry::registryChanged, this, [this]() { rebuildDriverList(); refresh(); });
+    rebuildDriverList();
+    refresh();
+#else
+    Q_UNUSED(registry);
+#endif
+}
+
+void InstrumentCapabilitiesControl::setInstrumentManager(QpmInstrumentManager *manager)
+{
+#if !defined(QPM_DESIGNER_PLUGIN_BUILD) && QPM_HAS_INSTRUMENT_MANAGER
+    if (m_manager == manager) return;
+    if (m_manager) disconnect(m_manager, nullptr, this, nullptr);
+    m_manager = manager;
+    if (!m_manager) return;
+    setRegistry(m_manager->driverRegistry());
+    connect(m_manager, &QpmInstrumentManager::activeInstrumentChanged, this, [this](const QString &) {
+        if (!m_manager) return;
+        setDriverId(m_manager->appliedProfileId(m_manager->activeInstrument()));
+    });
+    connect(m_manager, &QpmInstrumentManager::profileApplied, this, [this](const QString &instrumentName, const QString &profileId, const QString &) {
+        if (m_manager && instrumentName == m_manager->activeInstrument()) setDriverId(profileId);
+    });
+    setDriverId(m_manager->appliedProfileId(m_manager->activeInstrument()));
+#else
+    Q_UNUSED(manager);
+#endif
+}
+
+void InstrumentCapabilitiesControl::rebuildDriverList()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_driver) return;
+    const QString current = m_driverId;
+    m_driver->blockSignals(true);
+    m_driver->clear();
+    if (m_registry) m_driver->addItems(m_registry->driverIds());
+    if (!current.isEmpty()) m_driver->setCurrentText(current);
+    m_driver->blockSignals(false);
+#endif
+}
+
+void InstrumentCapabilitiesControl::refresh()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_table) return;
+    m_table->setRowCount(0);
+    if (!m_registry || m_driverId.isEmpty())
+    {
+        if (m_context) m_context->setText(QStringLiteral("No applied/selected driver profile."));
+        return;
+    }
+    const QpmInstrumentProfile profile = m_registry->profile(m_driverId);
+    if (m_context) m_context->setText(QStringLiteral("%1 · %2 %3").arg(profile.displayName, profile.manufacturer, profile.model).trimmed());
+    const QString filter = m_filter ? m_filter->text().trimmed() : QString();
+    for (const QpmInstrumentProfile::Capability &capability : profile.capabilities)
+    {
+        const QString hay = QStringLiteral("%1 %2 %3").arg(capability.id, capability.label, capability.category);
+        if (!filter.isEmpty() && !hay.contains(filter, Qt::CaseInsensitive)) continue;
+        const int row = m_table->rowCount(); m_table->insertRow(row);
+        m_table->setItem(row, 0, new QTableWidgetItem(capability.id));
+        m_table->setItem(row, 1, new QTableWidgetItem(capability.label));
+        m_table->setItem(row, 2, new QTableWidgetItem(capability.category));
+        m_table->setItem(row, 3, new QTableWidgetItem(capability.actionIds.join(QStringLiteral(", "))));
+    }
+#else
+    // Keep the static preview produced by the constructor.
+#endif
+}
+`;
+}
+function qtProfiledInstrumentControlHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_instrument_profile.h"
+
+#include <QHash>
+#include <QWidget>
+#include <QtGlobal>
+
+class QCheckBox;
+class QComboBox;
+class QDoubleSpinBox;
+class QFormLayout;
+class QLabel;
+class QPushButton;
+class QpmScpiInstrument;
+class QpmInstrumentManager;
+
+class ProfiledInstrumentControl final : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+    Q_PROPERTY(QString profileId READ profileId WRITE setProfileId NOTIFY profileChanged)
+
+public:
+    explicit ProfiledInstrumentControl(QWidget *parent = nullptr);
+
+    QString title() const;
+    QString profileId() const { return m_profile.id; }
+    QpmScpiInstrument *instrument() const noexcept { return m_instrument; }
+    QpmInstrumentProfile profile() const { return m_profile; }
+
+public slots:
+    void setTitle(const QString &title);
+    void setProfileId(const QString &profileId);
+    void setProfile(const QpmInstrumentProfile &profile);
+    bool loadProfileFile(const QString &filePath);
+    void setInstrument(QpmScpiInstrument *instrument);
+    void setInstrumentManager(QpmInstrumentManager *manager);
+    void applyProfileFile(const QString &filePath) { loadProfileFile(filePath); }
+    void refreshAll();
+
+signals:
+    void profileChanged(const QString &profileId);
+    void actionTriggered(const QString &actionId, quint64 requestId);
+    void actionResult(const QString &actionId, const QString &response, bool success);
+    void errorOccurred(const QString &message);
+
+private slots:
+    void applyAction(const QString &actionId);
+    void queryAction(const QString &actionId);
+    void onRequestFinished(quint64 requestId, const QString &command, const QString &response, bool success, bool timedOut);
+    void updateInstrumentState();
+
+private:
+    void rebuildUi();
+    void updateReadback(const QString &actionId, const QString &response);
+    QString formattedValue(const QpmInstrumentProfile::Action &action, const QString &response) const;
+
+    QpmScpiInstrument *m_instrument = nullptr;
+    QpmInstrumentManager *m_manager = nullptr;
+    QpmInstrumentProfile m_profile;
+    QLabel *m_titleLabel = nullptr;
+    QLabel *m_descriptionLabel = nullptr;
+    QLabel *m_identityLabel = nullptr;
+    QLabel *m_stateLabel = nullptr;
+    QComboBox *m_profileCombo = nullptr;
+    QFormLayout *m_form = nullptr;
+    QPushButton *m_refresh = nullptr;
+    QHash<QString, QWidget *> m_editors;
+    QHash<QString, QLabel *> m_readbacks;
+    QHash<quint64, QString> m_pendingActions;
+};
+`;
+}
+function qtProfiledInstrumentControlSource() {
+    return `#include "widgets/profiled_instrument_control.h"
+
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#include "instrumentation/qpm_scpi_instrument.h"
+#if __has_include("instrumentation/qpm_instrument_manager.h")
+#include "instrumentation/qpm_instrument_manager.h"
+#define QPM_HAS_INSTRUMENT_MANAGER 1
+#endif
+#endif
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFileInfo>
+#include <QFormLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
+
+ProfiledInstrumentControl::ProfiledInstrumentControl(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
+    auto *root = new QVBoxLayout(this);
+    m_titleLabel = new QLabel(QStringLiteral("Instrument Control"), this);
+    QFont titleFont = m_titleLabel->font();
+    titleFont.setBold(true);
+    m_titleLabel->setFont(titleFont);
+    root->addWidget(m_titleLabel);
+
+    auto *top = new QHBoxLayout();
+    m_profileCombo = new QComboBox(this);
+    m_profileCombo->addItem(QStringLiteral("Digital Multimeter"), QStringLiteral("dmm"));
+    m_profileCombo->addItem(QStringLiteral("Power Supply"), QStringLiteral("power-supply"));
+    m_profileCombo->addItem(QStringLiteral("Signal Generator"), QStringLiteral("signal-generator"));
+    m_profileCombo->addItem(QStringLiteral("Oscilloscope"), QStringLiteral("oscilloscope"));
+    m_refresh = new QPushButton(QStringLiteral("Refresh"), this);
+    top->addWidget(m_profileCombo, 1);
+    top->addWidget(m_refresh);
+    root->addLayout(top);
+
+    m_descriptionLabel = new QLabel(this);
+    m_descriptionLabel->setWordWrap(true);
+    m_descriptionLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    root->addWidget(m_descriptionLabel);
+
+    auto *status = new QHBoxLayout();
+    m_stateLabel = new QLabel(QStringLiteral("No instrument"), this);
+    m_identityLabel = new QLabel(QStringLiteral("Identity: --"), this);
+    m_identityLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    status->addWidget(m_stateLabel);
+    status->addStretch(1);
+    status->addWidget(m_identityLabel);
+    root->addLayout(status);
+
+    m_form = new QFormLayout();
+    root->addLayout(m_form);
+    root->addStretch(1);
+
+    connect(m_profileCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (index >= 0) setProfileId(m_profileCombo->itemData(index).toString());
+    });
+    connect(m_refresh, &QPushButton::clicked, this, &ProfiledInstrumentControl::refreshAll);
+    setProfileId(QStringLiteral("dmm"));
+}
+
+QString ProfiledInstrumentControl::title() const { return m_titleLabel ? m_titleLabel->text() : QString(); }
+void ProfiledInstrumentControl::setTitle(const QString &title) { if (m_titleLabel) m_titleLabel->setText(title); }
+
+void ProfiledInstrumentControl::setInstrumentManager(QpmInstrumentManager *manager)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#ifdef QPM_HAS_INSTRUMENT_MANAGER
+    if (m_manager == manager) return;
+    if (m_manager) disconnect(m_manager, nullptr, this, nullptr);
+    m_manager = manager;
+    if (!m_manager)
+    {
+        setInstrument(nullptr);
+        return;
+    }
+    const auto syncActive = [this](const QString &name) {
+        if (!m_manager) return;
+        setInstrument(m_manager->instrument(name));
+        const QString applied = m_manager->appliedProfilePath(name);
+        if (!applied.isEmpty()) loadProfileFile(applied);
+    };
+    connect(m_manager, &QpmInstrumentManager::activeInstrumentChanged, this, syncActive);
+    connect(m_manager, &QpmInstrumentManager::profileApplied, this,
+            [this](const QString &name, const QString &, const QString &profilePath) {
+                if (m_manager && name == m_manager->activeInstrument()) loadProfileFile(profilePath);
+            });
+    syncActive(m_manager->activeInstrument());
+#else
+    Q_UNUSED(manager);
+    emit errorOccurred(QStringLiteral("QpmInstrumentManager support is not generated in this project."));
+#endif
+#else
+    Q_UNUSED(manager);
+#endif
+}
+
+void ProfiledInstrumentControl::setProfileId(const QString &profileId)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    setProfile(QpmInstrumentProfile::builtInById(profileId));
+#else
+    QpmInstrumentProfile preview;
+    preview.id = profileId.trimmed().isEmpty() ? QStringLiteral("dmm") : profileId.trimmed();
+    preview.displayName = QStringLiteral("QPM Instrument Profile Preview");
+    preview.description = QStringLiteral("Runtime controls are generated from the selected SCPI instrument profile.");
+    QpmInstrumentProfile::Action measurement;
+    measurement.id = QStringLiteral("measurement"); measurement.label = QStringLiteral("Measurement");
+    measurement.kind = QpmInstrumentProfile::ControlKind::Measurement; measurement.unit = QStringLiteral("V");
+    QpmInstrumentProfile::Action numeric;
+    numeric.id = QStringLiteral("setpoint"); numeric.label = QStringLiteral("Setpoint");
+    numeric.kind = QpmInstrumentProfile::ControlKind::Numeric; numeric.minimum = 0.0; numeric.maximum = 100.0; numeric.defaultValue = 5.0; numeric.unit = QStringLiteral("V");
+    QpmInstrumentProfile::Action toggle;
+    toggle.id = QStringLiteral("output"); toggle.label = QStringLiteral("Output"); toggle.kind = QpmInstrumentProfile::ControlKind::Toggle;
+    preview.actions = { measurement, numeric, toggle };
+    setProfile(preview);
+#endif
+}
+
+void ProfiledInstrumentControl::setProfile(const QpmInstrumentProfile &profile)
+{
+    if (profile.id.isEmpty()) return;
+    m_profile = profile;
+    const int index = m_profileCombo->findData(profile.id);
+    if (index >= 0)
+    {
+        QSignalBlocker blocker(m_profileCombo);
+        m_profileCombo->setCurrentIndex(index);
+    }
+    rebuildUi();
+    emit profileChanged(m_profile.id);
+}
+
+bool ProfiledInstrumentControl::loadProfileFile(const QString &filePath)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    QpmInstrumentProfile loaded;
+    QString error;
+    if (!QpmInstrumentProfile::loadJsonFile(filePath, &loaded, &error))
+    {
+        emit errorOccurred(QStringLiteral("Cannot load profile %1: %2").arg(QFileInfo(filePath).fileName(), error));
+        return false;
+    }
+    setProfile(loaded);
+    return true;
+#else
+    Q_UNUSED(filePath);
+    return false;
+#endif
+}
+
+void ProfiledInstrumentControl::setInstrument(QpmScpiInstrument *instrument)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_instrument == instrument) return;
+    if (m_instrument) disconnect(m_instrument, nullptr, this, nullptr);
+    m_instrument = instrument;
+    if (m_instrument)
+    {
+        connect(m_instrument, &QpmScpiInstrument::requestFinished, this, &ProfiledInstrumentControl::onRequestFinished);
+        connect(m_instrument, &QpmScpiInstrument::connectedChanged, this, [this](bool) { updateInstrumentState(); });
+        connect(m_instrument, &QpmScpiInstrument::identityChanged, this, [this](const QString &) { updateInstrumentState(); });
+        connect(m_instrument, &QpmScpiInstrument::errorOccurred, this, &ProfiledInstrumentControl::errorOccurred);
+    }
+    updateInstrumentState();
+#else
+    Q_UNUSED(instrument);
+#endif
+}
+
+void ProfiledInstrumentControl::rebuildUi()
+{
+    while (m_form->rowCount() > 0) m_form->removeRow(0);
+    m_editors.clear();
+    m_readbacks.clear();
+    m_pendingActions.clear();
+    m_descriptionLabel->setText(m_profile.description);
+
+    for (const QpmInstrumentProfile::Action &action : m_profile.actions)
+    {
+        auto *rowWidget = new QWidget(this);
+        auto *row = new QHBoxLayout(rowWidget);
+        row->setContentsMargins(0, 0, 0, 0);
+
+        if (action.kind == QpmInstrumentProfile::ControlKind::Measurement)
+        {
+            auto *readback = new QLabel(QStringLiteral("--"), rowWidget);
+            readback->setMinimumWidth(90);
+            auto *button = new QPushButton(QStringLiteral("Read"), rowWidget);
+            row->addWidget(readback, 1);
+            row->addWidget(button);
+            m_readbacks.insert(action.id, readback);
+            connect(button, &QPushButton::clicked, this, [this, id = action.id]() { queryAction(id); });
+        }
+        else if (action.kind == QpmInstrumentProfile::ControlKind::Numeric)
+        {
+            auto *editor = new QDoubleSpinBox(rowWidget);
+            editor->setRange(action.minimum, action.maximum);
+            editor->setDecimals(qBound(0, action.decimals, 12));
+            editor->setValue(action.defaultValue);
+            if (!action.unit.isEmpty()) editor->setSuffix(QStringLiteral(" ") + action.unit);
+            auto *apply = new QPushButton(QStringLiteral("Apply"), rowWidget);
+            row->addWidget(editor, 1);
+            row->addWidget(apply);
+            if (!action.query.isEmpty())
+            {
+                auto *read = new QPushButton(QStringLiteral("Read"), rowWidget);
+                auto *readback = new QLabel(QStringLiteral("--"), rowWidget);
+                row->addWidget(read);
+                row->addWidget(readback);
+                m_readbacks.insert(action.id, readback);
+                connect(read, &QPushButton::clicked, this, [this, id = action.id]() { queryAction(id); });
+            }
+            m_editors.insert(action.id, editor);
+            connect(apply, &QPushButton::clicked, this, [this, id = action.id]() { applyAction(id); });
+        }
+        else if (action.kind == QpmInstrumentProfile::ControlKind::Toggle)
+        {
+            auto *toggle = new QCheckBox(QStringLiteral("Enabled"), rowWidget);
+            auto *read = new QPushButton(QStringLiteral("Read"), rowWidget);
+            auto *readback = new QLabel(QStringLiteral("--"), rowWidget);
+            row->addWidget(toggle, 1);
+            if (!action.query.isEmpty()) { row->addWidget(read); row->addWidget(readback); }
+            m_editors.insert(action.id, toggle);
+            m_readbacks.insert(action.id, readback);
+            connect(toggle, &QCheckBox::toggled, this, [this, id = action.id](bool) { applyAction(id); });
+            connect(read, &QPushButton::clicked, this, [this, id = action.id]() { queryAction(id); });
+        }
+        else
+        {
+            auto *execute = new QPushButton(QStringLiteral("Execute"), rowWidget);
+            row->addWidget(execute);
+            row->addStretch(1);
+            connect(execute, &QPushButton::clicked, this, [this, id = action.id]() { applyAction(id); });
+        }
+        m_form->addRow(action.label, rowWidget);
+    }
+}
+
+void ProfiledInstrumentControl::applyAction(const QString &actionId)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_instrument || !m_instrument->isConnected())
+    {
+        emit errorOccurred(QStringLiteral("Instrument is not connected."));
+        return;
+    }
+    const QpmInstrumentProfile::Action *action = m_profile.action(actionId);
+    if (!action || action->writeTemplate.isEmpty()) return;
+    QString command = action->writeTemplate;
+    if (action->kind == QpmInstrumentProfile::ControlKind::Numeric)
+    {
+        auto *editor = qobject_cast<QDoubleSpinBox *>(m_editors.value(actionId));
+        if (!editor) return;
+        command.replace(QStringLiteral("%1"), QString::number(editor->value(), 'g', 15));
+    }
+    else if (action->kind == QpmInstrumentProfile::ControlKind::Toggle)
+    {
+        auto *toggle = qobject_cast<QCheckBox *>(m_editors.value(actionId));
+        if (!toggle) return;
+        command.replace(QStringLiteral("%1"), toggle->isChecked() ? QStringLiteral("ON") : QStringLiteral("OFF"));
+    }
+    const quint64 requestId = m_instrument->writeCommand(command);
+    if (requestId != 0) emit actionTriggered(actionId, requestId);
+#else
+    Q_UNUSED(actionId);
+#endif
+}
+
+void ProfiledInstrumentControl::queryAction(const QString &actionId)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_instrument || !m_instrument->isConnected())
+    {
+        emit errorOccurred(QStringLiteral("Instrument is not connected."));
+        return;
+    }
+    const QpmInstrumentProfile::Action *action = m_profile.action(actionId);
+    if (!action || action->query.isEmpty()) return;
+    const quint64 requestId = m_instrument->query(action->query);
+    if (requestId != 0)
+    {
+        m_pendingActions.insert(requestId, actionId);
+        emit actionTriggered(actionId, requestId);
+    }
+#else
+    Q_UNUSED(actionId);
+#endif
+}
+
+void ProfiledInstrumentControl::refreshAll()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    for (const QpmInstrumentProfile::Action &action : m_profile.actions)
+        if (!action.query.isEmpty()) queryAction(action.id);
+#endif
+}
+
+void ProfiledInstrumentControl::onRequestFinished(quint64 requestId, const QString &, const QString &response, bool success, bool)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    const QString actionId = m_pendingActions.take(requestId);
+    if (actionId.isEmpty()) return;
+    if (success) updateReadback(actionId, response);
+    emit actionResult(actionId, response, success);
+#else
+    Q_UNUSED(requestId); Q_UNUSED(response); Q_UNUSED(success);
+#endif
+}
+
+void ProfiledInstrumentControl::updateReadback(const QString &actionId, const QString &response)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    const QpmInstrumentProfile::Action *action = m_profile.action(actionId);
+    if (!action) return;
+    if (QLabel *label = m_readbacks.value(actionId)) label->setText(formattedValue(*action, response));
+
+    bool ok = false;
+    const double numericValue = response.trimmed().toDouble(&ok);
+    if (ok)
+    {
+        if (auto *editor = qobject_cast<QDoubleSpinBox *>(m_editors.value(actionId)))
+        {
+            QSignalBlocker blocker(editor);
+            editor->setValue(numericValue);
+        }
+    }
+    if (auto *toggle = qobject_cast<QCheckBox *>(m_editors.value(actionId)))
+    {
+        const QString normalized = response.trimmed().toUpper();
+        const bool enabled = normalized == QStringLiteral("1") || normalized == QStringLiteral("ON") || normalized == QStringLiteral("TRUE");
+        QSignalBlocker blocker(toggle);
+        toggle->setChecked(enabled);
+    }
+#else
+    Q_UNUSED(actionId); Q_UNUSED(response);
+#endif
+}
+
+QString ProfiledInstrumentControl::formattedValue(const QpmInstrumentProfile::Action &action, const QString &response) const
+{
+    bool ok = false;
+    const double value = response.trimmed().toDouble(&ok);
+    if (!ok) return response.trimmed();
+    QString text = QString::number(value, 'f', qBound(0, action.decimals, 12));
+    while (text.contains(QLatin1Char('.')) && text.endsWith(QLatin1Char('0'))) text.chop(1);
+    if (text.endsWith(QLatin1Char('.'))) text.chop(1);
+    if (!action.unit.isEmpty()) text += QStringLiteral(" ") + action.unit;
+    return text;
+}
+
+void ProfiledInstrumentControl::updateInstrumentState()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_instrument)
+    {
+        m_stateLabel->setText(QStringLiteral("No instrument"));
+        m_identityLabel->setText(QStringLiteral("Identity: --"));
+        return;
+    }
+    m_stateLabel->setText(m_instrument->isConnected() ? QStringLiteral("Connected") : QStringLiteral("Disconnected"));
+    m_identityLabel->setText(QStringLiteral("Identity: %1").arg(m_instrument->identity().isEmpty() ? QStringLiteral("--") : m_instrument->identity()));
+#else
+    m_stateLabel->setText(QStringLiteral("Designer preview"));
+#endif
+}
+`;
+}
+function qtInstrumentProfileJson(profileId) {
+    const profiles = {
+        dmm: {
+            schemaVersion: 1, id: 'dmm', displayName: 'Generic SCPI Digital Multimeter', family: 'dmm', manufacturer: 'Generic', model: 'SCPI DMM',
+            description: 'Starter profile. Verify commands against the programming manual for the target DMM.',
+            capabilities: [
+                { id: 'measure.dc-voltage', label: 'DC voltage measurement', category: 'measurement', actions: ['voltage-dc'] },
+                { id: 'measure.dc-current', label: 'DC current measurement', category: 'measurement', actions: ['current-dc'] },
+                { id: 'measure.resistance', label: 'Resistance measurement', category: 'measurement', actions: ['resistance'] },
+                { id: 'measure.frequency', label: 'Frequency measurement', category: 'measurement', actions: ['frequency'] }
+            ],
+            actions: [
+                { id: 'voltage-dc', label: 'DC voltage', kind: 'measurement', query: 'MEAS:VOLT:DC?', unit: 'V', decimals: 6 },
+                { id: 'current-dc', label: 'DC current', kind: 'measurement', query: 'MEAS:CURR:DC?', unit: 'A', decimals: 6 },
+                { id: 'resistance', label: 'Resistance', kind: 'measurement', query: 'MEAS:RES?', unit: 'Ohm', decimals: 6 },
+                { id: 'frequency', label: 'Frequency', kind: 'measurement', query: 'MEAS:FREQ?', unit: 'Hz', decimals: 6 }
+            ]
+        },
+        'power-supply': {
+            schemaVersion: 1, id: 'power-supply', displayName: 'Generic SCPI Power Supply', family: 'power-supply', manufacturer: 'Generic', model: 'SCPI PSU',
+            description: 'Starter profile. Channel selection and command trees vary between programmable supplies.',
+            capabilities: [
+                { id: 'power.voltage-set', label: 'Voltage setpoint', category: 'power', actions: ['voltage'] },
+                { id: 'power.current-limit', label: 'Current limit', category: 'power', actions: ['current'] },
+                { id: 'power.output', label: 'Output enable', category: 'power', actions: ['output'] },
+                { id: 'measure.dc-voltage', label: 'DC voltage measurement', category: 'measurement', actions: ['measured-voltage'] },
+                { id: 'measure.dc-current', label: 'DC current measurement', category: 'measurement', actions: ['measured-current'] }
+            ],
+            actions: [
+                { id: 'voltage', label: 'Voltage setpoint', kind: 'numeric', query: 'VOLT?', write: 'VOLT %1', unit: 'V', minimum: 0, maximum: 1000, decimals: 6, defaultValue: 5 },
+                { id: 'current', label: 'Current limit', kind: 'numeric', query: 'CURR?', write: 'CURR %1', unit: 'A', minimum: 0, maximum: 1000, decimals: 6, defaultValue: 1 },
+                { id: 'output', label: 'Output', kind: 'toggle', query: 'OUTP?', write: 'OUTP %1' },
+                { id: 'measured-voltage', label: 'Measured voltage', kind: 'measurement', query: 'MEAS:VOLT?', unit: 'V', decimals: 6 },
+                { id: 'measured-current', label: 'Measured current', kind: 'measurement', query: 'MEAS:CURR?', unit: 'A', decimals: 6 }
+            ]
+        },
+        'signal-generator': {
+            schemaVersion: 1, id: 'signal-generator', displayName: 'Generic SCPI Signal Generator', family: 'signal-generator', manufacturer: 'Generic', model: 'SCPI Generator',
+            description: 'Starter profile. Adapt source/channel prefixes and amplitude semantics to the target generator.',
+            capabilities: [
+                { id: 'source.frequency', label: 'Frequency control', category: 'source', actions: ['frequency'] },
+                { id: 'source.amplitude', label: 'Amplitude control', category: 'source', actions: ['amplitude'] },
+                { id: 'source.offset', label: 'DC offset control', category: 'source', actions: ['offset'] },
+                { id: 'source.output', label: 'Output enable', category: 'source', actions: ['output'] }
+            ],
+            actions: [
+                { id: 'frequency', label: 'Frequency', kind: 'numeric', query: 'FREQ?', write: 'FREQ %1', unit: 'Hz', minimum: 0, maximum: 1e12, decimals: 6, defaultValue: 1000 },
+                { id: 'amplitude', label: 'Amplitude', kind: 'numeric', query: 'VOLT?', write: 'VOLT %1', unit: 'Vpp', minimum: 0, maximum: 1000, decimals: 6, defaultValue: 1 },
+                { id: 'offset', label: 'DC offset', kind: 'numeric', query: 'VOLT:OFFS?', write: 'VOLT:OFFS %1', unit: 'V', minimum: -1000, maximum: 1000, decimals: 6, defaultValue: 0 },
+                { id: 'output', label: 'Output', kind: 'toggle', query: 'OUTP?', write: 'OUTP %1' }
+            ]
+        },
+        oscilloscope: {
+            schemaVersion: 1, id: 'oscilloscope', displayName: 'Generic SCPI Oscilloscope', family: 'oscilloscope', manufacturer: 'Generic', model: 'SCPI Oscilloscope',
+            description: 'Starter profile. Oscilloscope timebase/channel/measurement command trees differ significantly by vendor.',
+            capabilities: [
+                { id: 'scope.run', label: 'Run acquisition', category: 'oscilloscope', actions: ['run'] },
+                { id: 'scope.stop', label: 'Stop acquisition', category: 'oscilloscope', actions: ['stop'] },
+                { id: 'scope.single', label: 'Single acquisition', category: 'oscilloscope', actions: ['single'] },
+                { id: 'scope.time-scale', label: 'Timebase control', category: 'oscilloscope', actions: ['time-scale'] },
+                { id: 'scope.vertical-scale', label: 'Vertical scale control', category: 'oscilloscope', actions: ['channel1-scale'] },
+                { id: 'measure.frequency', label: 'Frequency measurement', category: 'measurement', actions: ['frequency'] },
+                { id: 'measure.vpp', label: 'Peak-to-peak measurement', category: 'measurement', actions: ['vpp'] }
+            ],
+            actions: [
+                { id: 'run', label: 'Run', kind: 'action', write: 'RUN' },
+                { id: 'stop', label: 'Stop', kind: 'action', write: 'STOP' },
+                { id: 'single', label: 'Single acquisition', kind: 'action', write: 'SING' },
+                { id: 'time-scale', label: 'Time scale', kind: 'numeric', query: 'TIM:SCAL?', write: 'TIM:SCAL %1', unit: 's/div', minimum: 1e-12, maximum: 1000, decimals: 9, defaultValue: 0.001 },
+                { id: 'channel1-scale', label: 'CH1 vertical scale', kind: 'numeric', query: 'CHAN1:SCAL?', write: 'CHAN1:SCAL %1', unit: 'V/div', minimum: 1e-9, maximum: 1000, decimals: 9, defaultValue: 1 },
+                { id: 'frequency', label: 'Frequency', kind: 'measurement', query: 'MEAS:FREQ?', unit: 'Hz', decimals: 6 },
+                { id: 'vpp', label: 'Peak-to-peak', kind: 'measurement', query: 'MEAS:VPP?', unit: 'V', decimals: 6 }
+            ]
+        }
+    };
+    return `${JSON.stringify(profiles[profileId] ?? profiles.dmm, null, 2)}\n`;
+}
+function qtScpiInstrumentHeader() {
+    return `#pragma once
+
+#include <QByteArray>
+#include <QObject>
+#include <QQueue>
+#include <QString>
+#include <QTimer>
+#include <QtGlobal>
+
+class QTcpSocket;
+
+class QpmScpiInstrument final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QString host READ host WRITE setHost NOTIFY configurationChanged)
+    Q_PROPERTY(quint16 port READ port WRITE setPort NOTIFY configurationChanged)
+    Q_PROPERTY(State state READ state NOTIFY stateChanged)
+    Q_PROPERTY(bool connected READ isConnected NOTIFY connectedChanged)
+    Q_PROPERTY(QString identity READ identity NOTIFY identityChanged)
+    Q_PROPERTY(int timeoutMs READ timeoutMs WRITE setTimeoutMs NOTIFY configurationChanged)
+    Q_PROPERTY(bool autoIdentify READ autoIdentify WRITE setAutoIdentify NOTIFY configurationChanged)
+    Q_PROPERTY(QString lineTerminator READ lineTerminator WRITE setLineTerminator NOTIFY configurationChanged)
+    Q_PROPERTY(int queuedCommandCount READ queuedCommandCount NOTIFY queueDepthChanged)
+
+public:
+    enum class State { Disconnected, Connecting, Ready, Error };
+    Q_ENUM(State)
+    enum class Direction { Tx, Rx, System };
+    Q_ENUM(Direction)
+
+    explicit QpmScpiInstrument(QObject *parent = nullptr);
+    ~QpmScpiInstrument() override;
+
+    QString host() const { return m_host; }
+    quint16 port() const noexcept { return m_port; }
+    State state() const noexcept { return m_state; }
+    bool isConnected() const noexcept { return m_state == State::Ready; }
+    QString identity() const { return m_identity; }
+    int timeoutMs() const noexcept { return m_timeoutMs; }
+    bool autoIdentify() const noexcept { return m_autoIdentify; }
+    QString lineTerminator() const { return m_lineTerminator; }
+    int queuedCommandCount() const noexcept { return m_queue.size() + (m_hasActive ? 1 : 0); }
+
+    void setHost(const QString &host);
+    void setPort(quint16 port);
+    void setTimeoutMs(int timeoutMs);
+    void setAutoIdentify(bool enabled);
+    void setLineTerminator(const QString &terminator);
+
+    Q_INVOKABLE quint64 writeCommand(const QString &command, int timeoutMs = -1);
+    Q_INVOKABLE quint64 query(const QString &command, int timeoutMs = -1);
+    Q_INVOKABLE quint64 identify();
+    QString queryBlocking(const QString &command, int timeoutMs = 2000, bool *ok = nullptr);
+
+public slots:
+    void connectToInstrument();
+    void disconnectFromInstrument();
+    void clearQueue();
+
+signals:
+    void stateChanged(QpmScpiInstrument::State state);
+    void connectedChanged(bool connected);
+    void identityChanged(const QString &identity);
+    void configurationChanged();
+    void queueDepthChanged(int depth);
+    void requestQueued(quint64 id, const QString &command, bool expectsResponse);
+    void requestStarted(quint64 id, const QString &command);
+    void requestFinished(quint64 id, const QString &command, const QString &response, bool success, bool timedOut);
+    void traffic(QpmScpiInstrument::Direction direction, const QString &text, qint64 timestampMs);
+    void unsolicitedResponse(const QString &response);
+    void errorOccurred(const QString &message);
+
+private slots:
+    void onConnected();
+    void onDisconnected();
+    void onReadyRead();
+    void onSocketError();
+    void onCommandTimeout();
+
+private:
+    struct PendingCommand
+    {
+        quint64 id = 0;
+        QString command;
+        bool expectsResponse = true;
+        int timeoutMs = 2000;
+    };
+
+    quint64 enqueue(const QString &command, bool expectsResponse, int timeoutMs);
+    void processNext();
+    void completeActive(const QString &response, bool success, bool timedOut);
+    void failAllPending(const QString &reason);
+    void setState(State state);
+    void log(Direction direction, const QString &text);
+    QByteArray encodedCommand(const QString &command) const;
+
+    QTcpSocket *m_socket = nullptr;
+    QTimer m_commandTimer;
+    QQueue<PendingCommand> m_queue;
+    PendingCommand m_active;
+    bool m_hasActive = false;
+    QByteArray m_receiveBuffer;
+    QString m_host = QStringLiteral("127.0.0.1");
+    quint16 m_port = 5025;
+    State m_state = State::Disconnected;
+    QString m_identity;
+    int m_timeoutMs = 2000;
+    bool m_autoIdentify = true;
+    QString m_lineTerminator = QStringLiteral("\\n");
+    quint64 m_nextRequestId = 1;
+};
+`;
+}
+function qtScpiInstrumentSource() {
+    return `#include "instrumentation/qpm_scpi_instrument.h"
+
+#include <QAbstractSocket>
+#include <QDateTime>
+#include <QEventLoop>
+#include <QThread>
+#include <QTcpSocket>
+#include <QtGlobal>
+
+QpmScpiInstrument::QpmScpiInstrument(QObject *parent)
+    : QObject(parent), m_socket(new QTcpSocket(this))
+{
+    m_commandTimer.setSingleShot(true);
+    connect(m_socket, &QTcpSocket::connected, this, &QpmScpiInstrument::onConnected);
+    connect(m_socket, &QTcpSocket::disconnected, this, &QpmScpiInstrument::onDisconnected);
+    connect(m_socket, &QTcpSocket::readyRead, this, &QpmScpiInstrument::onReadyRead);
+    connect(m_socket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) { onSocketError(); });
+    connect(&m_commandTimer, &QTimer::timeout, this, &QpmScpiInstrument::onCommandTimeout);
+}
+
+QpmScpiInstrument::~QpmScpiInstrument()
+{
+    m_commandTimer.stop();
+    if (m_socket) m_socket->abort();
+}
+
+void QpmScpiInstrument::setHost(const QString &host)
+{
+    const QString normalized = host.trimmed();
+    if (normalized.isEmpty() || m_host == normalized) return;
+    m_host = normalized;
+    emit configurationChanged();
+}
+
+void QpmScpiInstrument::setPort(quint16 port)
+{
+    if (port == 0 || m_port == port) return;
+    m_port = port;
+    emit configurationChanged();
+}
+
+void QpmScpiInstrument::setTimeoutMs(int timeoutMs)
+{
+    timeoutMs = qMax(1, timeoutMs);
+    if (m_timeoutMs == timeoutMs) return;
+    m_timeoutMs = timeoutMs;
+    emit configurationChanged();
+}
+
+void QpmScpiInstrument::setAutoIdentify(bool enabled)
+{
+    if (m_autoIdentify == enabled) return;
+    m_autoIdentify = enabled;
+    emit configurationChanged();
+}
+
+void QpmScpiInstrument::setLineTerminator(const QString &terminator)
+{
+    if (terminator.isEmpty() || m_lineTerminator == terminator) return;
+    m_lineTerminator = terminator;
+    emit configurationChanged();
+}
+
+void QpmScpiInstrument::connectToInstrument()
+{
+    if (m_socket->state() != QAbstractSocket::UnconnectedState) return;
+    setState(State::Connecting);
+    log(Direction::System, QStringLiteral("Connecting to %1:%2").arg(m_host).arg(m_port));
+    m_socket->connectToHost(m_host, m_port);
+}
+
+void QpmScpiInstrument::disconnectFromInstrument()
+{
+    m_commandTimer.stop();
+    failAllPending(QStringLiteral("Disconnected"));
+    m_socket->abort();
+    setState(State::Disconnected);
+    log(Direction::System, QStringLiteral("Disconnected"));
+}
+
+quint64 QpmScpiInstrument::writeCommand(const QString &command, int timeoutMs)
+{
+    return enqueue(command, false, timeoutMs);
+}
+
+quint64 QpmScpiInstrument::query(const QString &command, int timeoutMs)
+{
+    return enqueue(command, true, timeoutMs);
+}
+
+quint64 QpmScpiInstrument::identify()
+{
+    return query(QStringLiteral("*IDN?"));
+}
+
+QString QpmScpiInstrument::queryBlocking(const QString &command, int timeoutMs, bool *ok)
+{
+    if (ok) *ok = false;
+    if (QThread::currentThread() != thread())
+    {
+        emit errorOccurred(QStringLiteral("queryBlocking() must be called from the QpmScpiInstrument thread."));
+        return {};
+    }
+    if (!isConnected()) return {};
+
+    QString result;
+    bool success = false;
+    QEventLoop loop;
+    quint64 requestId = 0;
+    const auto connection = connect(this, &QpmScpiInstrument::requestFinished, &loop,
+        [&](quint64 id, const QString &, const QString &response, bool requestSuccess, bool) {
+            if (id != requestId) return;
+            result = response;
+            success = requestSuccess;
+            loop.quit();
+        });
+
+    requestId = query(command, timeoutMs);
+    if (requestId == 0)
+    {
+        disconnect(connection);
+        return {};
+    }
+    QTimer::singleShot(qMax(1, timeoutMs) + 100, &loop, &QEventLoop::quit);
+    loop.exec();
+    disconnect(connection);
+    if (ok) *ok = success;
+    return result;
+}
+
+void QpmScpiInstrument::clearQueue()
+{
+    if (m_queue.isEmpty()) return;
+    while (!m_queue.isEmpty())
+    {
+        const PendingCommand pending = m_queue.dequeue();
+        emit requestFinished(pending.id, pending.command, QStringLiteral("Queue cleared"), false, false);
+    }
+    emit queueDepthChanged(queuedCommandCount());
+}
+
+quint64 QpmScpiInstrument::enqueue(const QString &command, bool expectsResponse, int timeoutMs)
+{
+    QString normalized = command;
+    while (normalized.endsWith(QLatin1Char('\\n')) || normalized.endsWith(QLatin1Char('\\r'))) normalized.chop(1);
+    normalized = normalized.trimmed();
+    if (normalized.isEmpty()) return 0;
+    if (!isConnected())
+    {
+        const QString message = QStringLiteral("SCPI instrument is not connected.");
+        emit errorOccurred(message);
+        log(Direction::System, message);
+        return 0;
+    }
+
+    PendingCommand pending;
+    pending.id = m_nextRequestId++;
+    pending.command = normalized;
+    pending.expectsResponse = expectsResponse;
+    pending.timeoutMs = timeoutMs > 0 ? timeoutMs : m_timeoutMs;
+    m_queue.enqueue(pending);
+    emit requestQueued(pending.id, pending.command, pending.expectsResponse);
+    emit queueDepthChanged(queuedCommandCount());
+    processNext();
+    return pending.id;
+}
+
+void QpmScpiInstrument::processNext()
+{
+    if (m_hasActive || m_queue.isEmpty() || !isConnected()) return;
+    m_active = m_queue.dequeue();
+    m_hasActive = true;
+    emit queueDepthChanged(queuedCommandCount());
+    emit requestStarted(m_active.id, m_active.command);
+    log(Direction::Tx, m_active.command);
+
+    const QByteArray payload = encodedCommand(m_active.command);
+    if (m_socket->write(payload) < 0)
+    {
+        completeActive(m_socket->errorString(), false, false);
+        return;
+    }
+    m_socket->flush();
+    if (m_active.expectsResponse)
+        m_commandTimer.start(m_active.timeoutMs);
+    else
+        completeActive({}, true, false);
+}
+
+void QpmScpiInstrument::completeActive(const QString &response, bool success, bool timedOut)
+{
+    if (!m_hasActive) return;
+    m_commandTimer.stop();
+    const PendingCommand completed = m_active;
+    m_hasActive = false;
+
+    if (success && completed.command.trimmed().compare(QStringLiteral("*IDN?"), Qt::CaseInsensitive) == 0)
+    {
+        const QString value = response.trimmed();
+        if (m_identity != value)
+        {
+            m_identity = value;
+            emit identityChanged(m_identity);
+        }
+    }
+
+    emit requestFinished(completed.id, completed.command, response, success, timedOut);
+    emit queueDepthChanged(queuedCommandCount());
+    QTimer::singleShot(0, this, &QpmScpiInstrument::processNext);
+}
+
+void QpmScpiInstrument::failAllPending(const QString &reason)
+{
+    if (m_hasActive)
+    {
+        const PendingCommand active = m_active;
+        m_hasActive = false;
+        emit requestFinished(active.id, active.command, reason, false, false);
+    }
+    while (!m_queue.isEmpty())
+    {
+        const PendingCommand pending = m_queue.dequeue();
+        emit requestFinished(pending.id, pending.command, reason, false, false);
+    }
+    emit queueDepthChanged(0);
+}
+
+void QpmScpiInstrument::onConnected()
+{
+    setState(State::Ready);
+    log(Direction::System, QStringLiteral("Connected to %1:%2").arg(m_host).arg(m_port));
+    if (m_autoIdentify) identify();
+}
+
+void QpmScpiInstrument::onDisconnected()
+{
+    m_commandTimer.stop();
+    failAllPending(QStringLiteral("Connection closed"));
+    if (m_state != State::Error) setState(State::Disconnected);
+    log(Direction::System, QStringLiteral("Connection closed"));
+}
+
+void QpmScpiInstrument::onReadyRead()
+{
+    m_receiveBuffer.append(m_socket->readAll());
+    for (;;)
+    {
+        const qsizetype newline = m_receiveBuffer.indexOf('\\n');
+        if (newline < 0) break;
+        QByteArray line = m_receiveBuffer.left(newline);
+        m_receiveBuffer.remove(0, newline + 1);
+        if (line.endsWith('\\r')) line.chop(1);
+        const QString response = QString::fromUtf8(line).trimmed();
+        if (response.isEmpty()) continue;
+        log(Direction::Rx, response);
+        if (m_hasActive && m_active.expectsResponse)
+            completeActive(response, true, false);
+        else
+            emit unsolicitedResponse(response);
+    }
+}
+
+void QpmScpiInstrument::onSocketError()
+{
+    const QString message = m_socket->errorString();
+    m_commandTimer.stop();
+    failAllPending(message);
+    setState(State::Error);
+    log(Direction::System, message);
+    emit errorOccurred(message);
+}
+
+void QpmScpiInstrument::onCommandTimeout()
+{
+    if (!m_hasActive) return;
+    const QString message = QStringLiteral("SCPI timeout after %1 ms").arg(m_active.timeoutMs);
+    log(Direction::System, message);
+    completeActive(message, false, true);
+}
+
+void QpmScpiInstrument::setState(State state)
+{
+    if (m_state == state) return;
+    const bool wasConnected = isConnected();
+    m_state = state;
+    emit stateChanged(m_state);
+    if (wasConnected != isConnected()) emit connectedChanged(isConnected());
+}
+
+void QpmScpiInstrument::log(Direction direction, const QString &text)
+{
+    emit traffic(direction, text, QDateTime::currentMSecsSinceEpoch());
+}
+
+QByteArray QpmScpiInstrument::encodedCommand(const QString &command) const
+{
+    QString value = command;
+    value += m_lineTerminator;
+    return value.toUtf8();
+}
+`;
+}
+function qtScpiProfileMatcherHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_instrument_profile.h"
+
+#include <QList>
+#include <QString>
+
+struct QpmScpiIdentity
+{
+    QString raw;
+    QString manufacturer;
+    QString model;
+    QString serialNumber;
+    QString firmware;
+
+    bool isValid() const { return !manufacturer.isEmpty() || !model.isEmpty(); }
+    static QpmScpiIdentity fromIdn(const QString &response);
+};
+
+struct QpmScpiProfileMatch
+{
+    enum class Confidence { None, Low, Medium, High };
+
+    QpmInstrumentProfile profile;
+    QString profilePath;
+    int score = 0;
+    Confidence confidence = Confidence::None;
+    QString reason;
+
+    bool isValid() const { return score > 0 && !profile.id.isEmpty(); }
+    bool isRecommended() const { return score >= 60; }
+    QString confidenceText() const;
+};
+
+class QpmScpiProfileMatcher final
+{
+public:
+    static QList<QpmScpiProfileMatch> matchDirectory(const QString &profileDirectory, const QString &idnResponse);
+    static QpmScpiProfileMatch bestMatch(const QString &profileDirectory, const QString &idnResponse);
+    static QpmScpiProfileMatch scoreProfile(const QpmInstrumentProfile &profile, const QString &profilePath, const QpmScpiIdentity &identity);
+};
+`;
+}
+function qtScpiProfileMatcherSource() {
+    return `#include "instrumentation/qpm_scpi_profile_matcher.h"
+
+#include <QDir>
+#include <QFileInfo>
+#include <QStringList>
+#include <QVariant>
+#include <QtGlobal>
+#include <algorithm>
+
+namespace
+{
+QString compactToken(QString value)
+{
+    value = value.trimmed().toLower();
+    QString result;
+    result.reserve(value.size());
+    for (const QChar ch : value)
+        if (ch.isLetterOrNumber()) result.append(ch);
+    return result;
+}
+
+QString canonicalManufacturer(const QString &value)
+{
+    const QString compact = compactToken(value);
+    if (compact.contains(QStringLiteral("keysight")) || compact.contains(QStringLiteral("agilent")) || compact.contains(QStringLiteral("hewlettpackard"))) return QStringLiteral("keysight");
+    if (compact.contains(QStringLiteral("rigol"))) return QStringLiteral("rigol");
+    if (compact.contains(QStringLiteral("fluke"))) return QStringLiteral("fluke");
+    if (compact.contains(QStringLiteral("tektronix"))) return QStringLiteral("tektronix");
+    if (compact.contains(QStringLiteral("rohdeschwarz")) || compact == QStringLiteral("rs")) return QStringLiteral("rohdeschwarz");
+    if (compact.contains(QStringLiteral("siglent"))) return QStringLiteral("siglent");
+    return compact;
+}
+
+QpmScpiProfileMatch::Confidence confidenceForScore(int score)
+{
+    if (score >= 90) return QpmScpiProfileMatch::Confidence::High;
+    if (score >= 60) return QpmScpiProfileMatch::Confidence::Medium;
+    if (score > 0) return QpmScpiProfileMatch::Confidence::Low;
+    return QpmScpiProfileMatch::Confidence::None;
+}
+}
+
+QpmScpiIdentity QpmScpiIdentity::fromIdn(const QString &response)
+{
+    QpmScpiIdentity result;
+    result.raw = response.trimmed();
+    const QStringList fields = result.raw.split(QLatin1Char(','), Qt::KeepEmptyParts);
+    if (fields.size() > 0) result.manufacturer = fields.at(0).trimmed();
+    if (fields.size() > 1) result.model = fields.at(1).trimmed();
+    if (fields.size() > 2) result.serialNumber = fields.at(2).trimmed();
+    if (fields.size() > 3) result.firmware = fields.mid(3).join(QStringLiteral(",")).trimmed();
+    return result;
+}
+
+QString QpmScpiProfileMatch::confidenceText() const
+{
+    switch (confidence)
+    {
+        case Confidence::High: return QStringLiteral("High");
+        case Confidence::Medium: return QStringLiteral("Medium");
+        case Confidence::Low: return QStringLiteral("Low");
+        default: return QStringLiteral("None");
+    }
+}
+
+QpmScpiProfileMatch QpmScpiProfileMatcher::scoreProfile(const QpmInstrumentProfile &profile, const QString &profilePath, const QpmScpiIdentity &identity)
+{
+    QpmScpiProfileMatch result;
+    result.profile = profile;
+    result.profilePath = profilePath;
+    if (!identity.isValid()) return result;
+
+    const QString profileManufacturer = canonicalManufacturer(profile.manufacturer);
+    const QString identityManufacturer = canonicalManufacturer(identity.manufacturer);
+    const QString profileModel = compactToken(profile.model);
+    const QString identityModel = compactToken(identity.model);
+    QStringList reasons;
+
+    if (!profileManufacturer.isEmpty() && profileManufacturer != QStringLiteral("generic") && profileManufacturer == identityManufacturer)
+    {
+        result.score += 30;
+        reasons.push_back(QStringLiteral("manufacturer match"));
+    }
+
+    if (!profileModel.isEmpty() && profileModel != QStringLiteral("scpi") && !identityModel.isEmpty())
+    {
+        if (profileModel == identityModel)
+        {
+            result.score += 70;
+            reasons.push_back(QStringLiteral("exact model match"));
+        }
+        else if (identityModel.contains(profileModel) || profileModel.contains(identityModel))
+        {
+            result.score += 55;
+            reasons.push_back(QStringLiteral("model token match"));
+        }
+    }
+
+    // Do not recommend generic starter profiles solely because they contain the word SCPI.
+    if (canonicalManufacturer(profile.manufacturer) == QStringLiteral("generic")) result.score = 0;
+    result.score = qBound(0, result.score, 100);
+    result.confidence = confidenceForScore(result.score);
+    result.reason = reasons.isEmpty() ? QStringLiteral("No manufacturer/model match") : reasons.join(QStringLiteral(" + "));
+    return result;
+}
+
+QList<QpmScpiProfileMatch> QpmScpiProfileMatcher::matchDirectory(const QString &profileDirectory, const QString &idnResponse)
+{
+    QList<QpmScpiProfileMatch> matches;
+    const QpmScpiIdentity identity = QpmScpiIdentity::fromIdn(idnResponse);
+    if (!identity.isValid()) return matches;
+
+    const QDir directory(profileDirectory);
+    const QFileInfoList files = directory.entryInfoList({QStringLiteral("*.json")}, QDir::Files | QDir::Readable, QDir::Name);
+    for (const QFileInfo &file : files)
+    {
+        QpmInstrumentProfile profile;
+        QString error;
+        if (!QpmInstrumentProfile::loadJsonFile(file.absoluteFilePath(), &profile, &error)) continue;
+        QpmScpiProfileMatch match = scoreProfile(profile, file.absoluteFilePath(), identity);
+        if (match.score > 0) matches.push_back(match);
+    }
+    std::sort(matches.begin(), matches.end(), [](const QpmScpiProfileMatch &a, const QpmScpiProfileMatch &b) {
+        if (a.score != b.score) return a.score > b.score;
+        return a.profile.displayName.compare(b.profile.displayName, Qt::CaseInsensitive) < 0;
+    });
+    return matches;
+}
+
+QpmScpiProfileMatch QpmScpiProfileMatcher::bestMatch(const QString &profileDirectory, const QString &idnResponse)
+{
+    const QList<QpmScpiProfileMatch> matches = matchDirectory(profileDirectory, idnResponse);
+    return matches.isEmpty() ? QpmScpiProfileMatch{} : matches.first();
+}
+`;
+}
+function qtInstrumentManagerHeader() {
+    return `#pragma once
+
+#include "instrumentation/qpm_scpi_instrument.h"
+#include "instrumentation/qpm_scpi_profile_matcher.h"
+#include "instrumentation/qpm_instrument_driver_registry.h"
+
+#include <QHash>
+#include <QObject>
+#include <QString>
+#include <QStringList>
+#include <QtGlobal>
+
+class QpmInstrumentManager final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QString activeInstrument READ activeInstrument WRITE setActiveInstrument NOTIFY activeInstrumentChanged)
+    Q_PROPERTY(int instrumentCount READ instrumentCount NOTIFY instrumentsChanged)
+    Q_PROPERTY(QString profileDirectory READ profileDirectory WRITE setProfileDirectory NOTIFY profileDirectoryChanged)
+
+public:
+    explicit QpmInstrumentManager(QObject *parent = nullptr);
+    ~QpmInstrumentManager() override = default;
+
+    QString activeInstrument() const { return m_activeInstrument; }
+    int instrumentCount() const noexcept { return m_instruments.size(); }
+    QString profileDirectory() const { return m_profileDirectory; }
+    QStringList instrumentNames() const;
+    QpmScpiInstrument *instrument(const QString &name) const;
+    bool contains(const QString &name) const { return m_instruments.contains(name); }
+
+    QString suggestedProfileId(const QString &name) const;
+    QString suggestedProfilePath(const QString &name) const;
+    QString suggestedProfileDisplayName(const QString &name) const;
+    int suggestedProfileScore(const QString &name) const;
+    QString suggestedProfileReason(const QString &name) const;
+    QString appliedProfilePath(const QString &name) const;
+    QString appliedProfileId(const QString &name) const;
+    QStringList capabilities(const QString &name) const;
+    bool supportsCapability(const QString &name, const QString &capabilityId) const;
+    QpmInstrumentDriverRegistry *driverRegistry() const noexcept { return m_driverRegistry; }
+
+    Q_INVOKABLE bool addInstrument(const QString &name, const QString &host, quint16 port = 5025);
+    Q_INVOKABLE bool removeInstrument(const QString &name);
+    Q_INVOKABLE bool applySuggestedProfile(const QString &name);
+    Q_INVOKABLE quint64 queryActive(const QString &command, int timeoutMs = -1);
+    Q_INVOKABLE quint64 writeActive(const QString &command, int timeoutMs = -1);
+    Q_INVOKABLE quint64 invokeActiveCapability(const QString &capabilityId, const QVariant &value = QVariant(), int timeoutMs = -1);
+    quint64 invokeCapability(const QString &name, const QString &capabilityId, const QVariant &value = QVariant(), int timeoutMs = -1);
+
+public slots:
+    void setActiveInstrument(const QString &name);
+    void setProfileDirectory(const QString &directory);
+    void connectInstrument(const QString &name);
+    void disconnectInstrument(const QString &name);
+    void identifyInstrument(const QString &name);
+    void connectAll();
+    void disconnectAll();
+    void probeConfiguredInstruments();
+    void refreshProfileSuggestion(const QString &name);
+    void refreshAllProfileSuggestions();
+
+signals:
+    void instrumentAdded(const QString &name);
+    void instrumentRemoved(const QString &name);
+    void instrumentUpdated(const QString &name);
+    void instrumentsChanged();
+    void activeInstrumentChanged(const QString &name);
+    void profileDirectoryChanged(const QString &directory);
+    void profileSuggestionChanged(const QString &instrumentName, const QString &profileId, const QString &profilePath, int score, const QString &reason);
+    void profileApplied(const QString &instrumentName, const QString &profileId, const QString &profilePath);
+    void capabilitiesChanged(const QString &instrumentName, const QStringList &capabilityIds);
+    void profilePathApplied(const QString &profilePath);
+    void traffic(const QString &instrumentName, QpmScpiInstrument::Direction direction, const QString &text, qint64 timestampMs);
+    void errorOccurred(const QString &instrumentName, const QString &message);
+
+private:
+    QString normalizedName(const QString &name) const;
+    void attachSignals(const QString &name, QpmScpiInstrument *instrument);
+
+    QHash<QString, QpmScpiInstrument *> m_instruments;
+    QHash<QString, QpmScpiProfileMatch> m_profileMatches;
+    QHash<QString, QString> m_appliedProfiles;
+    QHash<QString, QString> m_appliedProfileIds;
+    QpmInstrumentDriverRegistry *m_driverRegistry = nullptr;
+    QString m_activeInstrument;
+    QString m_profileDirectory = QStringLiteral("instrument_profiles");
+};
+`;
+}
+function qtInstrumentManagerSource() {
+    return `#include "instrumentation/qpm_instrument_manager.h"
+
+#include <QDir>
+#include <algorithm>
+
+QpmInstrumentManager::QpmInstrumentManager(QObject *parent)
+    : QObject(parent), m_driverRegistry(new QpmInstrumentDriverRegistry(this))
+{
+    m_driverRegistry->setProfileDirectory(m_profileDirectory);
+    connect(m_driverRegistry, &QpmInstrumentDriverRegistry::errorOccurred, this, [this](const QString &message) { emit errorOccurred(QStringLiteral("Driver registry"), message); });
+}
+
+QStringList QpmInstrumentManager::instrumentNames() const
+{
+    QStringList names = m_instruments.keys();
+    std::sort(names.begin(), names.end(), [](const QString &a, const QString &b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return names;
+}
+
+QpmScpiInstrument *QpmInstrumentManager::instrument(const QString &name) const
+{
+    return m_instruments.value(name.trimmed(), nullptr);
+}
+
+QString QpmInstrumentManager::suggestedProfileId(const QString &name) const { return m_profileMatches.value(name.trimmed()).profile.id; }
+QString QpmInstrumentManager::suggestedProfilePath(const QString &name) const { return m_profileMatches.value(name.trimmed()).profilePath; }
+QString QpmInstrumentManager::suggestedProfileDisplayName(const QString &name) const { return m_profileMatches.value(name.trimmed()).profile.displayName; }
+int QpmInstrumentManager::suggestedProfileScore(const QString &name) const { return m_profileMatches.value(name.trimmed()).score; }
+QString QpmInstrumentManager::suggestedProfileReason(const QString &name) const { return m_profileMatches.value(name.trimmed()).reason; }
+QString QpmInstrumentManager::appliedProfilePath(const QString &name) const { return m_appliedProfiles.value(name.trimmed()); }
+QString QpmInstrumentManager::appliedProfileId(const QString &name) const { return m_appliedProfileIds.value(name.trimmed()); }
+QStringList QpmInstrumentManager::capabilities(const QString &name) const
+{
+    return m_driverRegistry ? m_driverRegistry->capabilitiesForDriver(appliedProfileId(name)) : QStringList{};
+}
+bool QpmInstrumentManager::supportsCapability(const QString &name, const QString &capabilityId) const
+{
+    return m_driverRegistry && m_driverRegistry->supports(appliedProfileId(name), capabilityId);
+}
+
+bool QpmInstrumentManager::addInstrument(const QString &name, const QString &host, quint16 port)
+{
+    const QString requestedName = name.trimmed();
+    const QString endpoint = host.trimmed();
+    if (requestedName.isEmpty() || endpoint.isEmpty() || port == 0) return false;
+
+    if (auto *existing = m_instruments.value(requestedName, nullptr))
+    {
+        existing->setHost(endpoint);
+        existing->setPort(port);
+        emit instrumentUpdated(requestedName);
+        return true;
+    }
+
+    const QString key = normalizedName(requestedName);
+    auto *created = new QpmScpiInstrument(this);
+    created->setHost(endpoint);
+    created->setPort(port);
+    created->setAutoIdentify(true);
+    m_instruments.insert(key, created);
+    attachSignals(key, created);
+    if (m_activeInstrument.isEmpty()) setActiveInstrument(key);
+    emit instrumentAdded(key);
+    emit instrumentsChanged();
+    return true;
+}
+
+bool QpmInstrumentManager::removeInstrument(const QString &name)
+{
+    const QString key = name.trimmed();
+    QpmScpiInstrument *value = m_instruments.take(key);
+    if (!value) return false;
+    value->disconnectFromInstrument();
+    value->deleteLater();
+    m_profileMatches.remove(key);
+    m_appliedProfiles.remove(key);
+    m_appliedProfileIds.remove(key);
+    if (m_activeInstrument == key)
+    {
+        const QString next = instrumentNames().value(0);
+        m_activeInstrument = next;
+        emit activeInstrumentChanged(m_activeInstrument);
+    }
+    emit instrumentRemoved(key);
+    emit instrumentsChanged();
+    return true;
+}
+
+bool QpmInstrumentManager::applySuggestedProfile(const QString &name)
+{
+    const QString key = name.trimmed();
+    const QpmScpiProfileMatch match = m_profileMatches.value(key);
+    if (!match.isValid() || match.profilePath.isEmpty()) return false;
+    m_appliedProfiles.insert(key, match.profilePath);
+    m_appliedProfileIds.insert(key, match.profile.id);
+    if (m_driverRegistry) m_driverRegistry->reload();
+    emit profileApplied(key, match.profile.id, match.profilePath);
+    emit capabilitiesChanged(key, capabilities(key));
+    emit instrumentUpdated(key);
+    return true;
+}
+
+void QpmInstrumentManager::setActiveInstrument(const QString &name)
+{
+    const QString key = name.trimmed();
+    if (!key.isEmpty() && !m_instruments.contains(key)) return;
+    if (m_activeInstrument == key) return;
+    m_activeInstrument = key;
+    emit activeInstrumentChanged(m_activeInstrument);
+}
+
+void QpmInstrumentManager::setProfileDirectory(const QString &directory)
+{
+    const QString trimmed = directory.trimmed();
+    const QString normalized = trimmed.isEmpty() ? QStringLiteral("instrument_profiles") : QDir::cleanPath(trimmed);
+    if (m_profileDirectory == normalized) return;
+    m_profileDirectory = normalized;
+    if (m_driverRegistry) m_driverRegistry->setProfileDirectory(m_profileDirectory);
+    emit profileDirectoryChanged(m_profileDirectory);
+    refreshAllProfileSuggestions();
+}
+
+void QpmInstrumentManager::connectInstrument(const QString &name) { if (auto *value = instrument(name)) value->connectToInstrument(); }
+void QpmInstrumentManager::disconnectInstrument(const QString &name) { if (auto *value = instrument(name)) value->disconnectFromInstrument(); }
+
+void QpmInstrumentManager::identifyInstrument(const QString &name)
+{
+    if (auto *value = instrument(name))
+    {
+        if (value->isConnected()) value->identify();
+        else value->connectToInstrument();
+    }
+}
+
+void QpmInstrumentManager::connectAll() { for (QpmScpiInstrument *value : m_instruments) value->connectToInstrument(); }
+void QpmInstrumentManager::disconnectAll() { for (QpmScpiInstrument *value : m_instruments) value->disconnectFromInstrument(); }
+
+void QpmInstrumentManager::probeConfiguredInstruments()
+{
+    for (QpmScpiInstrument *value : m_instruments)
+    {
+        value->setAutoIdentify(true);
+        if (value->isConnected()) value->identify();
+        else value->connectToInstrument();
+    }
+}
+
+void QpmInstrumentManager::refreshProfileSuggestion(const QString &name)
+{
+    const QString key = name.trimmed();
+    QpmScpiInstrument *value = instrument(key);
+    if (!value || value->identity().trimmed().isEmpty())
+    {
+        m_profileMatches.remove(key);
+        emit profileSuggestionChanged(key, QString(), QString(), 0, QStringLiteral("No *IDN? response"));
+        return;
+    }
+    const QpmScpiProfileMatch match = QpmScpiProfileMatcher::bestMatch(m_profileDirectory, value->identity());
+    if (match.isValid()) m_profileMatches.insert(key, match); else m_profileMatches.remove(key);
+    emit profileSuggestionChanged(key, match.profile.id, match.profilePath, match.score, match.reason);
+    emit instrumentUpdated(key);
+}
+
+void QpmInstrumentManager::refreshAllProfileSuggestions()
+{
+    for (const QString &name : instrumentNames()) refreshProfileSuggestion(name);
+}
+
+quint64 QpmInstrumentManager::queryActive(const QString &command, int timeoutMs)
+{
+    if (auto *value = instrument(m_activeInstrument)) return value->query(command, timeoutMs);
+    return 0;
+}
+
+quint64 QpmInstrumentManager::writeActive(const QString &command, int timeoutMs)
+{
+    if (auto *value = instrument(m_activeInstrument)) return value->writeCommand(command, timeoutMs);
+    return 0;
+}
+
+quint64 QpmInstrumentManager::invokeActiveCapability(const QString &capabilityId, const QVariant &value, int timeoutMs)
+{
+    return invokeCapability(m_activeInstrument, capabilityId, value, timeoutMs);
+}
+
+quint64 QpmInstrumentManager::invokeCapability(const QString &name, const QString &capabilityId, const QVariant &value, int timeoutMs)
+{
+    QpmScpiInstrument *target = instrument(name);
+    if (!target || !m_driverRegistry) return 0;
+    const QString driverId = appliedProfileId(name);
+    const QpmInstrumentProfile profile = m_driverRegistry->profile(driverId);
+    const QpmInstrumentProfile::Capability *capability = profile.capability(capabilityId);
+    if (!capability || capability->actionIds.isEmpty())
+    {
+        emit errorOccurred(name, QStringLiteral("Capability %1 is not available for driver %2.").arg(capabilityId, driverId));
+        return 0;
+    }
+    const QpmInstrumentProfile::Action *action = profile.action(capability->actionIds.first());
+    if (!action) return 0;
+
+    switch (action->kind)
+    {
+        case QpmInstrumentProfile::ControlKind::Measurement:
+            return action->query.isEmpty() ? 0 : target->query(action->query, timeoutMs);
+        case QpmInstrumentProfile::ControlKind::Action:
+            return action->writeTemplate.isEmpty() ? 0 : target->writeCommand(action->writeTemplate, timeoutMs);
+        case QpmInstrumentProfile::ControlKind::Numeric:
+            if (!value.isValid()) return action->query.isEmpty() ? 0 : target->query(action->query, timeoutMs);
+            if (action->writeTemplate.isEmpty()) return 0;
+            return target->writeCommand(QString(action->writeTemplate).replace(QStringLiteral("%1"), QString::number(value.toDouble(), 'g', 15)), timeoutMs);
+        case QpmInstrumentProfile::ControlKind::Toggle:
+            if (!value.isValid()) return action->query.isEmpty() ? 0 : target->query(action->query, timeoutMs);
+            if (action->writeTemplate.isEmpty()) return 0;
+            return target->writeCommand(QString(action->writeTemplate).replace(QStringLiteral("%1"), value.toBool() ? QStringLiteral("ON") : QStringLiteral("OFF")), timeoutMs);
+    }
+    return 0;
+}
+
+QString QpmInstrumentManager::normalizedName(const QString &name) const
+{
+    QString base = name.trimmed();
+    if (base.isEmpty()) return {};
+    if (!m_instruments.contains(base)) return base;
+    int suffix = 2;
+    QString candidate;
+    do candidate = QStringLiteral("%1 %2").arg(base).arg(suffix++); while (m_instruments.contains(candidate));
+    return candidate;
+}
+
+void QpmInstrumentManager::attachSignals(const QString &name, QpmScpiInstrument *value)
+{
+    connect(value, &QpmScpiInstrument::stateChanged, this, [this, name](QpmScpiInstrument::State) { emit instrumentUpdated(name); });
+    connect(value, &QpmScpiInstrument::identityChanged, this, [this, name](const QString &) {
+        refreshProfileSuggestion(name);
+        emit instrumentUpdated(name);
+    });
+    connect(value, &QpmScpiInstrument::configurationChanged, this, [this, name]() { emit instrumentUpdated(name); });
+    connect(value, &QpmScpiInstrument::traffic, this, [this, name](QpmScpiInstrument::Direction direction, const QString &text, qint64 timestampMs) {
+        emit traffic(name, direction, text, timestampMs);
+    });
+    connect(value, &QpmScpiInstrument::errorOccurred, this, [this, name](const QString &message) {
+        emit errorOccurred(name, message);
+        emit instrumentUpdated(name);
+    });
+}
+`;
+}
+function qtInstrumentManagerControlHeader() {
+    return `#pragma once
+
+#include <QWidget>
+
+class QLabel;
+class QLineEdit;
+class QPlainTextEdit;
+class QPushButton;
+class QSpinBox;
+class QTableWidget;
+class QpmInstrumentManager;
+
+class InstrumentManagerControl final : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(QString title READ title WRITE setTitle)
+
+public:
+    explicit InstrumentManagerControl(QWidget *parent = nullptr);
+    QString title() const;
+    QpmInstrumentManager *manager() const noexcept { return m_manager; }
+
+public slots:
+    void setTitle(const QString &title);
+    void setManager(QpmInstrumentManager *manager);
+    void refreshTable();
+
+signals:
+    void activeInstrumentChanged(const QString &name);
+    void commandSubmitted(const QString &command, bool query);
+    void profileApplied(const QString &instrumentName, const QString &profileId, const QString &profilePath);
+
+private slots:
+    void onAddInstrument();
+    void onRemoveInstrument();
+    void onConnectInstrument();
+    void onDisconnectInstrument();
+    void onProbeAll();
+    void onApplyProfile();
+    void onBrowseProfiles();
+    void onProfileDirectoryEdited();
+    void onSelectionChanged();
+    void onQuery();
+    void onWrite();
+
+private:
+    QString selectedInstrumentName() const;
+    void appendHistory(const QString &line);
+
+    QpmInstrumentManager *m_manager = nullptr;
+    QLabel *m_titleLabel = nullptr;
+    QLineEdit *m_name = nullptr;
+    QLineEdit *m_host = nullptr;
+    QSpinBox *m_port = nullptr;
+    QLineEdit *m_profiles = nullptr;
+    QPushButton *m_browseProfiles = nullptr;
+    QPushButton *m_add = nullptr;
+    QPushButton *m_remove = nullptr;
+    QPushButton *m_connect = nullptr;
+    QPushButton *m_disconnect = nullptr;
+    QPushButton *m_probe = nullptr;
+    QPushButton *m_applyProfile = nullptr;
+    QTableWidget *m_table = nullptr;
+    QLineEdit *m_command = nullptr;
+    QPushButton *m_query = nullptr;
+    QPushButton *m_write = nullptr;
+    QPlainTextEdit *m_history = nullptr;
+    QLabel *m_status = nullptr;
+};
+`;
+}
+function qtInstrumentManagerControlSource() {
+    return `#include "widgets/instrument_manager_control.h"
+
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+#include "instrumentation/qpm_instrument_manager.h"
+#include "instrumentation/qpm_scpi_instrument.h"
+#endif
+
+#include <QAbstractItemView>
+#include <QDateTime>
+#include <QFileDialog>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QSpinBox>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QVBoxLayout>
+
+InstrumentManagerControl::InstrumentManagerControl(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_StyledBackground, true);
+    auto *root = new QVBoxLayout(this);
+    m_titleLabel = new QLabel(QStringLiteral("SCPI Instrument Manager"), this);
+    QFont titleFont = m_titleLabel->font(); titleFont.setBold(true); m_titleLabel->setFont(titleFont);
+    root->addWidget(m_titleLabel);
+
+    auto *endpointBox = new QGroupBox(QStringLiteral("Instrument endpoint"), this);
+    auto *endpoint = new QFormLayout(endpointBox);
+    m_name = new QLineEdit(QStringLiteral("Instrument"), endpointBox);
+    m_host = new QLineEdit(QStringLiteral("192.168.1.100"), endpointBox);
+    m_port = new QSpinBox(endpointBox); m_port->setRange(1, 65535); m_port->setValue(5025);
+    auto *profileRow = new QWidget(endpointBox); auto *profileLayout = new QHBoxLayout(profileRow); profileLayout->setContentsMargins(0,0,0,0);
+    m_profiles = new QLineEdit(QStringLiteral("instrument_profiles"), profileRow);
+    m_browseProfiles = new QPushButton(QStringLiteral("Browse..."), profileRow);
+    profileLayout->addWidget(m_profiles, 1); profileLayout->addWidget(m_browseProfiles);
+    endpoint->addRow(QStringLiteral("Name"), m_name);
+    endpoint->addRow(QStringLiteral("Host"), m_host);
+    endpoint->addRow(QStringLiteral("Port"), m_port);
+    endpoint->addRow(QStringLiteral("Profile directory"), profileRow);
+    root->addWidget(endpointBox);
+
+    auto *buttons = new QHBoxLayout();
+    m_add = new QPushButton(QStringLiteral("Add / Update"), this);
+    m_remove = new QPushButton(QStringLiteral("Remove"), this);
+    m_connect = new QPushButton(QStringLiteral("Connect"), this);
+    m_disconnect = new QPushButton(QStringLiteral("Disconnect"), this);
+    m_probe = new QPushButton(QStringLiteral("Probe configured (*IDN?)"), this);
+    m_applyProfile = new QPushButton(QStringLiteral("Apply suggested profile"), this);
+    buttons->addWidget(m_add); buttons->addWidget(m_remove); buttons->addWidget(m_connect); buttons->addWidget(m_disconnect); buttons->addWidget(m_probe); buttons->addWidget(m_applyProfile);
+    root->addLayout(buttons);
+
+    m_table = new QTableWidget(0, 5, this);
+    m_table->setHorizontalHeaderLabels({QStringLiteral("Name"), QStringLiteral("Endpoint"), QStringLiteral("State"), QStringLiteral("Identity"), QStringLiteral("Suggested profile")});
+    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_table->horizontalHeader()->setStretchLastSection(true);
+    root->addWidget(m_table, 1);
+
+    auto *commandBox = new QGroupBox(QStringLiteral("SCPI command"), this);
+    auto *commandLayout = new QHBoxLayout(commandBox);
+    m_command = new QLineEdit(QStringLiteral("*IDN?"), commandBox);
+    m_query = new QPushButton(QStringLiteral("Query"), commandBox);
+    m_write = new QPushButton(QStringLiteral("Write"), commandBox);
+    commandLayout->addWidget(m_command, 1); commandLayout->addWidget(m_query); commandLayout->addWidget(m_write);
+    root->addWidget(commandBox);
+
+    m_history = new QPlainTextEdit(this); m_history->setReadOnly(true); m_history->setMaximumBlockCount(1000); m_history->setPlaceholderText(QStringLiteral("SCPI TX/RX history")); root->addWidget(m_history, 1);
+    m_status = new QLabel(QStringLiteral("No manager attached"), this); root->addWidget(m_status);
+
+    connect(m_add, &QPushButton::clicked, this, &InstrumentManagerControl::onAddInstrument);
+    connect(m_remove, &QPushButton::clicked, this, &InstrumentManagerControl::onRemoveInstrument);
+    connect(m_connect, &QPushButton::clicked, this, &InstrumentManagerControl::onConnectInstrument);
+    connect(m_disconnect, &QPushButton::clicked, this, &InstrumentManagerControl::onDisconnectInstrument);
+    connect(m_probe, &QPushButton::clicked, this, &InstrumentManagerControl::onProbeAll);
+    connect(m_applyProfile, &QPushButton::clicked, this, &InstrumentManagerControl::onApplyProfile);
+    connect(m_browseProfiles, &QPushButton::clicked, this, &InstrumentManagerControl::onBrowseProfiles);
+    connect(m_profiles, &QLineEdit::editingFinished, this, &InstrumentManagerControl::onProfileDirectoryEdited);
+    connect(m_table, &QTableWidget::itemSelectionChanged, this, &InstrumentManagerControl::onSelectionChanged);
+    connect(m_query, &QPushButton::clicked, this, &InstrumentManagerControl::onQuery);
+    connect(m_write, &QPushButton::clicked, this, &InstrumentManagerControl::onWrite);
+}
+
+QString InstrumentManagerControl::title() const { return m_titleLabel ? m_titleLabel->text() : QString(); }
+void InstrumentManagerControl::setTitle(const QString &title) { if (m_titleLabel) m_titleLabel->setText(title); }
+
+void InstrumentManagerControl::setManager(QpmInstrumentManager *manager)
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (m_manager == manager) return;
+    if (m_manager) disconnect(m_manager, nullptr, this, nullptr);
+    m_manager = manager;
+    if (m_manager)
+    {
+        m_profiles->setText(m_manager->profileDirectory());
+        connect(m_manager, &QpmInstrumentManager::instrumentAdded, this, [this](const QString &) { refreshTable(); });
+        connect(m_manager, &QpmInstrumentManager::instrumentRemoved, this, [this](const QString &) { refreshTable(); });
+        connect(m_manager, &QpmInstrumentManager::instrumentUpdated, this, [this](const QString &) { refreshTable(); });
+        connect(m_manager, &QpmInstrumentManager::activeInstrumentChanged, this, &InstrumentManagerControl::activeInstrumentChanged);
+        connect(m_manager, &QpmInstrumentManager::profileSuggestionChanged, this, [this](const QString &name, const QString &profileId, const QString &, int score, const QString &reason) {
+            if (!profileId.isEmpty()) appendHistory(QStringLiteral("PROFILE [%1] %2 score=%3 (%4)").arg(name, profileId).arg(score).arg(reason));
+            refreshTable();
+        });
+        connect(m_manager, &QpmInstrumentManager::profileApplied, this, [this](const QString &name, const QString &profileId, const QString &profilePath) {
+            appendHistory(QStringLiteral("PROFILE [%1] applied %2 -> %3").arg(name, profileId, profilePath));
+            emit profileApplied(name, profileId, profilePath);
+            emit profilePathApplied(profilePath);
+            refreshTable();
+        });
+        connect(m_manager, &QpmInstrumentManager::traffic, this, [this](const QString &name, QpmScpiInstrument::Direction direction, const QString &text, qint64 timestampMs) {
+            const QString marker = direction == QpmScpiInstrument::Direction::Tx ? QStringLiteral("TX") : direction == QpmScpiInstrument::Direction::Rx ? QStringLiteral("RX") : QStringLiteral("SYS");
+            appendHistory(QStringLiteral("%1  [%2] %3  %4").arg(QDateTime::fromMSecsSinceEpoch(timestampMs).toString(QStringLiteral("HH:mm:ss.zzz")), name, marker, text));
+        });
+        connect(m_manager, &QpmInstrumentManager::errorOccurred, this, [this](const QString &name, const QString &message) { m_status->setText(QStringLiteral("%1: %2").arg(name, message)); });
+    }
+#else
+    Q_UNUSED(manager); m_manager = nullptr;
+#endif
+    refreshTable();
+}
+
+void InstrumentManagerControl::refreshTable()
+{
+    const QSignalBlocker blocker(m_table); m_table->setRowCount(0);
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_manager) { m_status->setText(QStringLiteral("No manager attached")); m_applyProfile->setEnabled(false); return; }
+    for (const QString &name : m_manager->instrumentNames())
+    {
+        QpmScpiInstrument *instrument = m_manager->instrument(name); if (!instrument) continue;
+        const int row = m_table->rowCount(); m_table->insertRow(row);
+        QString state;
+        switch (instrument->state()) { case QpmScpiInstrument::State::Connecting: state=QStringLiteral("Connecting"); break; case QpmScpiInstrument::State::Ready: state=QStringLiteral("Ready"); break; case QpmScpiInstrument::State::Error: state=QStringLiteral("Error"); break; default: state=QStringLiteral("Disconnected"); break; }
+        const int score = m_manager->suggestedProfileScore(name);
+        QString suggestion = m_manager->suggestedProfileDisplayName(name);
+        if (!suggestion.isEmpty()) suggestion += QStringLiteral(" (%1%)").arg(score);
+        if (!m_manager->appliedProfilePath(name).isEmpty()) suggestion += QStringLiteral("  [applied]");
+        m_table->setItem(row,0,new QTableWidgetItem(name));
+        m_table->setItem(row,1,new QTableWidgetItem(QStringLiteral("%1:%2").arg(instrument->host()).arg(instrument->port())));
+        m_table->setItem(row,2,new QTableWidgetItem(state));
+        m_table->setItem(row,3,new QTableWidgetItem(instrument->identity()));
+        m_table->setItem(row,4,new QTableWidgetItem(suggestion));
+        if (name == m_manager->activeInstrument()) m_table->selectRow(row);
+    }
+    const QString selected = selectedInstrumentName();
+    m_applyProfile->setEnabled(!selected.isEmpty() && m_manager->suggestedProfileScore(selected) > 0);
+    m_status->setText(QStringLiteral("%1 configured instrument(s) · profiles: %2").arg(m_manager->instrumentCount()).arg(m_manager->profileDirectory()));
+#else
+    m_table->insertRow(0); m_table->setItem(0,0,new QTableWidgetItem(QStringLiteral("DMM"))); m_table->setItem(0,1,new QTableWidgetItem(QStringLiteral("192.168.1.100:5025"))); m_table->setItem(0,2,new QTableWidgetItem(QStringLiteral("Disconnected"))); m_table->setItem(0,3,new QTableWidgetItem(QStringLiteral("KEYSIGHT TECHNOLOGIES,34461A,..."))); m_table->setItem(0,4,new QTableWidgetItem(QStringLiteral("Keysight 34461A (100%)"))); m_status->setText(QStringLiteral("Designer preview"));
+#endif
+}
+
+QString InstrumentManagerControl::selectedInstrumentName() const { const int row=m_table->currentRow(); if(row<0||!m_table->item(row,0)) return {}; return m_table->item(row,0)->text(); }
+
+void InstrumentManagerControl::onAddInstrument()
+{
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if (!m_manager) return; if (!m_manager->addInstrument(m_name->text(), m_host->text(), static_cast<quint16>(m_port->value()))) m_status->setText(QStringLiteral("Invalid instrument endpoint.")); else refreshTable();
+#endif
+}
+void InstrumentManagerControl::onRemoveInstrument(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(m_manager)m_manager->removeInstrument(selectedInstrumentName());
+#endif
+}
+void InstrumentManagerControl::onConnectInstrument(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(m_manager)m_manager->connectInstrument(selectedInstrumentName());
+#endif
+}
+void InstrumentManagerControl::onDisconnectInstrument(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(m_manager)m_manager->disconnectInstrument(selectedInstrumentName());
+#endif
+}
+void InstrumentManagerControl::onProbeAll(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(m_manager)m_manager->probeConfiguredInstruments();
+#endif
+}
+void InstrumentManagerControl::onApplyProfile(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(!m_manager)return; const QString name=selectedInstrumentName(); if(!m_manager->applySuggestedProfile(name))m_status->setText(QStringLiteral("No profile suggestion is available for %1.").arg(name));
+#endif
+}
+void InstrumentManagerControl::onBrowseProfiles(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    const QString selected=QFileDialog::getExistingDirectory(this,QStringLiteral("Select instrument profile directory"),m_profiles->text()); if(selected.isEmpty())return; m_profiles->setText(selected); onProfileDirectoryEdited();
+#endif
+}
+void InstrumentManagerControl::onProfileDirectoryEdited(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(m_manager)m_manager->setProfileDirectory(m_profiles->text());
+#endif
+}
+void InstrumentManagerControl::onSelectionChanged(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(!m_manager)return; const QString name=selectedInstrumentName(); if(!name.isEmpty())m_manager->setActiveInstrument(name); refreshTable();
+#endif
+}
+void InstrumentManagerControl::onQuery(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(!m_manager)return; const QString command=m_command->text().trimmed(); if(command.isEmpty())return; const quint64 id=m_manager->queryActive(command); if(id!=0){m_status->setText(QStringLiteral("Query queued (#%1)").arg(id));emit commandSubmitted(command,true);}
+#endif
+}
+void InstrumentManagerControl::onWrite(){
+#ifndef QPM_DESIGNER_PLUGIN_BUILD
+    if(!m_manager)return; const QString command=m_command->text().trimmed(); if(command.isEmpty())return; const quint64 id=m_manager->writeActive(command); if(id!=0){m_status->setText(QStringLiteral("Command queued (#%1)").arg(id));emit commandSubmitted(command,false);}
+#endif
+}
+void InstrumentManagerControl::appendHistory(const QString &line){m_history->appendPlainText(line);}
+`;
+}
+function qtXyPlotHeader(className) {
+    return `#pragma once\n\n#include <QPointF>\n#include <QVector>\n#include <QString>\n#include <QWidget>\n\nclass QEvent;\nclass QMouseEvent;\nclass QPaintEvent;\nclass QRectF;\n\nclass ${className} final : public QWidget\n{\n    Q_OBJECT\n    Q_PROPERTY(QString title READ title WRITE setTitle)\n    Q_PROPERTY(double xMinimum READ xMinimum WRITE setXMinimum)\n    Q_PROPERTY(double xMaximum READ xMaximum WRITE setXMaximum)\n    Q_PROPERTY(double yMinimum READ yMinimum WRITE setYMinimum)\n    Q_PROPERTY(double yMaximum READ yMaximum WRITE setYMaximum)\n    Q_PROPERTY(bool gridVisible READ gridVisible WRITE setGridVisible)\n    Q_PROPERTY(bool connectPoints READ connectPoints WRITE setConnectPoints)\n\npublic:\n    explicit ${className}(QWidget *parent = nullptr);\n    QString title() const { return m_title; }\n    double xMinimum() const noexcept { return m_xMinimum; }\n    double xMaximum() const noexcept { return m_xMaximum; }\n    double yMinimum() const noexcept { return m_yMinimum; }\n    double yMaximum() const noexcept { return m_yMaximum; }\n    bool gridVisible() const noexcept { return m_gridVisible; }\n    bool connectPoints() const noexcept { return m_connectPoints; }\n    const QVector<QPointF> &points() const noexcept { return m_points; }\n    QSize minimumSizeHint() const override;\n    QSize sizeHint() const override;\n\npublic slots:\n    void setTitle(const QString &title);\n    void setXMinimum(double minimum);\n    void setXMaximum(double maximum);\n    void setXRange(double minimum, double maximum);\n    void setYMinimum(double minimum);\n    void setYMaximum(double maximum);\n    void setYRange(double minimum, double maximum);\n    void setGridVisible(bool visible);\n    void setConnectPoints(bool connect);\n    void setPoints(const QVector<QPointF> &points);\n    void appendPoint(const QPointF &point);\n    void clearPoints();\n\nsignals:\n    void pointsChanged();\n    void cursorPointChanged(int index, QPointF point);\n\nprotected:\n    void paintEvent(QPaintEvent *event) override;\n    void mouseMoveEvent(QMouseEvent *event) override;\n    void leaveEvent(QEvent *event) override;\n\nprivate:\n    QRectF plotRect() const;\n    QPointF toScreen(const QPointF &point) const;\n    void updateCursor(const QPointF &position);\n    QVector<QPointF> m_points;\n    QString m_title = QStringLiteral("XY Plot");\n    double m_xMinimum = -1.0;\n    double m_xMaximum = 1.0;\n    double m_yMinimum = -1.0;\n    double m_yMaximum = 1.0;\n    bool m_gridVisible = true;\n    bool m_connectPoints = true;\n    int m_cursorIndex = -1;\n};\n`;
+}
+function qtXyPlotSource(className, headerInclude) {
+    return `#include "${headerInclude}"\n\n#include <QMouseEvent>\n#include <QPainter>\n#include <QPainterPath>\n#include <QPaintEvent>\n#include <QStyle>\n#include <QStyleOption>\n#include <QtGlobal>\n#include <limits>\n\n${className}::${className}(QWidget *parent):QWidget(parent){setAttribute(Qt::WA_StyledBackground,true);setMouseTracking(true);}\nQSize ${className}::minimumSizeHint() const{return {220,140};}\nQSize ${className}::sizeHint() const{return {520,320};}\nvoid ${className}::setTitle(const QString &title){if(m_title!=title){m_title=title;update();}}\nvoid ${className}::setXMinimum(double v){setXRange(v,m_xMaximum);}\nvoid ${className}::setXMaximum(double v){setXRange(m_xMinimum,v);}\nvoid ${className}::setXRange(double a,double b){if(b<a)qSwap(a,b);if(qFuzzyCompare(a+1.0,b+1.0))b=a+1.0;m_xMinimum=a;m_xMaximum=b;update();}\nvoid ${className}::setYMinimum(double v){setYRange(v,m_yMaximum);}\nvoid ${className}::setYMaximum(double v){setYRange(m_yMinimum,v);}\nvoid ${className}::setYRange(double a,double b){if(b<a)qSwap(a,b);if(qFuzzyCompare(a+1.0,b+1.0))b=a+1.0;m_yMinimum=a;m_yMaximum=b;update();}\nvoid ${className}::setGridVisible(bool v){if(m_gridVisible!=v){m_gridVisible=v;update();}}\nvoid ${className}::setConnectPoints(bool v){if(m_connectPoints!=v){m_connectPoints=v;update();}}\nvoid ${className}::setPoints(const QVector<QPointF> &points){m_points=points;m_cursorIndex=-1;update();emit pointsChanged();}\nvoid ${className}::appendPoint(const QPointF &point){m_points.push_back(point);update();emit pointsChanged();}\nvoid ${className}::clearPoints(){if(m_points.isEmpty())return;m_points.clear();m_cursorIndex=-1;update();emit pointsChanged();}\n\nvoid ${className}::paintEvent(QPaintEvent *event)\n{\n    Q_UNUSED(event);QStyleOption option;option.initFrom(this);QPainter painter(this);painter.setRenderHint(QPainter::Antialiasing);style()->drawPrimitive(QStyle::PE_Widget,&option,&painter,this);\n    const QRectF plot=plotRect();const QColor fg=palette().color(QPalette::WindowText);const QColor mid=palette().color(QPalette::Mid);const QColor hi=palette().color(QPalette::Highlight);painter.setPen(fg);QFont f=painter.font();f.setBold(true);painter.setFont(f);painter.drawText(QRectF(8,4,width()-16,22),Qt::AlignCenter,m_title);\n    painter.setPen(QPen(mid,1.0));if(m_gridVisible){for(int i=0;i<=10;++i){const qreal x=plot.left()+plot.width()*i/10.0;painter.drawLine(QPointF(x,plot.top()),QPointF(x,plot.bottom()));}for(int i=0;i<=8;++i){const qreal y=plot.top()+plot.height()*i/8.0;painter.drawLine(QPointF(plot.left(),y),QPointF(plot.right(),y));}}painter.drawRect(plot);\n    if(!m_points.isEmpty()){painter.setPen(QPen(hi,1.5));if(m_connectPoints&&m_points.size()>1){QPainterPath path;path.moveTo(toScreen(m_points[0]));for(int i=1;i<m_points.size();++i)path.lineTo(toScreen(m_points[i]));painter.drawPath(path);}painter.setBrush(hi);for(const QPointF &p:m_points)painter.drawEllipse(toScreen(p),2.5,2.5);}\n    if(m_cursorIndex>=0&&m_cursorIndex<m_points.size()){const QPointF p=toScreen(m_points[m_cursorIndex]);painter.setPen(QPen(fg,1.0,Qt::DashLine));painter.drawLine(QPointF(p.x(),plot.top()),QPointF(p.x(),plot.bottom()));painter.drawLine(QPointF(plot.left(),p.y()),QPointF(plot.right(),p.y()));painter.drawText(QRectF(plot.left()+4,plot.top()+4,plot.width()-8,20),Qt::AlignRight|Qt::AlignTop,QStringLiteral("x=%1  y=%2").arg(m_points[m_cursorIndex].x(),0,'g',6).arg(m_points[m_cursorIndex].y(),0,'g',6));}\n}\nvoid ${className}::mouseMoveEvent(QMouseEvent *event){updateCursor(event->position());QWidget::mouseMoveEvent(event);}\nvoid ${className}::leaveEvent(QEvent *event){m_cursorIndex=-1;update();QWidget::leaveEvent(event);}\nQRectF ${className}::plotRect() const{return QRectF(rect()).adjusted(48.0,30.0,-14.0,-30.0);}\nQPointF ${className}::toScreen(const QPointF &point) const{const QRectF p=plotRect();const double xr=(point.x()-m_xMinimum)/(m_xMaximum-m_xMinimum);const double yr=(point.y()-m_yMinimum)/(m_yMaximum-m_yMinimum);return QPointF(p.left()+qBound(0.0,xr,1.0)*p.width(),p.bottom()-qBound(0.0,yr,1.0)*p.height());}\nvoid ${className}::updateCursor(const QPointF &position){if(m_points.isEmpty()){m_cursorIndex=-1;return;}double best=std::numeric_limits<double>::max();int bestIndex=-1;for(int i=0;i<m_points.size();++i){const QPointF s=toScreen(m_points[i]);const double dx=s.x()-position.x();const double dy=s.y()-position.y();const double d=dx*dx+dy*dy;if(d<best){best=d;bestIndex=i;}}if(bestIndex==m_cursorIndex)return;m_cursorIndex=bestIndex;update();if(bestIndex>=0)emit cursorPointChanged(bestIndex,m_points[bestIndex]);}\n`;
 }
 function qtDesignerUi(className, widgetClass) {
     const isMainWindow = widgetClass === 'QMainWindow';
@@ -5308,6 +11440,54 @@ class QpmTemplateService {
         this.installations = installations;
         this.output = output;
     }
+    async convertQtDesignerFormToClass(projectDirectory, formPath) {
+        const absoluteFormPath = path.resolve(formPath);
+        if (path.extname(absoluteFormPath).toLowerCase() !== '.ui') {
+            vscode.window.showErrorMessage('QPM can convert only Qt Designer .ui files to Qt C++ classes.');
+            return undefined;
+        }
+        if (!fs.existsSync(absoluteFormPath)) {
+            vscode.window.showErrorMessage(`Qt Designer form not found: ${absoluteFormPath}`);
+            return undefined;
+        }
+        let content;
+        try {
+            content = fs.readFileSync(absoluteFormPath, 'utf8');
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`Unable to read ${path.basename(absoluteFormPath)}: ${error instanceof Error ? error.message : String(error)}`);
+            return undefined;
+        }
+        const metadata = inspectQtDesignerForm(content);
+        if (!metadata) {
+            vscode.window.showErrorMessage('Unable to identify the Qt class and root widget type in this .ui file.');
+            return undefined;
+        }
+        const validationError = validateCppClassName(metadata.className);
+        if (validationError) {
+            vscode.window.showErrorMessage(`The Designer form class “${metadata.className}” cannot be used as a C++ class: ${validationError}`);
+            return undefined;
+        }
+        if (!['QWidget', 'QDialog', 'QMainWindow'].includes(metadata.baseClass)) {
+            vscode.window.showErrorMessage(`The root widget type ${metadata.baseClass} is not supported by the automatic class wrapper. Supported types: QWidget, QDialog and QMainWindow.`);
+            return undefined;
+        }
+        const classStem = qtFileStem(metadata.className);
+        const uiStem = path.basename(absoluteFormPath, path.extname(absoluteFormPath));
+        const headerPath = path.join(projectDirectory, 'include', `${classStem}.h`);
+        const sourcePath = path.join(projectDirectory, 'src', `${classStem}.cpp`);
+        const header = qtWidgetHeader(metadata.className, metadata.baseClass);
+        const source = qtWidgetSource(metadata.className, metadata.baseClass, path.basename(headerPath), uiStem);
+        const result = await this.writeFiles([
+            { absolutePath: sourcePath, contents: toCrlf(source) },
+            { absolutePath: headerPath, contents: toCrlf(header) }
+        ], sourcePath);
+        if (result) {
+            result.files.push(absoluteFormPath);
+            this.output.appendLine(`[Qt/C++ Templates] Wrapped Designer form ${absoluteFormPath} as ${metadata.baseClass} class ${metadata.className}.`);
+        }
+        return result;
+    }
     async generateNewFiles(projectDirectory) {
         const userTemplates = this.loadFileTemplates();
         const selectedValue = await this.pickNewFileWorkflow(userTemplates.length > 0);
@@ -5320,6 +11500,13 @@ class QpmTemplateService {
             case 'cpp-source': return this.generateCppSource(projectDirectory);
             case 'qt-main': return this.generateQtMain(projectDirectory);
             case 'qt-class': return this.generateQtClass(projectDirectory);
+            case 'qt-custom-painted-widget': return this.generateQtCustomPaintedWidget(projectDirectory);
+            case 'qt-realtime-acquisition': return this.generateQtRealtimeAcquisition(projectDirectory);
+            case 'qt-acquisition-sources': return this.generateQtAcquisitionSources(projectDirectory);
+            case 'qt-acquisition-dashboard': return this.generateQtAcquisitionDashboard(projectDirectory);
+            case 'qt-scpi-instrument-manager': return this.generateQtScpiInstrumentManager(projectDirectory);
+            case 'qt-instrument-driver-registry': return this.generateQtInstrumentDriverRegistry(projectDirectory);
+            case 'qt-instrument-profiles': return this.generateQtInstrumentProfiles(projectDirectory);
             case 'qt-form': return this.generateQtForm(projectDirectory);
             case 'qt-resource': return this.generateQtResource(projectDirectory);
             case 'qt-qml': return this.generateQtQml(projectDirectory);
@@ -5366,8 +11553,15 @@ class QpmTemplateService {
         const choicesByGroup = {
             'group-qt': [
                 { label: 'Qt application main.cpp', description: 'Widgets, console or Qt Quick application entry point', value: 'qt-main' },
-                { label: 'Qt class', description: 'QObject, QWidget, QDialog or QMainWindow class with optional Designer form', value: 'qt-class' },
-                { label: 'Qt Designer form (.ui)', description: 'Create a standalone QMainWindow, QWidget or QDialog form', value: 'qt-form' },
+                { label: 'Qt Widget / QObject class', description: 'Create C++ .h/.cpp files; QWidget, QDialog and QMainWindow also receive a Designer .ui form', value: 'qt-class' },
+                { label: 'Custom Painted Widget (QPainter)', description: 'Create a reusable Designer-promotable QWidget: generic value control, analog gauge/dial, or signal plot/chart', value: 'qt-custom-painted-widget' },
+                { label: 'Real-time Signal Acquisition Support', description: 'Create a thread-safe multi-channel ring buffer and a GUI-thread SignalPlot refresh bridge', value: 'qt-realtime-acquisition' },
+                { label: 'Acquisition Sources + Control Panel', description: 'Generate Serial, TCP, UDP and SCPI acquisition backends, a common controller/decoder and a Designer-ready acquisition panel', value: 'qt-acquisition-sources' },
+                { label: 'Complete Acquisition Dashboard', description: 'Generate acquisition backends, SignalPlot, realtime bridge and a ready-to-run AcquisitionDashboard; auto-inserts it into a blank MainWindow form', value: 'qt-acquisition-dashboard' },
+                { label: 'SCPI Instrument Manager + Auto Profile Detection', description: 'Create queued SCPI/TCP sessions plus *IDN? manufacturer/model matching, profile suggestions, Apply profile, capabilities and TX/RX history', value: 'qt-scpi-instrument-manager' },
+                { label: 'Instrument Driver Registry + Capabilities', description: 'Create a model-independent capability registry, capability-aware profile model and Designer-ready capabilities inspector', value: 'qt-instrument-driver-registry' },
+                { label: 'SCPI Instrument Profiles + Auto Control Panel', description: 'Create editable DMM, power-supply, generator and oscilloscope profiles plus a Designer-ready panel generated from profile actions', value: 'qt-instrument-profiles' },
+                { label: 'Designer Form Only (.ui)', description: 'Advanced: create only a .ui file. No C++ class .h/.cpp files are created', value: 'qt-form' },
                 { label: 'Qt resource collection (.qrc)', description: 'Create a Qt resource collection ready for rcc', value: 'qt-resource' },
                 { label: 'QML file (.qml)', description: 'Create a Qt Quick ApplicationWindow starter', value: 'qt-qml' },
                 { label: 'Qt Test class (.cpp)', description: 'Create a Qt Test executable source with private test slots', value: 'qt-test' },
@@ -5803,9 +11997,9 @@ class QpmTemplateService {
     async generateQtClass(projectDirectory) {
         const type = await vscode.window.showQuickPick([
             { label: 'QObject class', value: 'QObject', description: 'QObject-derived class with Q_OBJECT, signals and slots sections' },
-            { label: 'QWidget + Designer form', value: 'QWidget', description: 'QWidget class paired with a .ui form' },
-            { label: 'QDialog + Designer form', value: 'QDialog', description: 'QDialog class paired with a .ui form' },
-            { label: 'QMainWindow + Designer form', value: 'QMainWindow', description: 'QMainWindow class paired with a .ui form' }
+            { label: 'QWidget + UI', value: 'QWidget', description: 'Creates include/<class>.h, src/<class>.cpp and forms/<class>.ui' },
+            { label: 'QDialog + UI', value: 'QDialog', description: 'Recommended for application dialogs. Creates the C++ class and its Designer form' },
+            { label: 'QMainWindow + UI', value: 'QMainWindow', description: 'Creates the C++ main-window class and its Designer form' }
         ], { title: 'Select a Qt class type' });
         if (!type)
             return undefined;
@@ -5837,12 +12031,295 @@ class QpmTemplateService {
             files.push({ absolutePath: formPath, contents: toCrlf(qtDesignerUi(className, type.value)) });
         return this.writeFiles(files, sourcePath);
     }
+    async generateQtCustomPaintedWidget(projectDirectory) {
+        const type = await vscode.window.showQuickPick([
+            { label: 'Complete QPM Instrumentation Pack', value: 'pack', description: 'Create LED, digital meter, rotary knob, linear/analog gauges, signal, spectrum and XY plots in one operation' },
+            { label: 'LED Indicator', value: 'led', description: 'Boolean status LED with label and Designer-editable active/inactive colors' },
+            { label: 'Digital Meter', value: 'digital', description: 'Numeric measurement display with title, prefix, unit, decimals and optional sign' },
+            { label: 'Rotary Knob', value: 'knob', description: 'Interactive rotary control with range, step, mouse drag and wheel input' },
+            { label: 'Linear Gauge', value: 'linear', description: 'Horizontal or vertical level gauge with range, ticks and direct mouse interaction' },
+            { label: 'Analog Gauge / Dial', value: 'gauge', description: 'Circular instrument gauge with ticks, needle, range/value properties and interactive mouse/wheel control' },
+            { label: 'Signal Plot / Chart', value: 'signal', description: 'Oscilloscope-style multichannel plot with trigger, AC/DC coupling, automatic Vpp/Vrms/Vavg/frequency/duty measurements, X/Y cursors, autoscale, zoom and pan' },
+            { label: 'Spectrum Plot', value: 'spectrum', description: 'Multitrace FFT/spectrum analyzer with max/min hold, persistence, peak marker, linear/log frequency, A/B cursors, Δf/ΔA, autoscale, zoom and pan' },
+            { label: 'XY Plot', value: 'xy', description: 'Scientific XY graph with configurable X/Y ranges, point markers, cursor and connected trace' },
+            { label: 'Generic Painted Value Widget', value: 'value', description: 'Minimal QWidget + QPainter + value/min/max/title/unit Q_PROPERTY starter' }
+        ], {
+            title: 'QPM Instrumentation / Custom Painted Widget',
+            placeHolder: 'Select a reusable QWidget. Every template is Designer-promotable and can be exposed in the QPM Instrumentation Widget Box.'
+        });
+        if (!type)
+            return undefined;
+        if (type.value === 'pack') {
+            const widgetSpecs = [
+                { className: 'StatusLed', header: qtLedIndicatorHeader, source: qtLedIndicatorSource },
+                { className: 'DigitalMeter', header: qtDigitalMeterHeader, source: qtDigitalMeterSource },
+                { className: 'RotaryKnob', header: qtRotaryKnobHeader, source: qtRotaryKnobSource },
+                { className: 'LinearGauge', header: qtLinearGaugeHeader, source: qtLinearGaugeSource },
+                { className: 'AnalogGauge', header: qtAnalogGaugeHeader, source: qtAnalogGaugeSource },
+                { className: 'SignalPlot', header: qtSignalPlotHeader, source: qtSignalPlotSource },
+                { className: 'SpectrumPlot', header: qtSpectrumPlotHeader, source: qtSpectrumPlotSource },
+                { className: 'XyPlot', header: qtXyPlotHeader, source: qtXyPlotSource }
+            ];
+            const files = [];
+            let primaryPath;
+            for (const spec of widgetSpecs) {
+                const stem = qtFileStem(spec.className);
+                const headerPath = path.join(projectDirectory, 'include', 'widgets', `${stem}.h`);
+                const sourcePath = path.join(projectDirectory, 'src', 'widgets', `${stem}.cpp`);
+                const headerInclude = `widgets/${stem}.h`;
+                files.push({ absolutePath: sourcePath, contents: toCrlf(spec.source(spec.className, headerInclude)) }, { absolutePath: headerPath, contents: toCrlf(spec.header(spec.className)) });
+                primaryPath ??= sourcePath;
+            }
+            const result = await this.writeFiles(files, primaryPath);
+            if (result) {
+                this.output.appendLine(`[Qt/C++ Templates] Created complete QPM Instrumentation pack (${widgetSpecs.length} widgets). Configure Qt Designer Custom Widgets to expose them in the Widget Box.`);
+            }
+            return result;
+        }
+        const defaults = {
+            led: 'LedIndicator',
+            digital: 'DigitalMeter',
+            knob: 'RotaryKnob',
+            linear: 'LinearGauge',
+            gauge: 'AnalogGauge',
+            signal: 'SignalPlot',
+            spectrum: 'SpectrumPlot',
+            xy: 'XyPlot',
+            value: 'ValueIndicator'
+        };
+        const className = await vscode.window.showInputBox({
+            title: `Create ${type.label}`,
+            prompt: 'C++ widget class name',
+            value: defaults[type.value] ?? 'CustomPaintedWidget',
+            validateInput: validateCppClassName
+        });
+        if (!className)
+            return undefined;
+        const stem = qtFileStem(className);
+        const headerPath = path.join(projectDirectory, 'include', 'widgets', `${stem}.h`);
+        const sourcePath = path.join(projectDirectory, 'src', 'widgets', `${stem}.cpp`);
+        const headerInclude = `widgets/${stem}.h`;
+        let header;
+        let source;
+        switch (type.value) {
+            case 'led':
+                header = qtLedIndicatorHeader(className);
+                source = qtLedIndicatorSource(className, headerInclude);
+                break;
+            case 'digital':
+                header = qtDigitalMeterHeader(className);
+                source = qtDigitalMeterSource(className, headerInclude);
+                break;
+            case 'knob':
+                header = qtRotaryKnobHeader(className);
+                source = qtRotaryKnobSource(className, headerInclude);
+                break;
+            case 'linear':
+                header = qtLinearGaugeHeader(className);
+                source = qtLinearGaugeSource(className, headerInclude);
+                break;
+            case 'gauge':
+                header = qtAnalogGaugeHeader(className);
+                source = qtAnalogGaugeSource(className, headerInclude);
+                break;
+            case 'signal':
+                header = qtSignalPlotHeader(className);
+                source = qtSignalPlotSource(className, headerInclude);
+                break;
+            case 'spectrum':
+                header = qtSpectrumPlotHeader(className);
+                source = qtSpectrumPlotSource(className, headerInclude);
+                break;
+            case 'xy':
+                header = qtXyPlotHeader(className);
+                source = qtXyPlotSource(className, headerInclude);
+                break;
+            default:
+                header = qtPaintedValueWidgetHeader(className);
+                source = qtPaintedValueWidgetSource(className, headerInclude);
+                break;
+        }
+        const result = await this.writeFiles([
+            { absolutePath: sourcePath, contents: toCrlf(source) },
+            { absolutePath: headerPath, contents: toCrlf(header) }
+        ], sourcePath);
+        if (result) {
+            this.output.appendLine(`[Qt/C++ Templates] Created Designer-promotable ${type.label}: ${className}. Promote a QWidget to ${className} using header ${headerInclude}.`);
+        }
+        return result;
+    }
+    async generateQtRealtimeAcquisition(projectDirectory) {
+        const signalPlotHeader = path.join(projectDirectory, 'include', 'widgets', 'signal_plot.h');
+        if (!fs.existsSync(signalPlotHeader)) {
+            this.output.appendLine('[Qt/C++ Templates] Real-time acquisition support expects include/widgets/signal_plot.h. Create the Signal Plot widget or the Complete QPM Instrumentation Pack if it is not already present.');
+        }
+        const files = [
+            {
+                absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_signal_buffer.h'),
+                contents: toCrlf(qtRealtimeSignalBufferHeader())
+            },
+            {
+                absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_signal_buffer.cpp'),
+                contents: toCrlf(qtRealtimeSignalBufferSource())
+            },
+            {
+                absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_signal_plot_bridge.h'),
+                contents: toCrlf(qtRealtimeSignalPlotBridgeHeader())
+            },
+            {
+                absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_signal_plot_bridge.cpp'),
+                contents: toCrlf(qtRealtimeSignalPlotBridgeSource())
+            }
+        ];
+        const result = await this.writeFiles(files, files[1].absolutePath);
+        if (result) {
+            this.output.appendLine('[Qt/C++ Templates] Created QpmSignalBuffer + QpmSignalPlotBridge. Acquisition threads can append samples without touching QWidget; the GUI bridge snapshots at a bounded refresh rate.');
+        }
+        return result;
+    }
+    async generateQtAcquisitionSources(projectDirectory) {
+        const bufferHeader = path.join(projectDirectory, 'include', 'instrumentation', 'qpm_signal_buffer.h');
+        if (!fs.existsSync(bufferHeader)) {
+            this.output.appendLine('[Qt/C++ Templates] Acquisition Sources expect QpmSignalBuffer. QPM will also generate the 0.22.0 real-time buffer/bridge support because it is not present yet.');
+        }
+        const files = [];
+        if (!fs.existsSync(bufferHeader)) {
+            files.push({ absolutePath: bufferHeader, contents: toCrlf(qtRealtimeSignalBufferHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_signal_buffer.cpp'), contents: toCrlf(qtRealtimeSignalBufferSource()) });
+            const signalPlotHeader = path.join(projectDirectory, 'include', 'widgets', 'signal_plot.h');
+            if (fs.existsSync(signalPlotHeader)) {
+                files.push({ absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_signal_plot_bridge.h'), contents: toCrlf(qtRealtimeSignalPlotBridgeHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_signal_plot_bridge.cpp'), contents: toCrlf(qtRealtimeSignalPlotBridgeSource()) });
+            }
+        }
+        files.push({ absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_sample_decoder.h'), contents: toCrlf(qtAcquisitionSampleDecoderHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_sample_decoder.cpp'), contents: toCrlf(qtAcquisitionSampleDecoderSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_acquisition_source.h'), contents: toCrlf(qtAcquisitionSourceHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_acquisition_source.cpp'), contents: toCrlf(qtAcquisitionSourceSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_serial_acquisition_source.h'), contents: toCrlf(qtSerialAcquisitionSourceHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_serial_acquisition_source.cpp'), contents: toCrlf(qtSerialAcquisitionSourceSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_tcp_acquisition_source.h'), contents: toCrlf(qtTcpAcquisitionSourceHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_tcp_acquisition_source.cpp'), contents: toCrlf(qtTcpAcquisitionSourceSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_udp_acquisition_source.h'), contents: toCrlf(qtUdpAcquisitionSourceHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_udp_acquisition_source.cpp'), contents: toCrlf(qtUdpAcquisitionSourceSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_scpi_acquisition_source.h'), contents: toCrlf(qtScpiAcquisitionSourceHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_scpi_acquisition_source.cpp'), contents: toCrlf(qtScpiAcquisitionSourceSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_acquisition_controller.h'), contents: toCrlf(qtAcquisitionControllerHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_acquisition_controller.cpp'), contents: toCrlf(qtAcquisitionControllerSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'acquisition_control.h'), contents: toCrlf(qtAcquisitionControlHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'acquisition_control.cpp'), contents: toCrlf(qtAcquisitionControlSource()) });
+        const primaryPath = path.join(projectDirectory, 'src', 'instrumentation', 'qpm_acquisition_controller.cpp');
+        const result = await this.writeFiles(files, primaryPath);
+        if (result) {
+            result.requiredQtModules = ['Core', 'Widgets', 'Network', 'SerialPort'];
+            this.output.appendLine('[Qt/C++ Templates] Created acquisition source pack: common decoder/base, Serial, TCP, UDP, SCPI-over-TCP, QpmAcquisitionController and Designer-ready AcquisitionControl. Required Qt modules: Network + SerialPort + Widgets.');
+        }
+        return result;
+    }
+    async generateQtAcquisitionDashboard(projectDirectory) {
+        const files = [];
+        const addIfMissing = (relativePath, contents) => {
+            const absolutePath = path.join(projectDirectory, ...relativePath.split('/'));
+            if (!fs.existsSync(absolutePath))
+                files.push({ absolutePath, contents: toCrlf(contents) });
+        };
+        addIfMissing('include/instrumentation/qpm_signal_buffer.h', qtRealtimeSignalBufferHeader());
+        addIfMissing('src/instrumentation/qpm_signal_buffer.cpp', qtRealtimeSignalBufferSource());
+        addIfMissing('include/widgets/signal_plot.h', qtSignalPlotHeader('SignalPlot'));
+        addIfMissing('src/widgets/signal_plot.cpp', qtSignalPlotSource('SignalPlot', 'widgets/signal_plot.h'));
+        addIfMissing('include/instrumentation/qpm_signal_plot_bridge.h', qtRealtimeSignalPlotBridgeHeader());
+        addIfMissing('src/instrumentation/qpm_signal_plot_bridge.cpp', qtRealtimeSignalPlotBridgeSource());
+        addIfMissing('include/instrumentation/qpm_sample_decoder.h', qtAcquisitionSampleDecoderHeader());
+        addIfMissing('src/instrumentation/qpm_sample_decoder.cpp', qtAcquisitionSampleDecoderSource());
+        addIfMissing('include/instrumentation/qpm_acquisition_source.h', qtAcquisitionSourceHeader());
+        addIfMissing('src/instrumentation/qpm_acquisition_source.cpp', qtAcquisitionSourceSource());
+        addIfMissing('include/instrumentation/qpm_serial_acquisition_source.h', qtSerialAcquisitionSourceHeader());
+        addIfMissing('src/instrumentation/qpm_serial_acquisition_source.cpp', qtSerialAcquisitionSourceSource());
+        addIfMissing('include/instrumentation/qpm_tcp_acquisition_source.h', qtTcpAcquisitionSourceHeader());
+        addIfMissing('src/instrumentation/qpm_tcp_acquisition_source.cpp', qtTcpAcquisitionSourceSource());
+        addIfMissing('include/instrumentation/qpm_udp_acquisition_source.h', qtUdpAcquisitionSourceHeader());
+        addIfMissing('src/instrumentation/qpm_udp_acquisition_source.cpp', qtUdpAcquisitionSourceSource());
+        addIfMissing('include/instrumentation/qpm_scpi_acquisition_source.h', qtScpiAcquisitionSourceHeader());
+        addIfMissing('src/instrumentation/qpm_scpi_acquisition_source.cpp', qtScpiAcquisitionSourceSource());
+        addIfMissing('include/instrumentation/qpm_acquisition_controller.h', qtAcquisitionControllerHeader());
+        addIfMissing('src/instrumentation/qpm_acquisition_controller.cpp', qtAcquisitionControllerSource());
+        addIfMissing('include/widgets/acquisition_control.h', qtAcquisitionControlHeader());
+        addIfMissing('src/widgets/acquisition_control.cpp', qtAcquisitionControlSource());
+        addIfMissing('include/widgets/acquisition_dashboard.h', qtAcquisitionDashboardHeader());
+        addIfMissing('src/widgets/acquisition_dashboard.cpp', qtAcquisitionDashboardSource());
+        const integratedUi = integrateAcquisitionDashboardIntoBlankMainWindowUi(projectDirectory);
+        if (integratedUi !== undefined) {
+            files.push({ absolutePath: path.join(projectDirectory, 'forms', 'mainwindow.ui'), contents: toCrlf(integratedUi) });
+        }
+        if (files.length === 0) {
+            vscode.window.showInformationMessage('The complete acquisition dashboard is already present in this project.');
+            return undefined;
+        }
+        const primaryPath = path.join(projectDirectory, 'src', 'widgets', 'acquisition_dashboard.cpp');
+        const result = await this.writeFiles(files, primaryPath);
+        if (result) {
+            result.requiredQtModules = ['Core', 'Gui', 'Widgets', 'Network', 'SerialPort'];
+            const integration = integratedUi !== undefined
+                ? ' The blank MainWindow form was populated automatically with AcquisitionDashboard.'
+                : ' MainWindow was left unchanged because its form already contains user content; drag AcquisitionDashboard from QPM Instrumentation or promote a QWidget to it.';
+            this.output.appendLine(`[Qt/C++ Templates] Created complete acquisition dashboard: AcquisitionControl + SignalPlot + QpmSignalBuffer + QpmSignalPlotBridge + Serial/TCP/UDP/SCPI backends.${integration}`);
+        }
+        return result;
+    }
+    async generateQtScpiInstrumentManager(projectDirectory) {
+        const files = [
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_scpi_instrument.h'), contents: toCrlf(qtScpiInstrumentHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_scpi_instrument.cpp'), contents: toCrlf(qtScpiInstrumentSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_profile.h'), contents: toCrlf(qtInstrumentProfileHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_profile.cpp'), contents: toCrlf(qtInstrumentProfileSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_driver_registry.h'), contents: toCrlf(qtInstrumentDriverRegistryHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_driver_registry.cpp'), contents: toCrlf(qtInstrumentDriverRegistrySource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_scpi_profile_matcher.h'), contents: toCrlf(qtScpiProfileMatcherHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_scpi_profile_matcher.cpp'), contents: toCrlf(qtScpiProfileMatcherSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_manager.h'), contents: toCrlf(qtInstrumentManagerHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_manager.cpp'), contents: toCrlf(qtInstrumentManagerSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'instrument_manager_control.h'), contents: toCrlf(qtInstrumentManagerControlHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'instrument_manager_control.cpp'), contents: toCrlf(qtInstrumentManagerControlSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'instrument_capabilities_control.h'), contents: toCrlf(qtInstrumentCapabilitiesControlHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'instrument_capabilities_control.cpp'), contents: toCrlf(qtInstrumentCapabilitiesControlSource()) }
+        ];
+        const profileDirectory = path.join(projectDirectory, 'instrument_profiles');
+        if (!fs.existsSync(profileDirectory) || fs.readdirSync(profileDirectory).filter((entry) => entry.toLowerCase().endsWith('.json')).length === 0) {
+            files.push({ absolutePath: path.join(profileDirectory, 'generic_dmm.json'), contents: qtInstrumentProfileJson('dmm') }, { absolutePath: path.join(profileDirectory, 'generic_power_supply.json'), contents: qtInstrumentProfileJson('power-supply') }, { absolutePath: path.join(profileDirectory, 'generic_signal_generator.json'), contents: qtInstrumentProfileJson('signal-generator') }, { absolutePath: path.join(profileDirectory, 'generic_oscilloscope.json'), contents: qtInstrumentProfileJson('oscilloscope') });
+        }
+        const primaryPath = path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_manager.cpp');
+        const result = await this.writeFiles(files, primaryPath);
+        if (result) {
+            result.requiredQtModules = ['Core', 'Widgets', 'Network'];
+            this.output.appendLine('[Qt/C++ Templates] Created SCPI Instrument Manager with automatic *IDN? parsing and manufacturer/model profile matching, plus Driver Registry and model-independent capabilities. Suggestions are scored and shown in InstrumentManagerControl; Apply profile is always explicit and never silently changes the active driver. Matching searches project-local instrument_profiles JSON files. Probe still operates on configured endpoints because generic SCPI has no universal LAN discovery protocol.');
+        }
+        return result;
+    }
+    async generateQtInstrumentDriverRegistry(projectDirectory) {
+        const files = [
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_profile.h'), contents: toCrlf(qtInstrumentProfileHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_profile.cpp'), contents: toCrlf(qtInstrumentProfileSource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_driver_registry.h'), contents: toCrlf(qtInstrumentDriverRegistryHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_driver_registry.cpp'), contents: toCrlf(qtInstrumentDriverRegistrySource()) },
+            { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'instrument_capabilities_control.h'), contents: toCrlf(qtInstrumentCapabilitiesControlHeader()) },
+            { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'instrument_capabilities_control.cpp'), contents: toCrlf(qtInstrumentCapabilitiesControlSource()) }
+        ];
+        const profileDirectory = path.join(projectDirectory, 'instrument_profiles');
+        if (!fs.existsSync(profileDirectory) || fs.readdirSync(profileDirectory).filter((entry) => entry.toLowerCase().endsWith('.json')).length === 0) {
+            files.push({ absolutePath: path.join(profileDirectory, 'generic_dmm.json'), contents: qtInstrumentProfileJson('dmm') }, { absolutePath: path.join(profileDirectory, 'generic_power_supply.json'), contents: qtInstrumentProfileJson('power-supply') }, { absolutePath: path.join(profileDirectory, 'generic_signal_generator.json'), contents: qtInstrumentProfileJson('signal-generator') }, { absolutePath: path.join(profileDirectory, 'generic_oscilloscope.json'), contents: qtInstrumentProfileJson('oscilloscope') });
+        }
+        const result = await this.writeFiles(files, path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_driver_registry.cpp'));
+        if (result) {
+            result.requiredQtModules = ['Core', 'Widgets'];
+            this.output.appendLine('[Qt/C++ Templates] Created QpmInstrumentDriverRegistry and InstrumentCapabilitiesControl. Profiles now expose model-independent capabilities mapped to SCPI action IDs, so application logic can query functions such as measure.dc-voltage or scope.single without checking vendor/model names.');
+        }
+        return result;
+    }
+    async generateQtInstrumentProfiles(projectDirectory) {
+        const scpiHeader = path.join(projectDirectory, 'include', 'instrumentation', 'qpm_scpi_instrument.h');
+        const files = [];
+        if (!fs.existsSync(scpiHeader)) {
+            files.push({ absolutePath: scpiHeader, contents: toCrlf(qtScpiInstrumentHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_scpi_instrument.cpp'), contents: toCrlf(qtScpiInstrumentSource()) });
+            this.output.appendLine('[Qt/C++ Templates] Instrument profiles require QpmScpiInstrument; QPM will generate the queued SCPI/TCP session because it is not present yet.');
+        }
+        files.push({ absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_profile.h'), contents: toCrlf(qtInstrumentProfileHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_profile.cpp'), contents: toCrlf(qtInstrumentProfileSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_instrument_driver_registry.h'), contents: toCrlf(qtInstrumentDriverRegistryHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_instrument_driver_registry.cpp'), contents: toCrlf(qtInstrumentDriverRegistrySource()) }, { absolutePath: path.join(projectDirectory, 'include', 'instrumentation', 'qpm_scpi_profile_matcher.h'), contents: toCrlf(qtScpiProfileMatcherHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'instrumentation', 'qpm_scpi_profile_matcher.cpp'), contents: toCrlf(qtScpiProfileMatcherSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'profiled_instrument_control.h'), contents: toCrlf(qtProfiledInstrumentControlHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'profiled_instrument_control.cpp'), contents: toCrlf(qtProfiledInstrumentControlSource()) }, { absolutePath: path.join(projectDirectory, 'include', 'widgets', 'instrument_capabilities_control.h'), contents: toCrlf(qtInstrumentCapabilitiesControlHeader()) }, { absolutePath: path.join(projectDirectory, 'src', 'widgets', 'instrument_capabilities_control.cpp'), contents: toCrlf(qtInstrumentCapabilitiesControlSource()) }, { absolutePath: path.join(projectDirectory, 'instrument_profiles', 'generic_dmm.json'), contents: qtInstrumentProfileJson('dmm') }, { absolutePath: path.join(projectDirectory, 'instrument_profiles', 'generic_power_supply.json'), contents: qtInstrumentProfileJson('power-supply') }, { absolutePath: path.join(projectDirectory, 'instrument_profiles', 'generic_signal_generator.json'), contents: qtInstrumentProfileJson('signal-generator') }, { absolutePath: path.join(projectDirectory, 'instrument_profiles', 'generic_oscilloscope.json'), contents: qtInstrumentProfileJson('oscilloscope') });
+        const primaryPath = path.join(projectDirectory, 'src', 'widgets', 'profiled_instrument_control.cpp');
+        const result = await this.writeFiles(files, primaryPath);
+        if (result) {
+            result.requiredQtModules = ['Core', 'Widgets', 'Network'];
+            this.output.appendLine('[Qt/C++ Templates] Created SCPI instrument profiles + ProfiledInstrumentControl + Driver Registry + InstrumentCapabilitiesControl + QpmScpiProfileMatcher. Built-in and editable JSON starter profiles cover DMM, power supply, signal generator and oscilloscope families. Commands are generic SCPI starters and must be checked against the target instrument programming manual.');
+        }
+        return result;
+    }
     async generateQtForm(projectDirectory) {
         const type = await vscode.window.showQuickPick([
-            { label: 'QMainWindow form', value: 'QMainWindow' },
-            { label: 'QWidget form', value: 'QWidget' },
-            { label: 'QDialog form', value: 'QDialog' }
-        ], { title: 'Select a Qt Designer form type' });
+            { label: 'QMainWindow UI only', value: 'QMainWindow', description: 'Creates only a .ui form; no C++ class files' },
+            { label: 'QWidget UI only', value: 'QWidget', description: 'Creates only a .ui form; no C++ class files' },
+            { label: 'QDialog UI only', value: 'QDialog', description: 'Creates only a .ui form; use Qt Widget / QObject class for a ready-to-use QDialog class' }
+        ], { title: 'Designer Form Only (.ui)', placeHolder: 'Choose the root widget for the standalone form' });
         if (!type)
             return undefined;
         const className = await vscode.window.showInputBox({

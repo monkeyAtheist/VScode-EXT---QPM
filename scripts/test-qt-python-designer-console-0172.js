@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const source = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtPythonService.ts'), 'utf8');
 const start = source.indexOf('async openDesigner(');

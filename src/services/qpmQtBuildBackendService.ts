@@ -337,10 +337,12 @@ function generateQmakeProject(context: BackendContext): string {
     `TARGET = ${qmakeQuote(context.manifest.targetName)}`,
     `CONFIG += ${config.join(' ')}`,
     `DESTDIR = ${qmakeQuote(targetDirectory)}`,
-    `OBJECTS_DIR = ${qmakeQuote(path.join(context.buildDirectory, 'obj'))}`,
-    `MOC_DIR = ${qmakeQuote(path.join(context.buildDirectory, 'moc'))}`,
-    `UI_DIR = ${qmakeQuote(path.join(context.buildDirectory, 'ui'))}`,
-    `RCC_DIR = ${qmakeQuote(path.join(context.buildDirectory, 'rcc'))}`,
+    // qmake runs with context.buildDirectory as cwd; relative intermediate dirs avoid
+    // MinGW response-file corruption when the absolute Windows path contains spaces.
+    'OBJECTS_DIR = obj',
+    'MOC_DIR = moc',
+    'UI_DIR = ui',
+    'RCC_DIR = rcc',
     qmakeList('SOURCES', files.sources),
     qmakeList('HEADERS', files.headers),
     qmakeList('FORMS', files.forms),

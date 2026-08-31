@@ -1,3 +1,57 @@
+## QPM 0.30.0 — Build diagnostics
+
+Build diagnostics are not generated project templates, but generated Qt/C++ sources benefit from the same parser. When compiler messages point at QPM-generated code, the structured log shows the generated file path and source line while the raw trace preserves the complete command line.
+
+## QPM 0.28.0 Instrument Driver Registry and capabilities
+
+Use **Create New File > Qt > Instrument Driver Registry + Capabilities** to generate `QpmInstrumentProfile`, `QpmInstrumentDriverRegistry` and the Designer-ready `InstrumentCapabilitiesControl`. Existing SCPI actions remain the executable commands; capabilities are stable semantic names linked to those action IDs.
+
+Example profile fragment:
+
+```json
+{
+  "capabilities": [
+    {
+      "id": "power.voltage-set",
+      "label": "Voltage setpoint",
+      "category": "power",
+      "actions": ["voltage"]
+    },
+    {
+      "id": "measure.dc-voltage",
+      "label": "DC voltage measurement",
+      "category": "measurement",
+      "actions": ["measured-voltage"]
+    }
+  ]
+}
+```
+
+Application logic can then ask `supportsCapability()` or use `invokeActiveCapability()` rather than checking whether the connected instrument is a Keysight, Rigol, Fluke, etc. For numeric/toggle capabilities, pass the requested value; with no value the runtime falls back to the mapped readback query when available.
+
+The SCPI Profile Catalog & Editor exposes the same capability list visually and validates that every linked action ID exists. Older profiles without a capability list remain compatible through conservative action-ID inference.
+
+The 0.28.0 acquisition templates also guarantee that `m_sampleRateHz` is declared in the generated acquisition controller/source state and propagated to the active buffer.
+
+## QPM 0.27.0 — SCPI automatic profile matching
+
+The **SCPI Instrument Manager + Auto Profile Detection** starter now generates `QpmScpiProfileMatcher` alongside the SCPI session, profile model, manager and Designer-ready control. A standard `*IDN?` reply is parsed and compared with project-local profile metadata. `InstrumentManagerControl` shows the best scored suggestion and requires an explicit **Apply suggested profile** action.
+
+Typical setup:
+
+```cpp
+QpmInstrumentManager manager;
+manager.setProfileDirectory("instrument_profiles");
+manager.addInstrument("DMM", "192.168.1.40", 5025);
+manager.connectInstrument("DMM");
+// auto-identify -> suggestion after *IDN?
+
+connect(&manager, &QpmInstrumentManager::profileApplied, this,
+        [](const QString &name, const QString &profileId, const QString &path) {
+            // load path into ProfiledInstrumentControl or application driver layer
+        });
+```
+
 ## 0.2.50 SDL add-on usage notes
 
 SDL2 and SDL3 starter projects can use add-on packages such as TTF, image, mixer and net without manually editing linker flags. The build settings still expose `SDL packages`, but QPM can infer installed add-ons from source code. For example, `TTF_Init()` causes `SDL2_ttf` or `SDL3_ttf` to be added to the build plan when the selected SDK contains the matching library.
@@ -5,6 +59,86 @@ SDL2 and SDL3 starter projects can use add-on packages such as TTF, image, mixer
 Accepted package aliases in build settings include `ttf`, `image`, `mixer` and `net`; QPM maps them to the selected SDL major version.
 
 # Templates and snippets guide
+
+## QPM 0.26.0 SCPI profile catalog/editor
+
+Use **Qt Project Manager: Open SCPI Instrument Profile Catalog & Editor** to create or adapt model-specific profiles without hand-editing JSON. Pick a generic or manufacturer/model-labelled starter from the catalog, edit the metadata and semantic action table, validate it, then save under `instrument_profiles/`.
+
+The editor supports the same four 0.25.0 action kinds and provides fields for query/write commands, `%1` substitution templates, unit, minimum/maximum, decimals, default value and readback. It also previews the resulting dynamic control layout. Model-labelled catalog entries are editable starters and should be reconciled with the programming manual before they are used as production drivers.
+
+New optional metadata fields are:
+
+```json
+{
+  "schemaVersion": 1,
+  "manufacturer": "Keysight",
+  "model": "34461A",
+  "documentationUrl": "docs/34461a-programming-guide.pdf"
+}
+```
+
+Existing 0.25.0 profiles without these fields remain valid.
+
+## QPM 0.25.0 SCPI instrument profiles
+
+Use **Create New File > Qt > SCPI Instrument Profiles + Auto Control Panel** when several instruments expose the same kinds of operations but use different SCPI command dialects. QPM creates `QpmInstrumentProfile`, `ProfiledInstrumentControl`, four generic profile JSON files, and the 0.24.0 `QpmScpiInstrument` session automatically when it is missing.
+
+An action in JSON can be one of:
+
+- `measurement`: query + readback label;
+- `numeric`: numeric editor with `%1` substituted into the write template plus optional readback query;
+- `toggle`: ON/OFF control using `%1` and optional readback;
+- `action`: immediate command such as `RUN`, `STOP` or `SING`.
+
+Example:
+
+```json
+{
+  "id": "voltage",
+  "label": "Voltage setpoint",
+  "kind": "numeric",
+  "query": "VOLT?",
+  "write": "VOLT %1",
+  "unit": "V",
+  "minimum": 0,
+  "maximum": 30,
+  "decimals": 3,
+  "defaultValue": 5
+}
+```
+
+Bind the Designer widget with `setInstrument()` and select a built-in profile with `setProfileId()`, or call `loadProfileFile()` for a vendor/model-specific JSON profile. The starter SCPI strings must be checked against the target programming manual; QPM intentionally keeps this variability explicit rather than hard-coding one manufacturer's dialect.
+
+## QPM 0.24.0 SCPI Instrument Manager
+
+Use **Create New File > Qt > SCPI Instrument Manager** when the application must configure and command one or more SCPI-over-TCP instruments independently of waveform acquisition. QPM creates `QpmScpiInstrument`, `QpmInstrumentManager` and `widgets/InstrumentManagerControl`.
+
+Typical asynchronous usage:
+
+```cpp
+auto *manager = new QpmInstrumentManager(this);
+manager->addInstrument("DMM", "192.168.1.40", 5025);
+manager->connectInstrument("DMM");
+connect(manager->instrument("DMM"), &QpmScpiInstrument::identityChanged, this, [](const QString &idn) {
+    qInfo() << idn;
+});
+manager->queryActive("MEAS:VOLT:DC?");
+```
+
+`QpmScpiInstrument` keeps a FIFO command queue and one outstanding line-response query at a time, associates requests with numeric IDs, applies per-command timeouts and emits timestamped traffic. The blocking `queryBlocking()` helper exists for non-latency-sensitive control flows, but asynchronous queries are preferable in GUI code.
+
+The **Probe configured (*IDN?)** action identifies endpoints already present in the manager. SCPI alone does not define portable LAN discovery; LXI/mDNS, VXI-11 and HiSLIP discovery are separate future providers rather than hidden network scanning in this starter.
+
+`InstrumentManagerControl` can be published through the QPM Designer plugin. Under `QPM_DESIGNER_PLUGIN_BUILD` it shows a static preview and avoids linking runtime networking/manager behavior into Designer.
+
+## QPM 0.23.0 acquisition source pack
+
+Use **Create New File > Qt > Acquisition Sources + Control Panel** after or alongside **Real-time Signal Acquisition Support**. QPM creates `QpmSampleDecoder`, `QpmAcquisitionSource`, Serial/TCP/UDP/SCPI implementations, `QpmAcquisitionController`, and `widgets/AcquisitionControl`. If `QpmSignalBuffer` is missing, the ring buffer is generated automatically; when `SignalPlot` already exists, QPM can also generate the plot bridge.
+
+The sample decoder expects either newline-delimited ASCII numeric values (comma, semicolon or whitespace separated) or interleaved little-endian Float32/Float64/Int16 frames. Set the controller channel count to the number of values in one frame. A sample-rate field can update `QpmSignalBuffer::sampleInterval` so the plot time axis remains calibrated. Scale and offset are applied after decoding and before samples enter the buffer.
+
+`AcquisitionControl` is a normal `QWidget` and is discoverable by the 0.18.0 Designer plugin workflow. Runtime usage is intentionally explicit: construct a `QpmAcquisitionController` with a `QpmSignalBuffer`, then call `setController()` on the widget. The generated SCPI backend is an ASCII-over-TCP starter (default port 5025 and `READ?`); binary-block parsing remains instrument-specific.
+
 
 ## Creation wizard
 
@@ -81,6 +215,21 @@ The `Module bundle...` creation action is grouped by language. C bundles current
 
 The module-bundle picker is separated into C modules, C++ modules and script modules. `Python execution bridge` copies only the C++ bridge in `external/pythonExec`; `Python worker protocol starter` creates the generic worker files; `Robot demo Python scripts` separately copies the original project-specific Python files.
 
+
+
+## QPM 0.18.0 Qt Designer Widget Box integration
+
+After creating one or more custom painted widgets, run **QPM > Qt project tools > Configure Qt Designer Custom Widgets...**. QPM scans the native manifest for `Q_OBJECT` classes deriving from `QWidget`, lets you select the classes to publish and writes a project-local Designer collection under `.qpm/designer-plugins/`. The default Widget Box category is **QPM Instrumentation**.
+
+Run **Build Qt Designer Widget Plugin** before opening Designer. The generated qmake project builds a plugin library with `Qt::UiPlugin`/`uiplugin` interfaces and embeds the selected widget implementations in the plugin. QPM prefers the Qt kit containing the selected `designer.exe` so the plugin ABI matches Designer. The output lives in `.qpm/designer-plugins/runtime/designer`, and QPM automatically exposes the parent runtime directory through `QT_PLUGIN_PATH` when opening `.ui` forms.
+
+The plugin is intentionally separate from the application: your normal application continues to compile the original widget `.h/.cpp` files and does not depend on Qt Designer. The optional **Install Widget Plugin into Qt Designer...** command copies the compiled library to the resolved `plugins/designer` directory; the project-local launch path is preferred because it avoids modifying the Qt installation.
+
+## QPM 0.17.9 Qt custom painted widgets
+
+`Create New File > Qt > Custom Painted Widget (QPainter)` creates reusable native Qt widget classes without a `.ui` file. QPM provides three starters: a generic value control, an analog gauge/dial, and a signal plot/chart. Each class is written under `include/widgets/` and `src/widgets/`, uses `Q_OBJECT`/`Q_PROPERTY`, and is suitable for project-local use in Qt Designer by placing a `QWidget` and choosing **Promote to...** with the generated class name and `widgets/<name>.h` header.
+
+The generated paint code deliberately uses the current `QPalette` and `QStyle::PE_Widget`, so application Qt Style Sheets can still control the widget background, foreground and highlight colors. The signal-plot starter exposes `setSamples`, `appendSample`, `clearSamples`, cursor notifications and Y-range zoom as a practical basis for instrumentation UIs.
 
 ## 0.2.26 creation workflow
 
@@ -223,3 +372,33 @@ QPM 0.13.0 can generate a `qmldir` file from the QML files registered in the nat
 Apple support does not add source-code snippets. For iOS, QPM generates an isolated CMake project containing the source/header/form/resource/QML files already registered in `.qtproject.json`, the selected Qt modules, bundle metadata, optional QML module metadata and Xcode signing attributes. The generated project is disposable and can be recreated from the manifest.
 
 macOS projects keep their existing direct, qmake or CMake source layout. Apple distribution commands operate on the produced `.app` bundle and do not modify user source files.
+## QPM 0.20.0 — Advanced SignalPlot / SpectrumPlot templates
+
+The `Signal Plot / Chart` starter is now multichannel and exposes channel naming/color/visibility, `sampleInterval`, legend control, autoscale, dual A/B measurement cursors, horizontal zoom/pan, follow-latest realtime scrolling, block append and Ctrl+wheel Y zoom. The compatibility methods `setSamples()`, `appendSample()` and `clearSamples()` still address channel 0.
+
+The `Spectrum Plot` starter is now multitrace with trace naming/color/visibility, linear/logarithmic frequency display, independent view-frequency zoom/pan, autoscale and dual A/B cursors for `Δf` and `ΔA`. `setMagnitudes()` and `clearSpectrum()` still address trace 0.
+
+## QPM 0.19.0 — Qt instrumentation widget starters
+
+`Create New File > Qt > Custom Painted Widget (QPainter)` now includes **Complete QPM Instrumentation Pack** plus LED Indicator, Digital Meter, Rotary Knob, Linear Gauge, Analog Gauge / Dial, Signal Plot / Chart, Spectrum Plot, XY Plot and the generic painted value widget. Every starter creates one header/source pair under `include/widgets` and `src/widgets`, includes `Q_OBJECT`, and exposes Designer-friendly properties appropriate to the control.
+
+
+## QPM 0.21.0 — Oscilloscope / analyzer templates
+
+`Signal Plot / Chart` adds `Coupling`, `TriggerMode`, `TriggerEdge`, trigger level/channel/position, automatic measurements and horizontal voltage cursors. `Spectrum Plot` adds `HoldMode`, persistence frames, hold/persistence clearing and peak measurement. Existing 0.20.0 methods remain valid.
+
+## Real-time acquisition support (0.22.0)
+
+`Create New File > Qt > Real-time Signal Acquisition Support` generates:
+
+- `include/instrumentation/qpm_signal_buffer.h` / `src/instrumentation/qpm_signal_buffer.cpp`
+- `include/instrumentation/qpm_signal_plot_bridge.h` / `src/instrumentation/qpm_signal_plot_bridge.cpp`
+
+The buffer accepts `appendSample`, `appendSamples`, `appendFrame` and `appendInterleaved`. The bridge polls with a precise `QTimer`, calls non-blocking `trySnapshot`, maps buffer channel names to `SignalPlot` channels and applies data through the batch-update API.
+
+### Complete acquisition dashboard (0.29.0)
+
+Use **Create New File > Qt > Complete Acquisition Dashboard** for a ready-to-run acquisition page. QPM adds only the missing acquisition/runtime/widget files, creates `widgets/AcquisitionDashboard`, and automatically inserts it into a still-blank `mainwindow.ui`. If the MainWindow already contains user controls, it is left untouched.
+
+To make QPM widgets appear in the standalone Qt Widgets Designer Widget Box, use **Qt Project Tools > Prepare QPM Widgets & Open Designer**. This is the shortest path: QPM discovers every eligible widget, writes/synchronizes the `QPM Instrumentation` collection, builds the ABI-compatible Designer plugin, sets the project-local plugin path and launches Designer. **Configure Qt Designer Custom Widgets...** remains available when only a selected subset should be published.
+

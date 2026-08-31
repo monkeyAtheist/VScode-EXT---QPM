@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.17.6');
+assert.strictEqual(pkg.version, '0.30.0');
 
 const cpp = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
 const start = cpp.indexOf('async function spawnDesigner(');
@@ -32,4 +32,4 @@ assert(pyBlock.includes("detached: process.platform !== 'win32'"), 'PySide6 Wind
 const emitted = fs.readFileSync(path.join(root, 'out', 'services', 'qpmQtProjectService.js'), 'utf8');
 assert(emitted.includes('windowsHide: false'), 'Emitted C++ runtime must contain restored Designer launch semantics');
 
-console.log('QPM 0.17.6 validated pre-Python C++ Designer launch regression tests: PASS');
+console.log('QPM 0.17.7 validated pre-Python C++ Designer launch regression tests: PASS');
