@@ -89,7 +89,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const quality = new QpmQtQualityService(workspaces, qtInstallations, output);
   const testing = new QpmQtTestingService(workspaces, builds, qtInstallations, quality, output);
   const treeProvider = new QpmTreeProvider(workspaces);
-  const treeView = vscode.window.createTreeView('qpm.workspaceExplorer', { treeDataProvider: treeProvider, showCollapseAll: true });
+  const treeView = vscode.window.createTreeView('qpm.workspaceExplorer', { treeDataProvider: treeProvider, dragAndDropController: treeProvider, showCollapseAll: true, canSelectMany: true });
   const symbols = new QpmSymbolService(context.extensionPath, workspaces);
   const fileSymbolsProvider = new QpmFileSymbolsProvider(symbols);
   const fileSymbolsView = vscode.window.createTreeView('qpm.fileSymbols', { treeDataProvider: fileSymbolsProvider });
@@ -717,6 +717,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.toggleObjOption', (node?: FileNode) => node ? workspaces.toggleCompileIntoObjectFile(node.ref, node.file) : undefined),
     register('qpm.replaceFile', (node?: FileNode) => node ? workspaces.replaceFile(node.ref, node.file) : undefined),
     register('qpm.renameFile', (node?: FileNode) => node ? workspaces.renameFile(node.ref, node.file) : undefined),
+    register('qpm.moveFileToFolder', (node?: FileNode) => node ? workspaces.moveFileToFolder(node.ref, node.file) : undefined),
     register('qpm.compileFile', (node?: FileNode) => node ? builds.compileFile(node.file.absolutePath, node.ref) : undefined),
     register('qpm.generatePrototypes', (node?: FileNode) => node ? workspaces.generatePrototypes(node.ref, node.file) : undefined),
     register('qpm.prepareDllImportLibraryGeneration', (node?: FileNode) => node ? builds.prepareDllImportLibraryGeneration(node.file.absolutePath) : undefined),

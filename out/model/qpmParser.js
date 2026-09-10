@@ -1268,6 +1268,33 @@ class QpmParser {
         }
         writeText(projectPath, document.toString());
     }
+    moveFilesToFolderInProject(projectPath, sectionNames, folder) {
+        const normalizedFolder = normalizeLogicalFolder(folder);
+        const sectionNameSet = new Set(sectionNames.map((name) => name.trim()).filter(Boolean));
+        if (sectionNameSet.size === 0) {
+            return 0;
+        }
+        const document = iniDocument_1.IniDocument.parse(readText(projectPath));
+        let moved = 0;
+        for (const section of document.sections.filter((candidate) => /^File \d{4}$/i.test(candidate.name))) {
+            if (!sectionNameSet.has(section.name)) {
+                continue;
+            }
+            const currentFolder = normalizeLogicalFolder((0, pathUtils_1.unquote)(section.get('Folder')) ?? '');
+            if (currentFolder.toLowerCase() === normalizedFolder.toLowerCase()) {
+                continue;
+            }
+            section.set('Folder', (0, pathUtils_1.quote)(normalizedFolder));
+            moved += 1;
+        }
+        if (moved > 0 && normalizedFolder) {
+            this.ensureProjectFolder(document, normalizedFolder);
+        }
+        if (moved > 0) {
+            writeText(projectPath, document.toString());
+        }
+        return moved;
+    }
     synchronizeWorkspaceBreakpoints(workspacePath, projectIndex, projectPath, requestedBreakpoints, previouslyTrackedBreakpoints = [], preserveNativeBreakpoints = false) {
         if (path.extname(workspacePath).toLowerCase() !== '.cws') {
             throw new Error('Native QPM breakpoint synchronization requires an opened .cws workspace.');

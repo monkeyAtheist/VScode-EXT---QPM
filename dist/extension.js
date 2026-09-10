@@ -1531,6 +1531,33 @@ var require_qpmParser = __commonJS({
         }
         writeText(projectPath, document.toString());
       }
+      moveFilesToFolderInProject(projectPath, sectionNames, folder) {
+        const normalizedFolder = normalizeLogicalFolder(folder);
+        const sectionNameSet = new Set(sectionNames.map((name) => name.trim()).filter(Boolean));
+        if (sectionNameSet.size === 0) {
+          return 0;
+        }
+        const document = iniDocument_1.IniDocument.parse(readText(projectPath));
+        let moved = 0;
+        for (const section of document.sections.filter((candidate) => /^File \d{4}$/i.test(candidate.name))) {
+          if (!sectionNameSet.has(section.name)) {
+            continue;
+          }
+          const currentFolder = normalizeLogicalFolder((0, pathUtils_1.unquote)(section.get("Folder")) ?? "");
+          if (currentFolder.toLowerCase() === normalizedFolder.toLowerCase()) {
+            continue;
+          }
+          section.set("Folder", (0, pathUtils_1.quote)(normalizedFolder));
+          moved += 1;
+        }
+        if (moved > 0 && normalizedFolder) {
+          this.ensureProjectFolder(document, normalizedFolder);
+        }
+        if (moved > 0) {
+          writeText(projectPath, document.toString());
+        }
+        return moved;
+      }
       synchronizeWorkspaceBreakpoints(workspacePath, projectIndex, projectPath, requestedBreakpoints, previouslyTrackedBreakpoints = [], preserveNativeBreakpoints = false) {
         if (path2.extname(workspacePath).toLowerCase() !== ".cws") {
           throw new Error("Native QPM breakpoint synchronization requires an opened .cws workspace.");
@@ -3822,8 +3849,11 @@ var require_qpmTreeProvider = __commonJS({
     var path2 = __importStar2(require("path"));
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
-    var QpmTreeProvider = class {
+    var QpmTreeProvider = class _QpmTreeProvider {
       workspaces;
+      static dragMimeType = "application/vnd.code.tree.qpm.workspaceexplorer";
+      dragMimeTypes = [_QpmTreeProvider.dragMimeType];
+      dropMimeTypes = [_QpmTreeProvider.dragMimeType];
       changeEmitter = new vscode2.EventEmitter();
       disposables = [];
       onDidChangeTreeData = this.changeEmitter.event;
@@ -3841,6 +3871,72 @@ var require_qpmTreeProvider = __commonJS({
       }
       refresh() {
         this.changeEmitter.fire();
+      }
+      handleDrag(source, dataTransfer, _token) {
+        const files = source.filter((node) => node.kind === "file").map((node) => ({
+          projectPath: node.ref.absolutePath,
+          projectIndex: node.ref.index,
+          sectionName: node.file.sectionName,
+          filePath: node.file.absolutePath,
+          fileName: path2.basename(node.file.absolutePath)
+        }));
+        if (files.length === 0) {
+          return;
+        }
+        dataTransfer.set(_QpmTreeProvider.dragMimeType, new vscode2.DataTransferItem(JSON.stringify({ files })));
+      }
+      async handleDrop(target, dataTransfer, token) {
+        if (token.isCancellationRequested) {
+          return;
+        }
+        const transfer = dataTransfer.get(_QpmTreeProvider.dragMimeType);
+        if (!transfer) {
+          return;
+        }
+        const dropTarget = this.dropTargetForNode(target);
+        if (!dropTarget) {
+          vscode2.window.showInformationMessage("Drop project files onto a QPM folder or onto a project root to move them.");
+          return;
+        }
+        const payload = this.parseDragPayload(transfer.value);
+        const matchingFiles = payload.files.filter((file) => path2.normalize(file.projectPath).toLowerCase() === path2.normalize(dropTarget.ref.absolutePath).toLowerCase());
+        if (matchingFiles.length === 0) {
+          vscode2.window.showWarningMessage("Files can only be moved inside their own QPM project.");
+          return;
+        }
+        if ((0, qtProjectManifest_12.isQtProjectManifestPath)(dropTarget.ref.absolutePath)) {
+          vscode2.window.showInformationMessage("Native Qt manifest folders are structural; drag/drop reclassification is not applied.");
+          return;
+        }
+        await this.workspaces.moveFilesToFolder(dropTarget.ref, matchingFiles.map((file) => file.sectionName), dropTarget.folderPath, { silent: true });
+      }
+      dropTargetForNode(node) {
+        if (!node) {
+          return void 0;
+        }
+        if (node.kind === "folder") {
+          return { ref: node.ref, folderPath: node.folderPath };
+        }
+        if (node.kind === "project") {
+          return { ref: node.ref, folderPath: "" };
+        }
+        return void 0;
+      }
+      parseDragPayload(value) {
+        if (typeof value === "string") {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && Array.isArray(parsed.files)) {
+              return { files: parsed.files.filter((file) => {
+                const candidate = file;
+                return typeof candidate.projectPath === "string" && typeof candidate.projectIndex === "number" && typeof candidate.sectionName === "string" && typeof candidate.filePath === "string" && typeof candidate.fileName === "string";
+              }) };
+            }
+          } catch {
+            return { files: [] };
+          }
+        }
+        return { files: [] };
       }
       getTreeItem(element) {
         switch (element.kind) {
@@ -14194,6 +14290,68 @@ var require_qpmWorkspaceService = __commonJS({
           vscode2.window.showErrorMessage(`Cannot rename ${currentName}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
+      async moveFileToFolder(projectRef, file) {
+        if ((0, qtProjectManifest_12.isQtProjectManifestPath)(projectRef.absolutePath)) {
+          vscode2.window.showInformationMessage("Native Qt manifest folders are structural; file categories are derived from the file type.");
+          return;
+        }
+        const project = this.getProject(projectRef);
+        if (!project) {
+          vscode2.window.showErrorMessage("The selected C/C++ project cannot be read.");
+          return;
+        }
+        const currentFolder = normalizeLogicalFolder(file.folder);
+        const folders = collectLogicalFolders(project);
+        const items = [
+          { label: "$(root-folder) Project root", description: "No logical folder", targetFolder: "" },
+          ...folders.map((folder) => ({ label: folder, description: folder.toLowerCase() === currentFolder.toLowerCase() ? "current folder" : "logical folder", targetFolder: folder })),
+          { label: "$(new-folder) Create new folder...", description: "Create a QPM logical folder and move the file into it", createNew: true }
+        ];
+        const picked = await vscode2.window.showQuickPick(items, {
+          title: "Move File To Folder",
+          placeHolder: `Move ${path2.basename(file.absolutePath)} to another QPM logical folder`
+        });
+        if (!picked) {
+          return;
+        }
+        let targetFolder = picked.targetFolder ?? "";
+        if (picked.createNew) {
+          const name = await vscode2.window.showInputBox({
+            title: "Create Target Folder",
+            prompt: "New logical folder. Nested folders can use /.",
+            validateInput: validateLogicalFolder
+          });
+          if (!name) {
+            return;
+          }
+          targetFolder = normalizeLogicalFolder(name);
+        }
+        await this.moveFilesToFolder(projectRef, [file.sectionName], targetFolder);
+      }
+      async moveFilesToFolder(projectRef, sectionNames, targetFolder, options = {}) {
+        if ((0, qtProjectManifest_12.isQtProjectManifestPath)(projectRef.absolutePath)) {
+          if (!options.silent)
+            vscode2.window.showInformationMessage("Native Qt manifest folders are structural; file categories are derived from the file type.");
+          return;
+        }
+        if (!projectRef.exists) {
+          vscode2.window.showErrorMessage("The selected C/C++ project file does not exist.");
+          return;
+        }
+        const normalizedTarget = normalizeLogicalFolder(targetFolder);
+        const moved = this.parser.moveFilesToFolderInProject(projectRef.absolutePath, sectionNames, normalizedTarget);
+        if (moved === 0) {
+          if (!options.silent) {
+            vscode2.window.showInformationMessage("The selected file is already in this QPM logical folder.");
+          }
+          return;
+        }
+        this.refresh();
+        if (!options.silent) {
+          const destination = normalizedTarget || "project root";
+          vscode2.window.showInformationMessage(`${moved} file reference(s) moved to ${destination}.`);
+        }
+      }
       async saveFile(filePath) {
         const document = vscode2.workspace.textDocuments.find((candidate) => path2.normalize(candidate.uri.fsPath) === path2.normalize(filePath));
         if (document?.isDirty) {
@@ -14607,6 +14765,29 @@ If you enable ${sdlVersion}_image in qpm.sdlPackages, QPM automatically defines 
         return "The name contains a character that is not permitted in a Windows file name.";
       }
       return void 0;
+    }
+    function collectLogicalFolders(project) {
+      const seen = /* @__PURE__ */ new Set();
+      const addFolder = (value) => {
+        const normalized = normalizeLogicalFolder(value);
+        if (normalized) {
+          seen.add(normalized);
+          let current = normalized;
+          while (current.includes("/")) {
+            current = current.slice(0, current.lastIndexOf("/"));
+            if (current) {
+              seen.add(current);
+            }
+          }
+        }
+      };
+      for (const folder of project.folders) {
+        addFolder(folder);
+      }
+      for (const file of project.files) {
+        addFolder(file.folder);
+      }
+      return [...seen].sort((a, b) => a.localeCompare(b));
     }
     function validateLogicalFolder(value) {
       if (!value.trim()) {
@@ -22959,11 +23140,11 @@ class Sensor extends Device
       };
       switch (id) {
         case "c_core":
-          return bundledPackLibrarySelection("c_core", "C complete structured pack", "qpm_base_c_pack.json", "C", ["C Language"]);
+          return bundledPackLibrarySelection("c_core", "C complete structured pack", "c_language_pack.json", "C", ["C Language"]);
         case "cpp_core":
-          return bundledPackLibrarySelection("cpp_core", "C++ complete structured pack", "qpm_base_cpp_pack.json", "C++", ["C++ Language"]);
+          return bundledPackLibrarySelection("cpp_core", "C++ complete structured pack", "cpp_language_pack.json", "C++", ["C++ Language"]);
         case "python_core":
-          return bundledPackLibrarySelection("python_core", "Python complete structured pack", "qpm_base_python_pack.json", "Python", ["Python Language"]);
+          return bundledPackLibrarySelection("python_core", "Python complete structured pack", "python_pack.json", "Python", ["Python Language"]);
         case "web_core":
           return bundledPackLibrarySelection("web_core", "JavaScript / HTML / CSS complete structured pack", "web_language_pack.json", "Web", ["JavaScript", "HTML", "CSS"]);
         case "java_core":
@@ -23011,9 +23192,9 @@ class Sensor extends Device
         case "database_all":
           return combinePreservingLibraries("database_all", "All database pack", ["database_core", "sqlite_core", "postgres_core", "mysql_core", "sqlserver_core", "duckdb_core", "mongodb_core", "redis_core", "sqlite_c_core", "libpq_core", "mysql_capi_core", "odbc_core", "sqlalchemy_core", "hiredis_core", "dbops_core"]);
         case "qt_full":
-          return bundledPackLibrarySelection("qt_full", "Qt C++ complete structured pack", "qpm_base_qt_pack.json", "QT", ["Qt Language", "Qt QML", "Qt Multimedia", "Qt SQL & Test"]);
+          return bundledPackLibrarySelection("qt_full", "Qt C++ complete structured pack", "qt_pack.json", "QT", ["Qt Language", "Qt QML", "Qt Multimedia", "Qt SQL & Test"]);
         case "qt_pyside_core":
-          return bundledPackLibrarySelection("qt_pyside_core", "Qt for Python PySide6 structured pack", "qpm_base_qt_pack.json", "QT", ["Qt for Python (PySide6)"]);
+          return bundledPackLibrarySelection("qt_pyside_core", "Qt for Python PySide6 structured pack", "qt_python_pack.json", "QT", ["Qt for Python (PySide6)"]);
         case "opencv_full":
           return combineSingleLibrary("opencv_full", "OpenCV language pack", "OpenCV Language", ["opencv_core", "opencv_vision"]);
         case "c_all":
@@ -23105,11 +23286,11 @@ class Sensor extends Device
         case "sdl3_all":
           return bundledPackFileSelection("sdl3_all", "SDL3 structured pack", "sdl3_language_pack.json", ["SDL"]);
         case "win32_gui_all":
-          return bundledPackLibrarySelection("win32_gui_all", "Win32 GUI structured pack", "qpm_base_windows_pack.json", "Windows API / Devices", ["User32", "GDI32", "Comdlg32", "Comctl32", "Kernel32", "Shell32", "Wtsapi32", "Advapi32", "DbgHelp", "Winsock2", "Iphlpapi", "Psapi"]);
+          return bundledPackLibrarySelection("win32_gui_all", "Win32 GUI structured pack", "windows_api_device_pack.json", "Windows API / Devices", ["User32", "GDI32", "Comdlg32", "Comctl32", "Kernel32", "Shell32", "Wtsapi32", "Advapi32", "DbgHelp", "Winsock2", "Iphlpapi", "Psapi"]);
         case "windows_devices_all":
-          return bundledPackLibrarySelection("windows_devices_all", "Windows Devices structured pack", "qpm_base_windows_pack.json", "Windows API / Devices", ["WinMM", "Core Audio", "XInput", "Raw Input", "Media Foundation", "DirectShow", "HID & SetupAPI", "Bluetooth", "Serial Ports", "WinUSB", "SetupAPI Advanced", "Bluetooth LE", "Media Foundation Advanced"]);
+          return bundledPackLibrarySelection("windows_devices_all", "Windows Devices structured pack", "windows_api_device_pack.json", "Windows API / Devices", ["WinMM", "Core Audio", "XInput", "Raw Input", "Media Foundation", "DirectShow", "HID & SetupAPI", "Bluetooth", "Serial Ports", "WinUSB", "SetupAPI Advanced", "Bluetooth LE", "Media Foundation Advanced"]);
         case "windows_all":
-          return bundledPackFileSelection("windows_all", "Windows API / Devices structured pack", "qpm_base_windows_pack.json", ["Windows API / Devices"]);
+          return bundledPackFileSelection("windows_all", "Windows API / Devices structured pack", "windows_api_device_pack.json", ["Windows API / Devices"]);
         case "lua_all":
           return bundledPackFileSelection("lua_all", "Lua pack", "lua_pack.json");
         case "lua_standard":
@@ -23123,19 +23304,28 @@ class Sensor extends Device
         case "examples_all":
           return combinePreservingLibraries("examples_all", "All example packs", ["opencv_robotics_example", "win32_hooks_example", "uart_protocol_example", "instrumentation_example"]);
         case "all_packs":
-          return combinePreservingLibraries("all_packs", "All packs", ["c_all", "cpp_all", "preprocessor_core", "qt_all", "opencv_all", "build_all", "scripting_all", "python_core", "java_core", "web_core", "csharp_core", "php_core", "kotlin_core", "typescript_core", "vba_core", "database_all", "embedded_all", "assembly_all", "lua_all", "sdl_all", "windows_all", "win32_hooks_example", "uart_protocol_example", "instrumentation_example"]);
+          return combinePreservingLibraries("all_packs", "Curated QPM packs", ["c_all", "cpp_all", "preprocessor_core", "opencv_all", "build_all", "windows_all", "scripting_all", "python_core", "web_core", "typescript_core", "database_all", "php_core", "embedded_all", "qt_all"]);
         default:
           return direct(id);
       }
     }
     async function chooseGroupedStarterPack(packName) {
       const families = [
-        { label: "Qt complete pack", description: "Qt C++, QML, Multimedia, SQL/Test and Qt for Python / PySide6", value: "qt" },
+        { label: "Add all curated QPM packs", description: "Insert the reduced QPM pack set in one operation", value: "all" },
         { label: "C pack", description: "C language and C DLL helpers", value: "c" },
         { label: "C++ pack", description: "C++ language and C++ DLL helpers", value: "cpp" },
-        { label: "C/C++ Preprocessor pack", description: "Macros, conditions, pragmas, stringification and token concatenation", value: "preprocessor" },
-        { label: "Windows API / Devices pack", description: "Win32 GUI, system APIs, serial, Bluetooth, USB and device helpers", value: "windows" },
-        { label: "Python language pack", description: "Python language, files, asyncio, networking, scientific tools and automation", value: "python_core" }
+        { label: "Preprocessor pack", description: "Shared C/C++ macros, conditions, pragmas, stringification and token concatenation", value: "preprocessor" },
+        { label: "OpenCV pack", description: "OpenCV language pack with camera and vision helpers", value: "opencv" },
+        { label: "Build pack", description: "CMake, CTest, CPack, GCC/G++, Clang/LLVM, MinGW, MSVC, Make, Ninja and dependency helpers", value: "build" },
+        { label: "Windows API / Devices pack", description: "Win32 GUI plus audio, input, camera, HID, Bluetooth, serial and USB helpers", value: "windows" },
+        { label: "Scripting / System pack", description: "Cross-platform automation, PowerShell, CMD/Batch, Bash, Linux administration, Git, SSH, Docker and DevOps", value: "scripting" },
+        { label: "Python language pack", description: "Structured Python language, files, asyncio, networking, scientific tools and automation", value: "python_core" },
+        { label: "JavaScript / HTML / CSS pack", description: "Structured browser, Node.js, frameworks, webviews and tooling pack", value: "web_core" },
+        { label: "TypeScript language pack", description: "Structured TypeScript language, types, Web, Node.js, backend and tooling pack", value: "typescript_core" },
+        { label: "Database pack", description: "SQL, NoSQL, client APIs, ODBC and database operations helpers", value: "database" },
+        { label: "PHP language pack", description: "Structured PHP language, web frameworks, persistence and deployment helpers", value: "php_core" },
+        { label: "Embedded pack", description: "Embedded architecture, Arduino, ESP32, STM32, Raspberry Pi, PIC and MSP helpers", value: "embedded" },
+        { label: "Qt pack", description: "Qt C++, QML, Multimedia, SQL/Test and Qt for Python / PySide6", value: "qt" }
       ];
       const family = await vscode2.window.showQuickPick(families, {
         title: `Choose a pack family \u2014 ${packName}`,
@@ -23143,7 +23333,10 @@ class Sensor extends Device
       });
       if (!family)
         return void 0;
-      if (family.value === "python_core") {
+      if (family.value === "all") {
+        return buildStarterPackSelection("all_packs");
+      }
+      if (["python_core", "web_core", "typescript_core", "php_core"].includes(family.value)) {
         return buildStarterPackSelection(family.value);
       }
       const groupedChoices = {
@@ -34652,12 +34845,21 @@ var require_qpmLibraryPackService = __commonJS({
     var path2 = __importStar2(require("path"));
     var vscode2 = __importStar2(require("vscode"));
     exports2.QPM_BUNDLED_LIBRARY_PACKS = [
-      { fileName: "qpm_base_qt_pack.json", expectedId: "qpm.base.qt", label: "Qt Complete" },
-      { fileName: "qpm_base_c_pack.json", expectedId: "qpm.base.c", label: "C" },
-      { fileName: "qpm_base_cpp_pack.json", expectedId: "qpm.base.cpp", label: "C++" },
-      { fileName: "qpm_base_preprocessor_pack.json", expectedId: "qpm.base.preprocessor", label: "C/C++ Preprocessor" },
-      { fileName: "qpm_base_windows_pack.json", expectedId: "qpm.base.windows", label: "Windows API / Devices" },
-      { fileName: "qpm_base_python_pack.json", expectedId: "qpm.base.python", label: "Python" }
+      { fileName: "c_language_pack.json", expectedId: "c_language_pack", label: "C" },
+      { fileName: "cpp_language_pack.json", expectedId: "jclib.cpp.language", label: "C++" },
+      { fileName: "qpm_base_preprocessor_pack.json", expectedId: "qpm.base.preprocessor", label: "Preprocessor" },
+      { fileName: "opencv_pack.json", expectedId: "opencv_cpp_structured_pack", label: "OpenCV" },
+      { fileName: "build_pack.json", expectedId: "build-toolchains-structured-pack", label: "Build" },
+      { fileName: "windows_api_device_pack.json", expectedId: "windows-api-device-pack", label: "Windows API / Devices" },
+      { fileName: "system_scripting_pack.json", expectedId: "scripting-system-pack", label: "Scripting / System" },
+      { fileName: "python_pack.json", expectedId: "python_structured_complete_pack", label: "Python" },
+      { fileName: "web_language_pack.json", expectedId: "javascript-html-css-audit-pack", label: "JavaScript / HTML / CSS" },
+      { fileName: "typescript_language_pack.json", expectedId: "typescript-language-pack-audit-v1", label: "TypeScript" },
+      { fileName: "database_pack.json", expectedId: "database_pack", label: "Database" },
+      { fileName: "php_language_pack.json", expectedId: "php_structured_complete_pack", label: "PHP" },
+      { fileName: "embedded_language_pack.json", expectedId: "embedded_systems_pack", label: "Embedded" },
+      { fileName: "qt_pack.json", expectedId: "qt-cpp-complete-pack", label: "Qt C++" },
+      { fileName: "qt_python_pack.json", expectedId: "qt-python-pyside6-complete", label: "Qt for Python / PySide6" }
     ];
     function readPackIdentity(filePath) {
       try {
@@ -34698,7 +34900,22 @@ var require_qpmLibraryPackService = __commonJS({
         const name = String(identity?.name || "").toLowerCase();
         const isLegacy = fileName === "qpm_core_pack.json" || id === "qpm-c-cpp-core-pack" || id === "qpm-structured-pack" || name.includes("qt project manager core") || name.includes("labwindows/qpm");
         if (isLegacy) {
-          backupAndRemove(filePath, targetDirectory, output, "Migrated the legacy combined QPM library pack to the six JC Lib 0.8.27 packs");
+          backupAndRemove(filePath, targetDirectory, output, "Migrated the legacy combined QPM library pack to the curated QPM JC Lib pack set");
+        }
+      }
+    }
+    function migrateDeprecatedIntegratedPacks(targetDirectory, output) {
+      const deprecated = [
+        "qpm_base_qt_pack.json",
+        "qpm_base_c_pack.json",
+        "qpm_base_cpp_pack.json",
+        "qpm_base_windows_pack.json",
+        "qpm_base_python_pack.json"
+      ];
+      for (const fileName of deprecated) {
+        const filePath = path2.join(targetDirectory, fileName);
+        if (fs.existsSync(filePath)) {
+          backupAndRemove(filePath, targetDirectory, output, `Migrated deprecated integrated pack ${fileName}`);
         }
       }
     }
@@ -34736,11 +34953,12 @@ var require_qpmLibraryPackService = __commonJS({
       const targetDirectory = path2.join(context.globalStorageUri.fsPath, "packs");
       fs.mkdirSync(targetDirectory, { recursive: true });
       migrateLegacySingleCorePack(targetDirectory, output);
+      migrateDeprecatedIntegratedPacks(targetDirectory, output);
       const counts = { installed: 0, upgraded: 0, current: 0, missing: 0 };
       for (const spec of exports2.QPM_BUNDLED_LIBRARY_PACKS) {
         counts[installOrUpgradePack(context, targetDirectory, spec, output)] += 1;
       }
-      output.appendLine(`[Qt Libraries] JC Lib 0.8.27 integrated packs: ${counts.installed} installed, ${counts.upgraded} upgraded, ${counts.current} current, ${counts.missing} missing.`);
+      output.appendLine(`[Qt Libraries] Curated integrated packs: ${counts.installed} installed, ${counts.upgraded} upgraded, ${counts.current} current, ${counts.missing} missing.`);
     }
     exports2.ensureBundledQpmLibraryPack = ensureBundledCppLibraryPack;
   }
@@ -34808,8 +35026,8 @@ var require_qpmTemplateService = __commonJS({
     var FILE_TEMPLATE_STORE = "file-templates.json";
     var SNIPPET_STORE = "snippets.json";
     var TEXT_TEMPLATE_EXTENSIONS = /* @__PURE__ */ new Set([".c", ".h", ".cpp", ".hpp", ".txt", ".ini", ".json", ".xml", ".md", ".lua", ".js", ".ts", ".bat", ".cmd", ".ps1"]);
-    var BUNDLED_MY_UTIL_ROOT = path2.join("data", "templates", "my_util", "MY_Util");
-    var BUNDLED_MY_UTIL_SKIP_EXTENSIONS = /* @__PURE__ */ new Set([".bak"]);
+    var BUNDLED_QPM_UTILITY_ROOT = path2.join("data", "templates", "qpm_utility", "QPM_Utility");
+    var BUNDLED_QPM_UTILITY_SKIP_EXTENSIONS = /* @__PURE__ */ new Set([".bak"]);
     var C_CORE_UTIL_HEADER_TEMPLATE = `/**
  * @file {{headerFile}}
  * @brief QPM C core utility API.
@@ -34823,7 +35041,7 @@ var require_qpmTemplateService = __commonJS({
  * - copies and trims strings safely;
  * - generates compact timestamps for logs and reports;
  * - reads simple key/value pairs from an INI file;
- * - keeps small procedural helpers independent from the C++ MY_Util layer.
+ * - keeps small procedural helpers independent from the C++ QPM_Utility layer.
  *
  * @par Typical applications
  * - small C command-line tools generated by QPM;
@@ -34955,10 +35173,14 @@ int QpmUtil_GetTimestamp(char *buffer, size_t bufferSize)
         return -1;
     }
 #else
-    if (localtime_r(&now, &localTime) == NULL)
     {
-        buffer[0] = '\\0';
-        return -1;
+        struct tm *localTimePtr = localtime(&now);
+        if (localTimePtr == NULL)
+        {
+            buffer[0] = '\\0';
+            return -1;
+        }
+        localTime = *localTimePtr;
     }
 #endif
 
@@ -35205,8 +35427,9 @@ maxLogLines=1024
  * @par Main features
  * - loads log configuration from an INI file;
  * - records code/message/file/line/function context;
+ * - formats each reported error as a structured, date-stamped log block;
  * - can mirror logs to stderr for console debugging;
- * - limits log growth with a maximum line count.
+ * - keeps the API small enough for generated test tools.
  *
  * @par Typical applications
  * - C++ test executables generated by QPM;
@@ -35214,16 +35437,24 @@ maxLogLines=1024
  * - debug builds where source-location context must be kept.
  *
  * @par Usage notes
- * - Use the QPM error macro when available so file, line and function are captured automatically.
+ * - Use QPM_ERR_* macros when available so file, line and function are captured automatically.
  * - Configure logPath and mirrorToStderr in the generated INI file.
+ * - Use ERROR_LABEL as the centralized cleanup label when using goto-based checks.
  *
  * @par Example of use
  * @code{.cpp}
  * #include "{{headerFile}}"
- * 
+ *
  * qpm::initErrorDefaults();
  * qpm::loadErrorConfig("qpm_error.ini");
  * qpm::reportError(10, "Initialization failed", __FILE__, __LINE__, __func__);
+ *
+ * int rc = run_device_test();
+ * QPM_ERR_INFZ(rc, "run_device_test failed");
+ * return 0;
+ *
+ * error:
+ * return qpm::g_errorCode;
  * @endcode
  */
 #ifndef {{guard}}
@@ -35262,6 +35493,8 @@ void logError(const std::string &message);
 void reportError(int code, const std::string &message, const char *file, int line, const char *functionName);
 }
 
+#define QPM_ERROR(code, message)     qpm::reportError((code), (message), __FILE__, __LINE__, __func__)
+
 #define QPM_ERR_INFZ(code, message)     do {         int qpmErrorCodeLocal = (code);         if (qpmErrorCodeLocal < 0) {             qpm::g_errorCode = qpmErrorCodeLocal;             qpm::reportError(qpmErrorCodeLocal, (message), __FILE__, __LINE__, __func__);             goto ERROR_LABEL;         }     } while (0)
 
 #define QPM_ERR_INFEQZ(code, message)     do {         int qpmErrorCodeLocal = (code);         if (qpmErrorCodeLocal <= 0) {             qpm::g_errorCode = qpmErrorCodeLocal;             qpm::reportError(qpmErrorCodeLocal, (message), __FILE__, __LINE__, __func__);             goto ERROR_LABEL;         }     } while (0)
@@ -35270,13 +35503,16 @@ void reportError(int code, const std::string &message, const char *file, int lin
 
 #endif /* {{guard}} */
 `;
-    var CPP_ERROR_SOURCE_TEMPLATE = `/**
+    var CPP_ERROR_SOURCE_TEMPLATE = String.raw`/**
  * @file {{baseName}}.cpp
  * @brief Implementation of the QPM C++ error management bundle.
  */
 #include "{{headerFile}}"
 
+#include <chrono>
+#include <ctime>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -35286,25 +35522,53 @@ int g_errorCode = 0;
 ErrorConfig g_errorConfig{};
 
 /**
- * @brief Implements the trim operation.
- * @param text See the matching header for semantic details.
- * @return See the matching header for status code or value semantics.
+ * @brief Removes leading and trailing whitespace from a string copy.
+ * @param text String to trim.
+ * @return Trimmed string.
  */
 static std::string trim(std::string text)
 {
-    const auto first = text.find_first_not_of(" 	\r
-");
+    const auto first = text.find_first_not_of(" \t\n");
     if (first == std::string::npos)
     {
         return {};
     }
-    const auto last = text.find_last_not_of(" 	\r
-");
+    const auto last = text.find_last_not_of(" \t\n");
     return text.substr(first, last - first + 1);
 }
 
 /**
- * @brief Implements the initErrorDefaults operation.
+ * @brief Returns the current local date/time as dd/mm/yyyy - hh:mm:ss.
+ * @return Timestamp string suitable for log section headers.
+ */
+static std::string makeLogTimestamp()
+{
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t timeNow = std::chrono::system_clock::to_time_t(now);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeNow);
+#else
+    localtime_r(&timeNow, &localTime);
+#endif
+    std::ostringstream stream;
+    stream << std::setfill('0')
+           << std::setw(2) << localTime.tm_mday << '/'
+           << std::setw(2) << (localTime.tm_mon + 1) << '/'
+           << std::setw(4) << (localTime.tm_year + 1900) << " - "
+           << std::setw(2) << localTime.tm_hour << ':'
+           << std::setw(2) << localTime.tm_min << ':'
+           << std::setw(2) << localTime.tm_sec;
+    return stream.str();
+}
+
+static std::string repeat(char ch, std::size_t count)
+{
+    return std::string(count, ch);
+}
+
+/**
+ * @brief Resets the global error code and configuration to default values.
  */
 void initErrorDefaults()
 {
@@ -35313,9 +35577,9 @@ void initErrorDefaults()
 }
 
 /**
- * @brief Implements the loadErrorConfig operation.
- * @param iniPath See the matching header for semantic details.
- * @return See the matching header for status code or value semantics.
+ * @brief Loads error configuration from a simple INI-style file.
+ * @param iniPath File containing enabled, mirrorToStderr, maxLogLines and logPath keys.
+ * @return true when the file was opened and parsed.
  */
 bool loadErrorConfig(const std::string &iniPath)
 {
@@ -35362,27 +35626,19 @@ bool loadErrorConfig(const std::string &iniPath)
     return true;
 }
 
-/**
- * @brief Implements the setErrorEnabled operation.
- * @param enabled See the matching header for semantic details.
- */
 void setErrorEnabled(bool enabled)
 {
     g_errorConfig.enabled = enabled;
 }
 
-/**
- * @brief Implements the setErrorLogFile operation.
- * @param filePath See the matching header for semantic details.
- */
 void setErrorLogFile(const std::string &filePath)
 {
     g_errorConfig.logPath = filePath;
 }
 
 /**
- * @brief Implements the logError operation.
- * @param message See the matching header for semantic details.
+ * @brief Appends a raw log message to the configured log output.
+ * @param message Message to append. A final newline is added by this function.
  */
 void logError(const std::string &message)
 {
@@ -35399,33 +35655,34 @@ void logError(const std::string &message)
     std::ofstream file(g_errorConfig.logPath, std::ios::app);
     if (file)
     {
-        file << message << '
-';
+        file << message << '\n';
     }
 }
 
 /**
- * @brief Implements the reportError operation.
- * @param code See the matching header for semantic details.
- * @param message See the matching header for semantic details.
- * @param file See the matching header for semantic details.
- * @param line See the matching header for semantic details.
- * @param functionName See the matching header for semantic details.
+ * @brief Writes a structured error block with source-location context.
+ * @param code Application-specific error code.
+ * @param message Human-readable error message.
+ * @param file Source file where the error was reported.
+ * @param line Source line where the error was reported.
+ * @param functionName Function where the error was reported.
  */
 void reportError(int code, const std::string &message, const char *file, int line, const char *functionName)
 {
+    const std::string dateLog = makeLogTimestamp();
+    const std::string leftRightSep = repeat('=', 26);
+    const std::string header = leftRightSep + dateLog + leftRightSep;
+    const std::string footer = repeat('=', header.size());
+
     std::ostringstream stream;
-    stream << "*** Qt/C++ ERROR ***
-"
-           << "Code: " << code << "
-"
-           << "Message: " << message << "
-"
-           << "File: " << (file != nullptr ? file : "unknown") << "
-"
-           << "Line: " << line << "
-"
-           << "Function: " << (functionName != nullptr ? functionName : "unknown");
+    stream << header << '\n'
+           << "Code: " << code << '\n'
+           << "Message: " << message << '\n'
+           << "Error at:" << '\n'
+           << "	File: " << (file != nullptr ? file : "unknown") << '\n'
+           << "	Line: " << line << '\n'
+           << "	Function: " << (functionName != nullptr ? functionName : "unknown") << '\n'
+           << footer;
     logError(stream.str());
 }
 }
@@ -45719,7 +45976,7 @@ void QpmError_Report(int code, const char *message, const char *file,
 
 #endif /* {{guard}} */
 `;
-    var ERROR_SOURCE_TEMPLATE = `/**
+    var ERROR_SOURCE_TEMPLATE = String.raw`/**
  * @file {{baseName}}.c
  * @brief Implementation of the QPM C error management bundle.
  */
@@ -45741,12 +45998,6 @@ void QpmError_Report(int code, const char *message, const char *file,
 int g_qpmErrorCode = 0;
 QpmErrorConfig g_qpmErrorConfig;
 
-/**
- * @brief Implements the QpmError_CopyString operation.
- * @param dst See the matching header for semantic details.
- * @param dstSize See the matching header for semantic details.
- * @param src See the matching header for semantic details.
- */
 static void QpmError_CopyString(char *dst, size_t dstSize, const char *src)
 {
     if (dst == NULL || dstSize == 0)
@@ -45754,32 +46005,21 @@ static void QpmError_CopyString(char *dst, size_t dstSize, const char *src)
     if (src == NULL)
         src = "";
     strncpy(dst, src, dstSize - 1);
-    dst[dstSize - 1] = '\\0';
+    dst[dstSize - 1] = '\0';
 }
 
-/**
- * @brief Implements the QpmError_Trim operation.
- * @param text See the matching header for semantic details.
- * @return See the matching header for status code or value semantics.
- */
 static char *QpmError_Trim(char *text)
 {
     char *end;
-    while (*text != '\\0' && isspace((unsigned char)*text))
+    while (*text != '\0' && isspace((unsigned char)*text))
         ++text;
     end = text + strlen(text);
     while (end > text && isspace((unsigned char)*(end - 1)))
         --end;
-    *end = '\\0';
+    *end = '\0';
     return text;
 }
 
-/**
- * @brief Implements the QpmError_ParseBool operation.
- * @param text See the matching header for semantic details.
- * @param defaultValue See the matching header for semantic details.
- * @return See the matching header for status code or value semantics.
- */
 static int QpmError_ParseBool(const char *text, int defaultValue)
 {
     if (text == NULL)
@@ -45791,16 +46031,60 @@ static int QpmError_ParseBool(const char *text, int defaultValue)
     return defaultValue;
 }
 
-/**
- * @brief Implements the QpmError_TrimLogIfNeeded operation.
- */
+static int QpmError_FormatTimestamp(char *buffer, size_t bufferSize)
+{
+    time_t now;
+    struct tm localTime;
+
+    if (buffer == NULL || bufferSize == 0)
+        return -1;
+
+    now = time(NULL);
+#if defined(_WIN32)
+    if (localtime_s(&localTime, &now) != 0)
+    {
+        buffer[0] = '\0';
+        return -1;
+    }
+#else
+    {
+        struct tm *localTimePtr = localtime(&now);
+        if (localTimePtr == NULL)
+        {
+            buffer[0] = '\0';
+            return -1;
+        }
+        localTime = *localTimePtr;
+    }
+#endif
+
+    if (strftime(buffer, bufferSize, "%d/%m/%Y - %H:%M:%S", &localTime) == 0)
+    {
+        buffer[0] = '\0';
+        return -1;
+    }
+    return 0;
+}
+
+static void QpmError_MakeSeparator(char *buffer, size_t bufferSize, char ch, size_t count)
+{
+    size_t i;
+    if (buffer == NULL || bufferSize == 0)
+        return;
+    if (count >= bufferSize)
+        count = bufferSize - 1;
+    for (i = 0; i < count; ++i)
+        buffer[i] = ch;
+    buffer[count] = '\0';
+}
+
 static void QpmError_TrimLogIfNeeded(void)
 {
     FILE *file;
     char line[512];
     int lineCount = 0;
 
-    if (!g_qpmErrorConfig.enabled || g_qpmErrorConfig.maxLogLines <= 0 || g_qpmErrorConfig.logPath[0] == '\\0')
+    if (!g_qpmErrorConfig.enabled || g_qpmErrorConfig.maxLogLines <= 0 || g_qpmErrorConfig.logPath[0] == '\0')
         return;
 
     file = fopen(g_qpmErrorConfig.logPath, "r");
@@ -45819,29 +46103,22 @@ static void QpmError_TrimLogIfNeeded(void)
     }
 }
 
-/**
- * @brief Implements the QpmError_InitDefaults operation.
- */
 void QpmError_InitDefaults(void)
 {
+    g_qpmErrorCode = 0;
     g_qpmErrorConfig.enabled = 1;
     g_qpmErrorConfig.mirrorToStderr = 1;
     g_qpmErrorConfig.maxLogLines = 5000;
     QpmError_CopyString(g_qpmErrorConfig.logPath, sizeof(g_qpmErrorConfig.logPath), "logs/error.log");
 }
 
-/**
- * @brief Implements the QpmError_LoadConfig operation.
- * @param iniPath See the matching header for semantic details.
- * @return See the matching header for status code or value semantics.
- */
 int QpmError_LoadConfig(const char *iniPath)
 {
     FILE *file;
     char line[1024];
 
     QpmError_InitDefaults();
-    if (iniPath == NULL || iniPath[0] == '\\0')
+    if (iniPath == NULL || iniPath[0] == '\0')
         return 0;
 
     file = fopen(iniPath, "r");
@@ -45854,22 +46131,22 @@ int QpmError_LoadConfig(const char *iniPath)
         char *equals;
         char *key;
         char *value;
-        if (trimmed[0] == '\\0' || trimmed[0] == '#' || trimmed[0] == ';' || trimmed[0] == '[')
+        if (trimmed[0] == '\0' || trimmed[0] == '#' || trimmed[0] == ';' || trimmed[0] == '[')
             continue;
         equals = strchr(trimmed, '=');
         if (equals == NULL)
             continue;
-        *equals = '\\0';
+        *equals = '\0';
         key = QpmError_Trim(trimmed);
         value = QpmError_Trim(equals + 1);
 
         if (QPM_STRICMP(key, "enabled") == 0)
             g_qpmErrorConfig.enabled = QpmError_ParseBool(value, g_qpmErrorConfig.enabled);
-        else if (QPM_STRICMP(key, "mirror_to_stderr") == 0)
+        else if (QPM_STRICMP(key, "mirror_to_stderr") == 0 || QPM_STRICMP(key, "mirrorToStderr") == 0)
             g_qpmErrorConfig.mirrorToStderr = QpmError_ParseBool(value, g_qpmErrorConfig.mirrorToStderr);
-        else if (QPM_STRICMP(key, "max_log_lines") == 0)
+        else if (QPM_STRICMP(key, "max_log_lines") == 0 || QPM_STRICMP(key, "maxLogLines") == 0)
             g_qpmErrorConfig.maxLogLines = atoi(value);
-        else if (QPM_STRICMP(key, "log_path") == 0)
+        else if (QPM_STRICMP(key, "log_path") == 0 || QPM_STRICMP(key, "logPath") == 0)
             QpmError_CopyString(g_qpmErrorConfig.logPath, sizeof(g_qpmErrorConfig.logPath), value);
     }
 
@@ -45877,28 +46154,16 @@ int QpmError_LoadConfig(const char *iniPath)
     return 0;
 }
 
-/**
- * @brief Implements the QpmError_SetEnabled operation.
- * @param enabled See the matching header for semantic details.
- */
 void QpmError_SetEnabled(int enabled)
 {
     g_qpmErrorConfig.enabled = enabled ? 1 : 0;
 }
 
-/**
- * @brief Implements the QpmError_SetLogFile operation.
- * @param filePath See the matching header for semantic details.
- */
 void QpmError_SetLogFile(const char *filePath)
 {
     QpmError_CopyString(g_qpmErrorConfig.logPath, sizeof(g_qpmErrorConfig.logPath), filePath);
 }
 
-/**
- * @brief Implements the QpmError_Log operation.
- * @param format See the matching header for semantic details.
- */
 void QpmError_Log(const char *format, ...)
 {
     char message[2048];
@@ -45908,9 +46173,9 @@ void QpmError_Log(const char *format, ...)
     va_start(args, format);
     vsnprintf(message, sizeof(message), format, args);
     va_end(args);
-    message[sizeof(message) - 1] = '\\0';
+    message[sizeof(message) - 1] = '\0';
 
-    if (g_qpmErrorConfig.enabled && g_qpmErrorConfig.logPath[0] != '\\0')
+    if (g_qpmErrorConfig.enabled && g_qpmErrorConfig.logPath[0] != '\0')
     {
         QpmError_TrimLogIfNeeded();
         file = fopen(g_qpmErrorConfig.logPath, "a");
@@ -45926,33 +46191,36 @@ void QpmError_Log(const char *format, ...)
         fputs(message, stderr);
 }
 
-/**
- * @brief Implements the QpmError_Report operation.
- * @param code See the matching header for semantic details.
- * @param message See the matching header for semantic details.
- * @param file See the matching header for semantic details.
- * @param line See the matching header for semantic details.
- * @param functionName See the matching header for semantic details.
- */
 void QpmError_Report(int code, const char *message, const char *file,
                      int line, const char *functionName)
 {
-    time_t now = time(NULL);
-    const char *timestamp = ctime(&now);
+    char timestamp[64];
+    char sideSep[32];
+    char fullSep[128];
+    char header[160];
 
-    QpmError_Log("*** Qt/C++ ERROR ***\\n"
-                 "Code: %d\\n"
-                 "Message: %s\\n"
-                 "File: %s\\n"
-                 "Line: %d\\n"
-                 "Function: %s\\n"
-                 "Time: %s\\n",
+    if (QpmError_FormatTimestamp(timestamp, sizeof(timestamp)) != 0)
+        QpmError_CopyString(timestamp, sizeof(timestamp), "unknown time");
+
+    QpmError_MakeSeparator(sideSep, sizeof(sideSep), '=', 26);
+    snprintf(header, sizeof(header), "%s%s%s", sideSep, timestamp, sideSep);
+    QpmError_MakeSeparator(fullSep, sizeof(fullSep), '=', strlen(header));
+
+    QpmError_Log("%s\n"
+                 "Code: %d\n"
+                 "Message: %s\n"
+                 "Error at:\n"
+                 "\tFile: %s\n"
+                 "\tLine: %d\n"
+                 "\tFunction: %s\n"
+                 "%s\n",
+                 header,
                  code,
                  message != NULL ? message : "(none)",
                  file != NULL ? file : "(unknown)",
                  line,
                  functionName != NULL ? functionName : "(unknown)",
-                 timestamp != NULL ? timestamp : "(unknown)\\n");
+                 fullSep);
 }
 `;
     var ERROR_INI_TEMPLATE = `[error]
@@ -46826,19 +47094,18 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           label: "Full communication stack",
           group: "C bundles",
           description: "Create C UART, IPC, Ethernet, Wi-Fi, Bluetooth, CAN, I2C and SPI modules.",
-          detail: "Pure C communication stack converted from the common MY_Util C++ communication bundles. CAN targets Linux SocketCAN by default; I2C/SPI target Linux device files; Bluetooth RFCOMM is Windows-first.",
+          detail: "Pure C communication stack converted from the common QPM_Utility C++ communication bundles. CAN targets Linux SocketCAN by default; I2C/SPI target Linux device files; Bluetooth RFCOMM is Windows-first.",
           defaultFolder: "Bundle/C/Communication",
           entries: ["CBundle/Communication/README.md=>README.md", "CBundle/Communication/UART=>UART", "CBundle/Communication/IPC=>IPC", "CBundle/Communication/Ethernet=>Ethernet", "CBundle/Communication/WiFi=>WiFi", "CBundle/Communication/Bluetooth=>Bluetooth", "CBundle/Communication/CAN=>CAN", "CBundle/Communication/I2C=>I2C", "CBundle/Communication/SPI=>SPI"],
           requiredWindowsLibraries: ["ws2_32"]
         },
         {
-          label: "Core utilities",
+          label: "QPM_Utility core utilities",
           group: "C++ bundles",
-          description: "Create qpm_util.cpp, qpm_util.hpp and qpm_util.ini.",
-          detail: "C++ equivalent of the generated C utility bundle with std::string helpers.",
-          defaultFolder: "Bundle/C++/QPM_Util",
-          generator: "cpp-core",
-          entries: []
+          description: "Copy qpm_utility.cpp, qpm_utility.h and utility.ini.",
+          detail: "Canonical QPM C++ utility bundle: executable path helpers, filesystem, text I/O, INI, strings, timestamps, delays, stopwatch, matrix/vector and error-log helpers.",
+          defaultFolder: "Bundle/C++/QPM_Utility",
+          entries: ["qpm_utility.cpp", "qpm_utility.h", "utility.ini", "README_QPM_Utility.md=>README.md"]
         },
         {
           label: "Error management",
@@ -46850,27 +47117,19 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           entries: []
         },
         {
-          label: "MY_Util core utilities",
-          group: "C++ bundles",
-          description: "Copy myUtil.cpp, myUtil.h and utility.ini.",
-          detail: "INI reader, string helpers, timestamp and error-log helper functions from MY_Util.",
-          defaultFolder: "Bundle/C++/MY_Util",
-          entries: ["myUtil.cpp", "myUtil.h", "utility.ini"]
-        },
-        {
-          label: "MY_Util error management",
+          label: "QPM_Utility error management",
           group: "C++ bundles",
           description: "Copy errorManagement.cpp/.h plus required core utility files.",
           detail: "check_negerror, check_zeroerror, set_error macros and a runtime utility.ini configuration file.",
-          defaultFolder: "Bundle/C++/MY_Util",
-          entries: ["myUtil.cpp", "myUtil.h", "utility.ini", "ErrorManagement/errorManagement.cpp", "ErrorManagement/errorManagement.h"]
+          defaultFolder: "Bundle/C++/QPM_Utility",
+          entries: ["qpm_utility.cpp", "qpm_utility.h", "utility.ini", "ErrorManagement/errorManagement.cpp", "ErrorManagement/errorManagement.h"]
         },
         {
           label: "UART communication",
           group: "C++ bundles",
           description: "Copy the cross-platform UART class.",
           detail: "Serial port wrapper with text, byte and packet helpers.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/uart/uart.cpp", "Communication/uart/uart.h"]
         },
         {
@@ -46878,7 +47137,7 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy the IPC pipe class.",
           detail: "Named-pipe, local-socket and anonymous-pipe helpers.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/IPC/IPC.cpp", "Communication/IPC/IPC.h"]
         },
         {
@@ -46886,7 +47145,7 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy the TCP/UDP EthernetLink class.",
           detail: "Client/server TCP and UDP helpers with packet framing.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/ethernet/ethernet.cpp", "Communication/ethernet/ethernet.h"],
           requiredWindowsLibraries: ["ws2_32"]
         },
@@ -46895,7 +47154,7 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy the C++ Wi-Fi TCP/UDP link class.",
           detail: "Application-layer Wi-Fi communication using regular TCP/UDP sockets once the OS network is connected.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/wifi/wifi.cpp", "Communication/wifi/wifi.h"],
           requiredWindowsLibraries: ["ws2_32"]
         },
@@ -46903,8 +47162,8 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           label: "Bluetooth communication",
           group: "C++ bundles",
           description: "Copy the C++ Bluetooth communication class.",
-          detail: "Bluetooth helper from the original MY_Util communication set, kept separate from the full stack.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          detail: "Bluetooth helper from the original QPM_Utility communication set, kept separate from the full stack.",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/bluetooth/bluetooth.cpp", "Communication/bluetooth/bluetooth.h"],
           requiredWindowsLibraries: ["ws2_32"]
         },
@@ -46913,23 +47172,23 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy the C++ SocketCAN communication class.",
           detail: "C++ CAN helper with classical CAN, CAN FD, filters, timeout and diagnostic formatting. Linux SocketCAN backend by default.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/can/can.cpp", "Communication/can/can.h"]
         },
         {
           label: "I2C communication",
           group: "C++ bundles",
           description: "Copy the C++ I2C class.",
-          detail: "Linux I2C helper from the original MY_Util communication set.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          detail: "Linux I2C helper from the original QPM_Utility communication set.",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/I2C/I2C.cpp", "Communication/I2C/I2C.h"]
         },
         {
           label: "SPI communication",
           group: "C++ bundles",
           description: "Copy the C++ SPI class.",
-          detail: "Linux SPI helper from the original MY_Util communication set.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          detail: "Linux SPI helper from the original QPM_Utility communication set.",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication/SPI/SPI.cpp", "Communication/SPI/SPI.h"]
         },
         {
@@ -46937,7 +47196,7 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy Communication/* modules.",
           detail: "UART, Bluetooth, Wi-Fi, Ethernet, CAN, I2C, SPI, IPC, CommsManager and listen service.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["Communication"],
           requiredWindowsLibraries: ["ws2_32"]
         },
@@ -46946,7 +47205,7 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
           group: "C++ bundles",
           description: "Copy only the Python execution bridge.",
           detail: "C++ bridge files only: launch a Python process and exchange lines/JSON through pipes.",
-          defaultFolder: "Bundle/C++/MY_Util",
+          defaultFolder: "Bundle/C++/QPM_Utility",
           entries: ["external/pythonExec"]
         },
         {
@@ -46970,10 +47229,10 @@ No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in t
         {
           label: "Complete bundle",
           group: "C++ bundles",
-          description: "Copy the curated MY_Util C++ modules.",
-          detail: "Core utilities, error management, communication stack, Python bridge and Web UI backend. Demo/static frontend files and OpenCV realtime demo are not included.",
-          defaultFolder: "Bundle/C++/MY_Util",
-          entries: ["myUtil.cpp", "myUtil.h", "utility.ini", "ErrorManagement", "Communication", "external/pythonExec", "webui/webui.cpp=>webui/webui.cpp", "webui/webui.h=>webui/webui.h"],
+          description: "Copy the curated QPM_Utility C++ modules.",
+          detail: "QPM_Utility, error management, communication stack, Python bridge and Web UI backend. Demo/static frontend files and OpenCV realtime demo are not included.",
+          defaultFolder: "Bundle/C++/QPM_Utility",
+          entries: ["qpm_utility.cpp", "qpm_utility.h", "utility.ini", "README_QPM_Utility.md=>README_QPM_Utility.md", "ErrorManagement", "Communication", "external/pythonExec", "webui/webui.cpp=>webui/webui.cpp", "webui/webui.h=>webui/webui.h"],
           requiredWindowsLibraries: ["ws2_32"]
         },
         {
@@ -48451,7 +48710,7 @@ TestCase
         const modules = getBuiltInMyUtilModules();
         const categories = [
           { label: "C", description: "Generated C utility bundles", group: "C bundles" },
-          { label: "C++", description: "Generated C++ bundles and MY_Util C++ modules", group: "C++ bundles" },
+          { label: "C++", description: "QPM_Utility and generated C++ bundles", group: "C++ bundles" },
           { label: "Scripts", description: "Companion scripts and non-compiled helpers", group: "Script bundles" }
         ].filter((category) => modules.some((module3) => module3.group === category.group));
         const selectedCategory = await vscode2.window.showQuickPick(categories, {
@@ -48504,7 +48763,7 @@ TestCase
           }
           return result2;
         }
-        const bundleRoot = path2.join(this.context.extensionPath, BUNDLED_MY_UTIL_ROOT);
+        const bundleRoot = path2.join(this.context.extensionPath, BUNDLED_QPM_UTILITY_ROOT);
         const files = this.collectBundledMyUtilFiles(bundleRoot, selected.module.entries, projectDirectory, normalizedFolder);
         if (files.length === 0) {
           vscode2.window.showErrorMessage(`No bundled files were found for ${selected.module.label}.`);
@@ -48655,7 +48914,7 @@ TestCase
         const rootPath = path2.resolve(bundleRoot);
         const pushFile = (absoluteSource, relativeSource) => {
           const ext = path2.extname(absoluteSource).toLowerCase();
-          if (BUNDLED_MY_UTIL_SKIP_EXTENSIONS.has(ext)) {
+          if (BUNDLED_QPM_UTILITY_SKIP_EXTENSIONS.has(ext)) {
             return;
           }
           const relative = normalizeRelativeTemplateFolder(relativeSource);
@@ -88643,7 +88902,7 @@ async function activate(context) {
   const quality = new qpmQtQualityService_1.QpmQtQualityService(workspaces, qtInstallations, output);
   const testing = new qpmQtTestingService_1.QpmQtTestingService(workspaces, builds, qtInstallations, quality, output);
   const treeProvider = new qpmTreeProvider_1.QpmTreeProvider(workspaces);
-  const treeView = vscode.window.createTreeView("qpm.workspaceExplorer", { treeDataProvider: treeProvider, showCollapseAll: true });
+  const treeView = vscode.window.createTreeView("qpm.workspaceExplorer", { treeDataProvider: treeProvider, dragAndDropController: treeProvider, showCollapseAll: true, canSelectMany: true });
   const symbols = new qpmSymbolService_1.QpmSymbolService(context.extensionPath, workspaces);
   const fileSymbolsProvider = new qpmFileSymbolsProvider_1.QpmFileSymbolsProvider(symbols);
   const fileSymbolsView = vscode.window.createTreeView("qpm.fileSymbols", { treeDataProvider: fileSymbolsProvider });
@@ -89629,6 +89888,7 @@ async function activate(context) {
     register("qpm.toggleObjOption", (node) => node ? workspaces.toggleCompileIntoObjectFile(node.ref, node.file) : void 0),
     register("qpm.replaceFile", (node) => node ? workspaces.replaceFile(node.ref, node.file) : void 0),
     register("qpm.renameFile", (node) => node ? workspaces.renameFile(node.ref, node.file) : void 0),
+    register("qpm.moveFileToFolder", (node) => node ? workspaces.moveFileToFolder(node.ref, node.file) : void 0),
     register("qpm.compileFile", (node) => node ? builds.compileFile(node.file.absolutePath, node.ref) : void 0),
     register("qpm.generatePrototypes", (node) => node ? workspaces.generatePrototypes(node.ref, node.file) : void 0),
     register("qpm.prepareDllImportLibraryGeneration", (node) => node ? builds.prepareDllImportLibraryGeneration(node.file.absolutePath) : void 0),

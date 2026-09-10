@@ -1,3 +1,13 @@
+## 0.31.0 — CPM parity: curated packs, QPM_Utility and file drag/drop
+
+- Reduces the embedded Qt Libraries payload to the QPM-focused families: C, C++, Preprocessor, OpenCV, Build, Windows/API, Scripting/System, Python, JavaScript/HTML/CSS, TypeScript, Database, PHP, Embedded and Qt.
+- Removes obsolete embedded copies for Java, C#, Kotlin, VBA, Lua, Assembly, SDL, CVI and the duplicated `qpm_base_*` packs; QPM now consumes the maintained structured pack files directly.
+- Synchronizes the improved `Scripting / System` pack from CPM 0.2.62.
+- Replaces the legacy `MY_Util` C++ bundle with `QPM_Utility` (`qpm_utility.h/.cpp`) and ports the extended time/date/timing helpers, `QPM_String`, repeat/removal operators and utility fixes.
+- Updates bundled error management to depend on `qpm_utility.h` and ports the raw-string escaping fixes for generated utility/error templates.
+- Adds logical file movement in the QPM workspace explorer by drag-and-drop and by **Move File To Folder...**. Legacy project files update only their logical `Folder` metadata; physical files are not moved.
+- Native Qt manifest category folders remain structural and are protected from logical-folder drag/drop reclassification.
+
 ## 0.30.0 — Structured build diagnostics and readable logs
 
 - Reworked the direct/generic C++ build output into clear build phases instead of emitting every full compiler command into the main channel.

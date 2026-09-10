@@ -1,6 +1,6 @@
-#include "myUtil.h"
+#include "qpm_utility.h"
 
-jc_utility::iniReader ini;
+qpm_utility::iniReader ini;
 if (!ini.load("${1:utility.ini}"))
 {
     ${2:throw std::runtime_error("Unable to load configuration file");}

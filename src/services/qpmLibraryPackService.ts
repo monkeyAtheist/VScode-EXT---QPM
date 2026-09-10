@@ -16,7 +16,7 @@ interface BundledPackSpec {
 }
 
 /**
- * Canonical JC Lib 0.8.27 packs preinstalled by QPM.
+ * Canonical curated JC Lib packs preinstalled by QPM.
  *
  * Each file keeps the environment -> library -> category -> group hierarchy used
  * by the standalone JC Lib extension. They are deliberately separate so a Qt
@@ -24,12 +24,21 @@ interface BundledPackSpec {
  * synthetic "Qt Project Manager" environment.
  */
 export const QPM_BUNDLED_LIBRARY_PACKS: readonly BundledPackSpec[] = [
-  { fileName: 'qpm_base_qt_pack.json', expectedId: 'qpm.base.qt', label: 'Qt Complete' },
-  { fileName: 'qpm_base_c_pack.json', expectedId: 'qpm.base.c', label: 'C' },
-  { fileName: 'qpm_base_cpp_pack.json', expectedId: 'qpm.base.cpp', label: 'C++' },
-  { fileName: 'qpm_base_preprocessor_pack.json', expectedId: 'qpm.base.preprocessor', label: 'C/C++ Preprocessor' },
-  { fileName: 'qpm_base_windows_pack.json', expectedId: 'qpm.base.windows', label: 'Windows API / Devices' },
-  { fileName: 'qpm_base_python_pack.json', expectedId: 'qpm.base.python', label: 'Python' }
+  { fileName: 'c_language_pack.json', expectedId: 'c_language_pack', label: 'C' },
+  { fileName: 'cpp_language_pack.json', expectedId: 'jclib.cpp.language', label: 'C++' },
+  { fileName: 'qpm_base_preprocessor_pack.json', expectedId: 'qpm.base.preprocessor', label: 'Preprocessor' },
+  { fileName: 'opencv_pack.json', expectedId: 'opencv_cpp_structured_pack', label: 'OpenCV' },
+  { fileName: 'build_pack.json', expectedId: 'build-toolchains-structured-pack', label: 'Build' },
+  { fileName: 'windows_api_device_pack.json', expectedId: 'windows-api-device-pack', label: 'Windows API / Devices' },
+  { fileName: 'system_scripting_pack.json', expectedId: 'scripting-system-pack', label: 'Scripting / System' },
+  { fileName: 'python_pack.json', expectedId: 'python_structured_complete_pack', label: 'Python' },
+  { fileName: 'web_language_pack.json', expectedId: 'javascript-html-css-audit-pack', label: 'JavaScript / HTML / CSS' },
+  { fileName: 'typescript_language_pack.json', expectedId: 'typescript-language-pack-audit-v1', label: 'TypeScript' },
+  { fileName: 'database_pack.json', expectedId: 'database_pack', label: 'Database' },
+  { fileName: 'php_language_pack.json', expectedId: 'php_structured_complete_pack', label: 'PHP' },
+  { fileName: 'embedded_language_pack.json', expectedId: 'embedded_systems_pack', label: 'Embedded' },
+  { fileName: 'qt_pack.json', expectedId: 'qt-cpp-complete-pack', label: 'Qt C++' },
+  { fileName: 'qt_python_pack.json', expectedId: 'qt-python-pyside6-complete', label: 'Qt for Python / PySide6' }
 ] as const;
 
 function readPackIdentity(filePath: string): PackIdentity | undefined {
@@ -77,7 +86,23 @@ function migrateLegacySingleCorePack(targetDirectory: string, output: vscode.Out
       || name.includes('qt project manager core')
       || name.includes('labwindows/qpm');
     if (isLegacy) {
-      backupAndRemove(filePath, targetDirectory, output, 'Migrated the legacy combined QPM library pack to the six JC Lib 0.8.27 packs');
+      backupAndRemove(filePath, targetDirectory, output, 'Migrated the legacy combined QPM library pack to the curated QPM JC Lib pack set');
+    }
+  }
+}
+
+function migrateDeprecatedIntegratedPacks(targetDirectory: string, output: vscode.OutputChannel): void {
+  const deprecated = [
+    'qpm_base_qt_pack.json',
+    'qpm_base_c_pack.json',
+    'qpm_base_cpp_pack.json',
+    'qpm_base_windows_pack.json',
+    'qpm_base_python_pack.json'
+  ];
+  for (const fileName of deprecated) {
+    const filePath = path.join(targetDirectory, fileName);
+    if (fs.existsSync(filePath)) {
+      backupAndRemove(filePath, targetDirectory, output, `Migrated deprecated integrated pack ${fileName}`);
     }
   }
 }
@@ -126,7 +151,7 @@ function installOrUpgradePack(
 }
 
 /**
- * Seed or upgrade the canonical JC Lib 0.8.27 pack set used by QPM.
+ * Seed or upgrade the curated JC Lib pack set used by QPM.
  *
  * The old combined qpm_core_pack.json is backed up and removed to prevent
  * duplicated C/C++/preprocessor nodes. User-created global and workspace packs
@@ -137,6 +162,7 @@ export function ensureBundledCppLibraryPack(context: vscode.ExtensionContext, ou
   fs.mkdirSync(targetDirectory, { recursive: true });
 
   migrateLegacySingleCorePack(targetDirectory, output);
+  migrateDeprecatedIntegratedPacks(targetDirectory, output);
 
   const counts = { installed: 0, upgraded: 0, current: 0, missing: 0 };
   for (const spec of QPM_BUNDLED_LIBRARY_PACKS) {
@@ -144,7 +170,7 @@ export function ensureBundledCppLibraryPack(context: vscode.ExtensionContext, ou
   }
 
   output.appendLine(
-    `[Qt Libraries] JC Lib 0.8.27 integrated packs: ${counts.installed} installed, ${counts.upgraded} upgraded, ${counts.current} current, ${counts.missing} missing.`
+    `[Qt Libraries] Curated integrated packs: ${counts.installed} installed, ${counts.upgraded} upgraded, ${counts.current} current, ${counts.missing} missing.`
   );
 }
 

@@ -207,7 +207,7 @@ The DLL starter references `hinstDLL` and `lpvReserved` directly in the generate
 
 ## Module bundles
 
-The `Module bundle...` creation action is grouped by language. C bundles currently generate QPM-native utility files such as `qpm_util.c/.h/.ini` and `qpm_error.c/.h/.ini`. C++ bundles copy the bundled MY_Util modules without repeating the `MY_Util /` prefix in each item label.
+The `Module bundle...` creation action is grouped by language. C bundles currently generate QPM-native utility files such as `qpm_util.c/.h/.ini` and `qpm_error.c/.h/.ini`. C++ bundles copy the bundled QPM_Utility modules without repeating the `QPM_Utility /` prefix in each item label.
 
 
 
@@ -235,7 +235,7 @@ The generated paint code deliberately uses the current `QPalette` and `QStyle::P
 
 The file creation command is now organized as category pickers rather than one long list. The first picker exposes `C`, `C++`, `Module bundles`, `Scripts and text`, and `Saved templates` when user templates exist.
 
-Module bundles are also organized by folder-like categories: `C`, `C++`, and `Scripts`. Generated bundle default folders now use `Bundle/C`, `Bundle/C++`, and `Bundle/Scripts`. The generated QPM core utility and error-management bundles exist in both C and C++ forms. Generated C rewrites are available for Python execution, Web UI backend, UART, IPC and Ethernet TCP/UDP. C++ MY_Util modules remain available for projects that want the original class-based APIs.
+Module bundles are also organized by folder-like categories: `C`, `C++`, and `Scripts`. Generated bundle default folders now use `Bundle/C`, `Bundle/C++`, and `Bundle/Scripts`. The small procedural QPM core utility remains available in C; the canonical C++ utility layer is QPM_Utility, alongside the generated QPM C++ error-management bundle. Generated C rewrites are available for Python execution, Web UI backend, UART, IPC and Ethernet TCP/UDP. C++ QPM_Utility modules remain available for projects that want the richer class-based APIs.
 
 
 ### C communication bundles
@@ -247,7 +247,7 @@ Module bundles are also organized by folder-like categories: `C`, `C++`, and `Sc
 - `Ethernet TCP-UDP communication`: creates `qpm_socket.c` / `qpm_socket.h`.
 - `Full communication stack`: creates all three communication modules together.
 
-The C APIs are intentionally procedural and independent from the original MY_Util C++ classes. Under Windows, the Ethernet module requires `ws2_32` at link time.
+The C APIs are intentionally procedural and independent from the original QPM_Utility C++ classes. Under Windows, the Ethernet module requires `ws2_32` at link time.
 
 ### C Python execution bridge
 
@@ -256,7 +256,7 @@ The C APIs are intentionally procedural and independent from the original MY_Uti
 - `qpm_python_exec.h`
 - `qpm_python_exec.c`
 
-The API is pure C and supports one-shot script execution as well as a persistent session with stdin/stdout pipes. It mirrors the useful behavior of the MY_Util C++ bridge without copying the companion Python scripts. Generic scripts are available under `Module bundles > Scripts > Python worker protocol starter`; the old project-specific scripts are available under `Module bundles > Scripts > Robot demo Python scripts`.
+The API is pure C and supports one-shot script execution as well as a persistent session with stdin/stdout pipes. It mirrors the useful behavior of the QPM_Utility C++ bridge without copying the companion Python scripts. Generic scripts are available under `Module bundles > Scripts > Python worker protocol starter`; the old project-specific scripts are available under `Module bundles > Scripts > Robot demo Python scripts`.
 
 
 ### 0.2.28 Web UI bundle split
@@ -273,7 +273,7 @@ C bundles now include README/API notes where useful. When a socket or Web UI bac
 
 ### 0.2.31 C I2C/SPI communication bundles
 
-`Module bundles > C` now offers `I2C communication` and `SPI communication` alongside UART, IPC and Ethernet. The full C communication stack now creates all five low-level communication modules. The C++ bundle list also exposes the original MY_Util I2C and SPI classes as individual selectable bundles.
+`Module bundles > C` now offers `I2C communication` and `SPI communication` alongside UART, IPC and Ethernet. The full C communication stack now creates all five low-level communication modules. The C++ bundle list also exposes the original QPM_Utility I2C and SPI classes as individual selectable bundles.
 
 
 
@@ -320,7 +320,7 @@ The Lua header documents the main API directly in Doxygen form: one-shot executi
 
 ### 0.2.40 bundle header documentation audit
 
-The bundle headers now include a stronger self-contained documentation block. Each audited header starts with Doxygen sections for main features, typical applications, usage notes and a short example using the public API. This was applied to the generated C bundles, the generated C++ bundles and the copied MY_Util communication/external/Web UI bundles.
+The bundle headers now include a stronger self-contained documentation block. Each audited header starts with Doxygen sections for main features, typical applications, usage notes and a short example using the public API. This was applied to the generated C bundles, the generated C++ bundles and the copied QPM_Utility communication/external/Web UI bundles.
 
 This avoids missing important runtime behavior such as script argument passing or stdout capture: the Python and Lua execution bridge headers now explicitly document both argument access on the script side and output capture in the Qt/C++ result structures.
 

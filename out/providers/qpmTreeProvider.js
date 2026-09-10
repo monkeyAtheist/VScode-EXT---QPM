@@ -40,6 +40,9 @@ const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 class QpmTreeProvider {
     workspaces;
+    static dragMimeType = 'application/vnd.code.tree.qpm.workspaceexplorer';
+    dragMimeTypes = [QpmTreeProvider.dragMimeType];
+    dropMimeTypes = [QpmTreeProvider.dragMimeType];
     changeEmitter = new vscode.EventEmitter();
     disposables = [];
     onDidChangeTreeData = this.changeEmitter.event;
@@ -57,6 +60,79 @@ class QpmTreeProvider {
     }
     refresh() {
         this.changeEmitter.fire();
+    }
+    handleDrag(source, dataTransfer, _token) {
+        const files = source
+            .filter((node) => node.kind === 'file')
+            .map((node) => ({
+            projectPath: node.ref.absolutePath,
+            projectIndex: node.ref.index,
+            sectionName: node.file.sectionName,
+            filePath: node.file.absolutePath,
+            fileName: path.basename(node.file.absolutePath)
+        }));
+        if (files.length === 0) {
+            return;
+        }
+        dataTransfer.set(QpmTreeProvider.dragMimeType, new vscode.DataTransferItem(JSON.stringify({ files })));
+    }
+    async handleDrop(target, dataTransfer, token) {
+        if (token.isCancellationRequested) {
+            return;
+        }
+        const transfer = dataTransfer.get(QpmTreeProvider.dragMimeType);
+        if (!transfer) {
+            return;
+        }
+        const dropTarget = this.dropTargetForNode(target);
+        if (!dropTarget) {
+            vscode.window.showInformationMessage('Drop project files onto a QPM folder or onto a project root to move them.');
+            return;
+        }
+        const payload = this.parseDragPayload(transfer.value);
+        const matchingFiles = payload.files.filter((file) => path.normalize(file.projectPath).toLowerCase() === path.normalize(dropTarget.ref.absolutePath).toLowerCase());
+        if (matchingFiles.length === 0) {
+            vscode.window.showWarningMessage('Files can only be moved inside their own QPM project.');
+            return;
+        }
+        if ((0, qtProjectManifest_1.isQtProjectManifestPath)(dropTarget.ref.absolutePath)) {
+            vscode.window.showInformationMessage('Native Qt manifest folders are structural; drag/drop reclassification is not applied.');
+            return;
+        }
+        await this.workspaces.moveFilesToFolder(dropTarget.ref, matchingFiles.map((file) => file.sectionName), dropTarget.folderPath, { silent: true });
+    }
+    dropTargetForNode(node) {
+        if (!node) {
+            return undefined;
+        }
+        if (node.kind === 'folder') {
+            return { ref: node.ref, folderPath: node.folderPath };
+        }
+        if (node.kind === 'project') {
+            return { ref: node.ref, folderPath: '' };
+        }
+        return undefined;
+    }
+    parseDragPayload(value) {
+        if (typeof value === 'string') {
+            try {
+                const parsed = JSON.parse(value);
+                if (parsed && Array.isArray(parsed.files)) {
+                    return { files: parsed.files.filter((file) => {
+                            const candidate = file;
+                            return typeof candidate.projectPath === 'string'
+                                && typeof candidate.projectIndex === 'number'
+                                && typeof candidate.sectionName === 'string'
+                                && typeof candidate.filePath === 'string'
+                                && typeof candidate.fileName === 'string';
+                        }) };
+                }
+            }
+            catch {
+                return { files: [] };
+            }
+        }
+        return { files: [] };
     }
     getTreeItem(element) {
         switch (element.kind) {

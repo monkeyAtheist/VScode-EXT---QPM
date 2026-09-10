@@ -790,15 +790,23 @@ The **Create New File or Starter...** menu includes Qt entry points, `QObject`, 
 
 ### Embedded JC Lib catalog
 
-QPM embeds the JC Lib 0.8.27 hierarchy model and ships only the six base packs relevant to this extension:
+QPM embeds the JC Lib hierarchy model and ships a curated QPM-focused pack set:
 
 ```text
-Qt complete
 C
 C++
-C/C++ preprocessor
+Preprocessor
+OpenCV
+Build
 Windows API / Devices
+Scripting / System
 Python
+JavaScript / HTML / CSS
+TypeScript
+Database
+PHP
+Embedded
+Qt
 ```
 
 The Qt pack groups Qt language, QML, Multimedia, SQL/Test and PySide6 content under the canonical `QT` environment. Empty custom packs no longer receive an automatic `General` environment.

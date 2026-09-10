@@ -1,10 +1,12 @@
 .vscode/**
-.vscode-test/**
+.git/**
+node_modules/**
 src/**
 out/**
 scripts/**
-node_modules/**
-docs/**
-*.vsix
-tsconfig.json
+test-mocks/**
+*.tsbuildinfo
 package-lock.json
+tsconfig.json
+**/*.map
+**/*.bak

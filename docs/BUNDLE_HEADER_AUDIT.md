@@ -25,7 +25,7 @@ Each audited header must provide:
 - `CBundle/Communication/I2C/qpm_i2c.h`
 - `CBundle/Communication/SPI/qpm_spi.h`
 
-### C++ MY_Util bundle headers
+### C++ QPM_Utility bundle headers
 
 - `Communication/uart/uart.h`
 - `Communication/IPC/IPC.h`
@@ -40,7 +40,7 @@ Each audited header must provide:
 - `external/pythonExec/pythonExec.h`
 - `webui/webui.h`
 - `ErrorManagement/errorManagement.h`
-- `myUtil.h`
+- `qpm_utility.h`
 
 ## Audited generated template headers
 

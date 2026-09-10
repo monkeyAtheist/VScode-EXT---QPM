@@ -8251,11 +8251,11 @@ function buildStarterPackSelection(id: string): StarterPackSelection {
 
   switch (id) {
     case 'c_core':
-      return bundledPackLibrarySelection('c_core', 'C complete structured pack', 'qpm_base_c_pack.json', 'C', ['C Language']);
+      return bundledPackLibrarySelection('c_core', 'C complete structured pack', 'c_language_pack.json', 'C', ['C Language']);
     case 'cpp_core':
-      return bundledPackLibrarySelection('cpp_core', 'C++ complete structured pack', 'qpm_base_cpp_pack.json', 'C++', ['C++ Language']);
+      return bundledPackLibrarySelection('cpp_core', 'C++ complete structured pack', 'cpp_language_pack.json', 'C++', ['C++ Language']);
     case 'python_core':
-      return bundledPackLibrarySelection('python_core', 'Python complete structured pack', 'qpm_base_python_pack.json', 'Python', ['Python Language']);
+      return bundledPackLibrarySelection('python_core', 'Python complete structured pack', 'python_pack.json', 'Python', ['Python Language']);
     case 'web_core':
       return bundledPackLibrarySelection('web_core', 'JavaScript / HTML / CSS complete structured pack', 'web_language_pack.json', 'Web', ['JavaScript', 'HTML', 'CSS']);
     case 'java_core':
@@ -8303,9 +8303,9 @@ function buildStarterPackSelection(id: string): StarterPackSelection {
     case 'database_all':
       return combinePreservingLibraries('database_all', 'All database pack', ['database_core', 'sqlite_core', 'postgres_core', 'mysql_core', 'sqlserver_core', 'duckdb_core', 'mongodb_core', 'redis_core', 'sqlite_c_core', 'libpq_core', 'mysql_capi_core', 'odbc_core', 'sqlalchemy_core', 'hiredis_core', 'dbops_core']);
     case 'qt_full':
-      return bundledPackLibrarySelection('qt_full', 'Qt C++ complete structured pack', 'qpm_base_qt_pack.json', 'QT', ['Qt Language', 'Qt QML', 'Qt Multimedia', 'Qt SQL & Test']);
+      return bundledPackLibrarySelection('qt_full', 'Qt C++ complete structured pack', 'qt_pack.json', 'QT', ['Qt Language', 'Qt QML', 'Qt Multimedia', 'Qt SQL & Test']);
     case 'qt_pyside_core':
-      return bundledPackLibrarySelection('qt_pyside_core', 'Qt for Python PySide6 structured pack', 'qpm_base_qt_pack.json', 'QT', ['Qt for Python (PySide6)']);
+      return bundledPackLibrarySelection('qt_pyside_core', 'Qt for Python PySide6 structured pack', 'qt_python_pack.json', 'QT', ['Qt for Python (PySide6)']);
     case 'opencv_full':
       return combineSingleLibrary('opencv_full', 'OpenCV language pack', 'OpenCV Language', ['opencv_core', 'opencv_vision']);
     case 'c_all':
@@ -8397,11 +8397,11 @@ function buildStarterPackSelection(id: string): StarterPackSelection {
     case 'sdl3_all':
       return bundledPackFileSelection('sdl3_all', 'SDL3 structured pack', 'sdl3_language_pack.json', ['SDL']);
     case 'win32_gui_all':
-      return bundledPackLibrarySelection('win32_gui_all', 'Win32 GUI structured pack', 'qpm_base_windows_pack.json', 'Windows API / Devices', ['User32', 'GDI32', 'Comdlg32', 'Comctl32', 'Kernel32', 'Shell32', 'Wtsapi32', 'Advapi32', 'DbgHelp', 'Winsock2', 'Iphlpapi', 'Psapi']);
+      return bundledPackLibrarySelection('win32_gui_all', 'Win32 GUI structured pack', 'windows_api_device_pack.json', 'Windows API / Devices', ['User32', 'GDI32', 'Comdlg32', 'Comctl32', 'Kernel32', 'Shell32', 'Wtsapi32', 'Advapi32', 'DbgHelp', 'Winsock2', 'Iphlpapi', 'Psapi']);
     case 'windows_devices_all':
-      return bundledPackLibrarySelection('windows_devices_all', 'Windows Devices structured pack', 'qpm_base_windows_pack.json', 'Windows API / Devices', ['WinMM', 'Core Audio', 'XInput', 'Raw Input', 'Media Foundation', 'DirectShow', 'HID & SetupAPI', 'Bluetooth', 'Serial Ports', 'WinUSB', 'SetupAPI Advanced', 'Bluetooth LE', 'Media Foundation Advanced']);
+      return bundledPackLibrarySelection('windows_devices_all', 'Windows Devices structured pack', 'windows_api_device_pack.json', 'Windows API / Devices', ['WinMM', 'Core Audio', 'XInput', 'Raw Input', 'Media Foundation', 'DirectShow', 'HID & SetupAPI', 'Bluetooth', 'Serial Ports', 'WinUSB', 'SetupAPI Advanced', 'Bluetooth LE', 'Media Foundation Advanced']);
     case 'windows_all':
-      return bundledPackFileSelection('windows_all', 'Windows API / Devices structured pack', 'qpm_base_windows_pack.json', ['Windows API / Devices']);
+      return bundledPackFileSelection('windows_all', 'Windows API / Devices structured pack', 'windows_api_device_pack.json', ['Windows API / Devices']);
     case 'lua_all':
       return bundledPackFileSelection('lua_all', 'Lua pack', 'lua_pack.json');
     case 'lua_standard':
@@ -8415,7 +8415,7 @@ function buildStarterPackSelection(id: string): StarterPackSelection {
     case 'examples_all':
       return combinePreservingLibraries('examples_all', 'All example packs', ['opencv_robotics_example', 'win32_hooks_example', 'uart_protocol_example', 'instrumentation_example']);
     case 'all_packs':
-      return combinePreservingLibraries('all_packs', 'All packs', ['c_all', 'cpp_all', 'preprocessor_core', 'qt_all', 'opencv_all', 'build_all', 'scripting_all', 'python_core', 'java_core', 'web_core', 'csharp_core', 'php_core', 'kotlin_core', 'typescript_core', 'vba_core', 'database_all', 'embedded_all', 'assembly_all', 'lua_all', 'sdl_all', 'windows_all', 'win32_hooks_example', 'uart_protocol_example', 'instrumentation_example']);
+      return combinePreservingLibraries('all_packs', 'Curated QPM packs', ['c_all', 'cpp_all', 'preprocessor_core', 'opencv_all', 'build_all', 'windows_all', 'scripting_all', 'python_core', 'web_core', 'typescript_core', 'database_all', 'php_core', 'embedded_all', 'qt_all']);
     default:
       return direct(id as LanguagePackMode);
   }
@@ -8423,12 +8423,21 @@ function buildStarterPackSelection(id: string): StarterPackSelection {
 
 async function chooseGroupedStarterPack(packName: string): Promise<StarterPackSelection | undefined> {
   const families = [
-    { label: 'Qt complete pack', description: 'Qt C++, QML, Multimedia, SQL/Test and Qt for Python / PySide6', value: 'qt' },
+    { label: 'Add all curated QPM packs', description: 'Insert the reduced QPM pack set in one operation', value: 'all' },
     { label: 'C pack', description: 'C language and C DLL helpers', value: 'c' },
     { label: 'C++ pack', description: 'C++ language and C++ DLL helpers', value: 'cpp' },
-    { label: 'C/C++ Preprocessor pack', description: 'Macros, conditions, pragmas, stringification and token concatenation', value: 'preprocessor' },
-    { label: 'Windows API / Devices pack', description: 'Win32 GUI, system APIs, serial, Bluetooth, USB and device helpers', value: 'windows' },
-    { label: 'Python language pack', description: 'Python language, files, asyncio, networking, scientific tools and automation', value: 'python_core' }
+    { label: 'Preprocessor pack', description: 'Shared C/C++ macros, conditions, pragmas, stringification and token concatenation', value: 'preprocessor' },
+    { label: 'OpenCV pack', description: 'OpenCV language pack with camera and vision helpers', value: 'opencv' },
+    { label: 'Build pack', description: 'CMake, CTest, CPack, GCC/G++, Clang/LLVM, MinGW, MSVC, Make, Ninja and dependency helpers', value: 'build' },
+    { label: 'Windows API / Devices pack', description: 'Win32 GUI plus audio, input, camera, HID, Bluetooth, serial and USB helpers', value: 'windows' },
+    { label: 'Scripting / System pack', description: 'Cross-platform automation, PowerShell, CMD/Batch, Bash, Linux administration, Git, SSH, Docker and DevOps', value: 'scripting' },
+    { label: 'Python language pack', description: 'Structured Python language, files, asyncio, networking, scientific tools and automation', value: 'python_core' },
+    { label: 'JavaScript / HTML / CSS pack', description: 'Structured browser, Node.js, frameworks, webviews and tooling pack', value: 'web_core' },
+    { label: 'TypeScript language pack', description: 'Structured TypeScript language, types, Web, Node.js, backend and tooling pack', value: 'typescript_core' },
+    { label: 'Database pack', description: 'SQL, NoSQL, client APIs, ODBC and database operations helpers', value: 'database' },
+    { label: 'PHP language pack', description: 'Structured PHP language, web frameworks, persistence and deployment helpers', value: 'php_core' },
+    { label: 'Embedded pack', description: 'Embedded architecture, Arduino, ESP32, STM32, Raspberry Pi, PIC and MSP helpers', value: 'embedded' },
+    { label: 'Qt pack', description: 'Qt C++, QML, Multimedia, SQL/Test and Qt for Python / PySide6', value: 'qt' }
   ];
 
   const family = await vscode.window.showQuickPick(families, {
@@ -8436,7 +8445,10 @@ async function chooseGroupedStarterPack(packName: string): Promise<StarterPackSe
     placeHolder: 'Choose a pack family'
   });
   if (!family) return undefined;
-  if (family.value === 'python_core') {
+  if (family.value === 'all') {
+    return buildStarterPackSelection('all_packs');
+  }
+  if (['python_core', 'web_core', 'typescript_core', 'php_core'].includes(family.value)) {
     return buildStarterPackSelection(family.value);
   }
 

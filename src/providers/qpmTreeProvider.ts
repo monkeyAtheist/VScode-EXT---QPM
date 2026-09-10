@@ -15,7 +15,11 @@ export interface GeneratedFolderNode { kind: 'generatedFolder'; ref: QpmWorkspac
 export interface GeneratedFileNode { kind: 'generatedFile'; ref: QpmWorkspaceProjectRef; absolutePath: string; }
 export interface PlaceholderNode { kind: 'placeholder'; label: string; }
 
-export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode>, vscode.Disposable {
+export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode>, vscode.TreeDragAndDropController<QpmTreeNode>, vscode.Disposable {
+  private static readonly dragMimeType = 'application/vnd.code.tree.qpm.workspaceexplorer';
+
+  readonly dragMimeTypes = [QpmTreeProvider.dragMimeType];
+  readonly dropMimeTypes = [QpmTreeProvider.dragMimeType];
   private readonly changeEmitter = new vscode.EventEmitter<QpmTreeNode | undefined | null | void>();
   private readonly disposables: vscode.Disposable[] = [];
   readonly onDidChangeTreeData = this.changeEmitter.event;
@@ -36,6 +40,94 @@ export class QpmTreeProvider implements vscode.TreeDataProvider<QpmTreeNode>, vs
 
   refresh(): void {
     this.changeEmitter.fire();
+  }
+
+  handleDrag(source: readonly QpmTreeNode[], dataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): void {
+    const files = source
+      .filter((node): node is FileNode => node.kind === 'file')
+      .map((node) => ({
+        projectPath: node.ref.absolutePath,
+        projectIndex: node.ref.index,
+        sectionName: node.file.sectionName,
+        filePath: node.file.absolutePath,
+        fileName: path.basename(node.file.absolutePath)
+      }));
+
+    if (files.length === 0) {
+      return;
+    }
+
+    dataTransfer.set(QpmTreeProvider.dragMimeType, new vscode.DataTransferItem(JSON.stringify({ files })));
+  }
+
+  async handleDrop(target: QpmTreeNode | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+    if (token.isCancellationRequested) {
+      return;
+    }
+
+    const transfer = dataTransfer.get(QpmTreeProvider.dragMimeType);
+    if (!transfer) {
+      return;
+    }
+
+    const dropTarget = this.dropTargetForNode(target);
+    if (!dropTarget) {
+      vscode.window.showInformationMessage('Drop project files onto a QPM folder or onto a project root to move them.');
+      return;
+    }
+
+    const payload = this.parseDragPayload(transfer.value);
+    const matchingFiles = payload.files.filter((file) => path.normalize(file.projectPath).toLowerCase() === path.normalize(dropTarget.ref.absolutePath).toLowerCase());
+    if (matchingFiles.length === 0) {
+      vscode.window.showWarningMessage('Files can only be moved inside their own QPM project.');
+      return;
+    }
+
+    if (isQtProjectManifestPath(dropTarget.ref.absolutePath)) {
+      vscode.window.showInformationMessage('Native Qt manifest folders are structural; drag/drop reclassification is not applied.');
+      return;
+    }
+
+    await this.workspaces.moveFilesToFolder(
+      dropTarget.ref,
+      matchingFiles.map((file) => file.sectionName),
+      dropTarget.folderPath,
+      { silent: true }
+    );
+  }
+
+  private dropTargetForNode(node: QpmTreeNode | undefined): { ref: QpmWorkspaceProjectRef; folderPath: string } | undefined {
+    if (!node) {
+      return undefined;
+    }
+    if (node.kind === 'folder') {
+      return { ref: node.ref, folderPath: node.folderPath };
+    }
+    if (node.kind === 'project') {
+      return { ref: node.ref, folderPath: '' };
+    }
+    return undefined;
+  }
+
+  private parseDragPayload(value: unknown): { files: Array<{ projectPath: string; projectIndex: number; sectionName: string; filePath: string; fileName: string }> } {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && Array.isArray(parsed.files)) {
+          return { files: parsed.files.filter((file: unknown): file is { projectPath: string; projectIndex: number; sectionName: string; filePath: string; fileName: string } => {
+            const candidate = file as { projectPath?: unknown; projectIndex?: unknown; sectionName?: unknown; filePath?: unknown; fileName?: unknown };
+            return typeof candidate.projectPath === 'string'
+              && typeof candidate.projectIndex === 'number'
+              && typeof candidate.sectionName === 'string'
+              && typeof candidate.filePath === 'string'
+              && typeof candidate.fileName === 'string';
+          }) };
+        }
+      } catch {
+        return { files: [] };
+      }
+    }
+    return { files: [] };
   }
 
   getTreeItem(element: QpmTreeNode): vscode.TreeItem {

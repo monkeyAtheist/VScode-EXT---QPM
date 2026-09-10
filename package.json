@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -312,7 +312,8 @@
     "onCommand:qpm.installQtDesignerWidgets",
     "onCommand:qpm.openQtDesignerWithCustomWidgets",
     "onCommand:qpm.cleanQtDesignerWidgets",
-    "onCommand:qpm.revealQtDesignerWidgets"
+    "onCommand:qpm.revealQtDesignerWidgets",
+    "onCommand:qpm.moveFileToFolder"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -2154,6 +2155,11 @@
         "title": "Qt Project Manager: New SCPI Instrument Profile from Catalog",
         "category": "Qt Project Manager",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "qpm.moveFileToFolder",
+        "title": "Move File To Folder...",
+        "icon": "$(move)"
       }
     ],
     "menus": {
@@ -2799,6 +2805,11 @@
           "command": "qpm.buildQtDesignerWidgets",
           "when": "view == qpm.workspaceExplorer && viewItem == qpmProjectNative && qpm.qtCppProjectActive",
           "group": "qtDesigner@2"
+        },
+        {
+          "command": "qpm.moveFileToFolder",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\./",
+          "group": "modification@2"
         }
       ],
       "commandPalette": [
@@ -3065,6 +3076,10 @@
         {
           "command": "qpm.revealAndroidPackage",
           "when": "qpm.nativeQtProjectActive"
+        },
+        {
+          "command": "qpm.moveFileToFolder",
+          "when": "false"
         }
       ],
       "editor/context": [
