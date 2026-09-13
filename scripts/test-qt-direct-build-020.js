@@ -109,7 +109,7 @@ try {
 
   const rawWithoutAutoDeploy = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   delete rawWithoutAutoDeploy.qt.autoDeploy;
-  assert.strictEqual(model.validateAndNormalizeManifest(rawWithoutAutoDeploy, manifestPath).qt.autoDeploy, false);
+  assert.strictEqual(model.validateAndNormalizeManifest(rawWithoutAutoDeploy, manifestPath).qt.autoDeploy, true);
   assert.throws(() => model.validateAndNormalizeManifest({ ...rawWithoutAutoDeploy, targetName: '../escape' }, manifestPath), /targetName/);
   assert.throws(() => model.validateAndNormalizeManifest({ ...rawWithoutAutoDeploy, targetName: 'CON' }, manifestPath), /targetName/);
   assert.throws(() => model.validateAndNormalizeManifest({ ...rawWithoutAutoDeploy, targetName: 'Demo ' }, manifestPath), /targetName/);

@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 
 const projectSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
 assert(projectSource.includes('windowsHide: false'), 'C++ Designer must preserve the validated pre-Python Windows launch behavior');

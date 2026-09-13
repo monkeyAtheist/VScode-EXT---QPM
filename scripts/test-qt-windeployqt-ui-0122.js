@@ -69,9 +69,11 @@ try {
 
   const buildSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'qpmBuildService.ts'), 'utf8');
   assert(buildSource.includes("args.push('--qtpaths', installation.qtPathsPath)"), 'windeployqt must receive the selected kit qtpaths executable');
-  assert(buildSource.includes("args.push('--dir', path.dirname(targetPath))"), 'windeployqt deployment target directory must be explicit');
-  assert(buildSource.includes('detectQtRuntimeVariantFromBinary(targetPath'), 'deployment variant must be detected from the linked Qt runtime');
+  assert(buildSource.includes("args.push('--dir', deployDirectory)"), 'windeployqt must deploy into the clean standalone directory');
+  assert(buildSource.includes('detectQtRuntimeVariantFromBinary(buildTargetPath'), 'deployment variant must be detected from the linked Qt runtime');
   assert(buildSource.includes('createQtDeploymentEnvironment(installation)'), 'windeployqt must run in the selected Qt kit environment');
+  assert(buildSource.includes('qtDeploymentDirectory'), 'deployment must use the dedicated standalone directory');
+  assert(buildSource.includes("args.push('--compiler-runtime')"), 'compiler runtime deployment must be configurable');
 
   const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'qtProjectSettingsPanel.ts'), 'utf8');
   for (const token of ['--qpm-sticky-offset', 'settingsStickyHeader', 'ResizeObserver', 'updateStickyOffsets']) {

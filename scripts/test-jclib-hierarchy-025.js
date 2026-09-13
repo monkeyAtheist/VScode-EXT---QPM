@@ -70,42 +70,28 @@ for (const [selectionId, [expectedEnvironment, expectedLibraries]] of Object.ent
 
 
 const sourceText = fs.readFileSync(path.join(root, 'src', 'jcLibEmbedded.ts'), 'utf8');
-const buildStart = sourceText.indexOf('function buildStarterPackSelection');
-const buildEnd = sourceText.indexOf('async function chooseGroupedStarterPack');
-const buildSection = sourceText.slice(buildStart, buildEnd);
-const switchIds = [...buildSection.matchAll(/case '([^']+)'/g)].map((match) => match[1]);
-const unionMatch = sourceText.match(/type LanguagePackMode = ([^;]+);/);
-const directIds = unionMatch ? [...unionMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]) : [];
-for (const selectionId of [...new Set([...switchIds, ...directIds])]) {
-  const selection = api.buildStarterPackSelection(selectionId);
-  assert(selection.entries.length > 0, `${selectionId} must resolve to non-empty starter content`);
-  assert.strictEqual(selection.preserveEnvironments, true, `${selectionId} must preserve a canonical environment`);
-  assert(selection.entries.every((entry) => typeof entry.environment === 'string' && entry.environment.trim()), `${selectionId} must have no unscoped entries`);
+const familyStart = sourceText.indexOf('async function chooseGroupedStarterPack');
+const familyEnd = sourceText.indexOf('async function importLanguageStarterIntoPackFile');
+const familySection = sourceText.slice(familyStart, familyEnd);
+const removedFamilies = ['CVI', 'SDL', 'Java', 'C#', 'Kotlin', 'VBA', 'Lua', 'Assembly'];
+for (const family of removedFamilies) {
+  assert(!familySection.includes(`{ label: '${family} pack'`), `${family} must not be exposed as a QPM starter-pack family`);
 }
 
 const canonicalDataRoots = {
-  'assembly_language_pack.json': 'Assembly',
   'build_pack.json': 'Build & Toolchains',
   'c_language_pack.json': 'C',
   'cpp_language_pack.json': 'C++',
-  'csharp_language_pack.json': 'C# / .NET',
-  'cvi_pack.json': 'CVI',
   'database_pack.json': 'Databases',
   'embedded_language_pack.json': 'Embedded',
-  'java_language_pack.json': 'Java',
-  'kotlin_language_pack.json': 'Kotlin',
-  'lua_pack.json': 'Lua',
   'opencv_pack.json': 'OpenCV',
   'php_language_pack.json': 'PHP',
   'python_pack.json': 'Python',
+  'qpm_base_preprocessor_pack.json': 'C / C++ Preprocessor',
   'qt_pack.json': 'QT',
   'qt_python_pack.json': 'QT',
-  'sdl2_language_pack.json': 'SDL',
-  'sdl3_language_pack.json': 'SDL',
-  'sdl_pack.json': 'SDL',
   'system_scripting_pack.json': 'Scripting / System',
   'typescript_language_pack.json': 'TypeScript',
-  'vba_language_pack.json': 'Visual Basic / VBA',
   'web_language_pack.json': 'Web',
   'windows_api_device_pack.json': 'Windows API / Devices'
 };
@@ -121,6 +107,11 @@ function walkFunctions(category) {
   visit(category.groups || []);
   return result;
 }
+
+const actualJsonFiles = fs.readdirSync(path.join(root, 'data'))
+  .filter((name) => name.endsWith('.json') && name !== 'qt_instrument_profile_catalog.json')
+  .sort();
+assert.deepStrictEqual(actualJsonFiles, Object.keys(canonicalDataRoots).sort(), 'QPM data directory must contain only the curated JC Lib pack set plus the Qt instrument catalog');
 
 for (const [fileName, expectedRoot] of Object.entries(canonicalDataRoots)) {
   const data = JSON.parse(fs.readFileSync(path.join(root, 'data', fileName), 'utf8'));
@@ -140,4 +131,4 @@ for (const [fileName, expectedRoot] of Object.entries(canonicalDataRoots)) {
   }
 }
 
-console.log('QPM 0.2.5 embedded JC Lib 0.8.27 hierarchy tests: PASS');
+console.log('QPM 0.33.0 curated embedded JC Lib hierarchy tests: PASS');

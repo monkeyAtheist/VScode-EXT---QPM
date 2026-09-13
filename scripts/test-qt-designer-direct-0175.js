@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 
 const cppSource = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtProjectService.ts'), 'utf8');
 assert(cppSource.includes('await spawnDesigner(installation, target, this.output, pluginRoots);'), 'C++ .ui files must keep the validated direct Designer launcher while allowing project-local widget plugin roots');

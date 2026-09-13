@@ -18,6 +18,7 @@ import { QpmQtInstallation } from './qpmQtInstallationService';
 import { writeQtPackagingMetadata } from './qpmQtPackagingModel';
 import { describeAutoDetectedQtModules, effectiveQtModules } from './qpmQtModuleInference';
 import { readDependencyIntegration } from './qpmQtDependencyModel';
+import { compilerStaticRuntimeLinkerFlags, validateQtLinkageSelection } from './qpmQtLinkage';
 
 export interface QtCodeGenerationStep {
   kind: 'moc-header' | 'moc-source' | 'uic' | 'rcc' | 'windres';
@@ -104,6 +105,8 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
   if (manifest.qt.majorVersion !== 'auto' && installation.majorVersion > 0 && manifest.qt.majorVersion !== installation.majorVersion) {
     throw new Error(`Project ${manifest.name} requires Qt ${manifest.qt.majorVersion}, but the selected kit is Qt ${installation.majorVersion}.`);
   }
+  const linkageDiagnostic = validateQtLinkageSelection(installation, buildProfile.linkage, 'direct');
+  if (linkageDiagnostic) throw new Error(linkageDiagnostic);
   const modeIs64Bit = mode === 'debug64' || mode === 'release64';
   if (installation.architecture === 'x64' && !modeIs64Bit) {
     throw new Error(`Build mode ${mode} is 32-bit, but the selected Qt kit is x64. Select Debug x64 or Release x64.`);
@@ -247,14 +250,6 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
       throw new Error(`Qt library ${library} was not found in the selected kit: ${installation.libDir}`);
     }
   }
-  if (process.platform === 'win32') {
-    const major = installation.majorVersion || Number(installation.version.split('.')[0]) || 6;
-    const dynamicCore = [path.join(installation.binDir, `Qt${major}Core.dll`), path.join(installation.binDir, `Qt${major}Cored.dll`)].some((candidate) => fs.existsSync(candidate));
-    if (!dynamicCore) {
-      throw new Error('Static Qt kits are not yet supported by the direct backend because their plugin and transitive system-library dependencies require additional resolution.');
-    }
-  }
-
   let precompiledHeaderPath: string | undefined;
   let precompiledHeaderCopyPath: string | undefined;
   let precompiledHeaderOutputPath: string | undefined;
@@ -288,7 +283,11 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry)), ...(dependencyIntegration?.libraryDirectories ?? [])]),
     defines,
     compilerFlags: unique([...(modeSettings.compilerFlags ?? []), ...(dependencyIntegration?.compilerFlags ?? [])]),
-    linkerFlags: unique([...(modeSettings.linkerFlags ?? []), ...(dependencyIntegration?.linkerFlags ?? [])]),
+    linkerFlags: unique([
+      ...compilerStaticRuntimeLinkerFlags(installation, buildProfile.linkage),
+      ...(modeSettings.linkerFlags ?? []),
+      ...(dependencyIntegration?.linkerFlags ?? [])
+    ]),
     entryPointArguments: windowsEntryPoint.arguments,
     qtLibraries,
     userLibraries: unique([...manifest.libraries, ...(dependencyIntegration?.libraries ?? [])]),

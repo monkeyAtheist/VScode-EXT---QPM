@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 assert.strictEqual(pkg.dependencies['vscode-languageclient'], '^9.0.1');
 
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
@@ -23,7 +23,7 @@ assert(pkg.contributes.menus['qpm.qmlTools'].some((entry) => entry.command === '
 
 const manifestApi = require('../out/model/qtProjectManifest');
 const quick = manifestApi.createDefaultQtProjectManifest('QuickApp', 'quick-application');
-assert.strictEqual(quick.schemaVersion, 17);
+assert.strictEqual(quick.schemaVersion, 18);
 assert.strictEqual(quick.qml.languageServer.enabled, true);
 assert.strictEqual(quick.qml.languageServer.autoStart, true);
 assert.strictEqual(quick.qml.languageServer.conflictPolicy, 'avoid-duplicate');
@@ -45,7 +45,7 @@ try {
   fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
   assert.strictEqual(manifestApi.migrateQtProjectManifestFile(legacyPath), true);
   const migrated = manifestApi.readQtProjectManifest(legacyPath);
-  assert.strictEqual(migrated.schemaVersion, 17);
+  assert.strictEqual(migrated.schemaVersion, 18);
   assert.strictEqual(migrated.qml.languageServer.enabled, true);
   assert(fs.existsSync(`${legacyPath}.schema-v12.backup`));
 
@@ -66,7 +66,7 @@ try {
 }
 
 const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-assert.strictEqual(schema.properties.schemaVersion.const, 17);
+assert.strictEqual(schema.properties.schemaVersion.const, 18);
 assert(schema.required.includes('qml'));
 assert.deepStrictEqual(schema.properties.qml.properties.languageServer.properties.trace.enum, ['off', 'messages', 'verbose']);
 assert.deepStrictEqual(schema.properties.qml.properties.languageServer.properties.conflictPolicy.enum, ['avoid-duplicate', 'allow-parallel']);

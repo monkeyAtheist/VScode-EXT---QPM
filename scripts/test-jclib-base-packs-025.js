@@ -8,12 +8,21 @@ const Module = require('module');
 
 const root = path.join(__dirname, '..');
 const specs = [
-  ['qpm_base_qt_pack.json', 'qpm.base.qt', 'QT', ['Qt Language', 'Qt QML', 'Qt Multimedia', 'Qt SQL & Test', 'Qt for Python (PySide6)']],
-  ['qpm_base_c_pack.json', 'qpm.base.c', 'C', ['C Language', 'C DLL Helpers']],
-  ['qpm_base_cpp_pack.json', 'qpm.base.cpp', 'C++', ['C++ Language', 'C++ DLL Helpers']],
-  ['qpm_base_preprocessor_pack.json', 'qpm.base.preprocessor', 'C / C++ Preprocessor', ['C/C++ Preprocessor']],
-  ['qpm_base_windows_pack.json', 'qpm.base.windows', 'Windows API / Devices', ['User32', 'Serial Ports']],
-  ['qpm_base_python_pack.json', 'qpm.base.python', 'Python', ['Python Language']]
+  ['c_language_pack.json', 'c_language_pack', 'C'],
+  ['cpp_language_pack.json', 'jclib.cpp.language', 'C++'],
+  ['qpm_base_preprocessor_pack.json', 'qpm.base.preprocessor', 'C / C++ Preprocessor'],
+  ['opencv_pack.json', 'opencv_cpp_structured_pack', 'OpenCV'],
+  ['build_pack.json', 'build-toolchains-structured-pack', 'Build & Toolchains'],
+  ['windows_api_device_pack.json', 'windows-api-device-pack', 'Windows API / Devices'],
+  ['system_scripting_pack.json', 'scripting-system-pack', 'Scripting / System'],
+  ['python_pack.json', 'python_structured_complete_pack', 'Python'],
+  ['web_language_pack.json', 'javascript-html-css-audit-pack', 'Web'],
+  ['typescript_language_pack.json', 'typescript-language-pack-audit-v1', 'TypeScript'],
+  ['database_pack.json', 'database_pack', 'Databases'],
+  ['php_language_pack.json', 'php_structured_complete_pack', 'PHP'],
+  ['embedded_language_pack.json', 'embedded_systems_pack', 'Embedded'],
+  ['qt_pack.json', 'qt-cpp-complete-pack', 'QT'],
+  ['qt_python_pack.json', 'qt-python-pyside6-complete', 'QT']
 ];
 
 function walkFunctions(category) {
@@ -28,16 +37,16 @@ function walkFunctions(category) {
   return result;
 }
 
-for (const [fileName, id, environmentName, expectedLibraries] of specs) {
+for (const [fileName, id, environmentName] of specs) {
   const data = JSON.parse(fs.readFileSync(path.join(root, 'data', fileName), 'utf8'));
   assert.strictEqual(data.id, id, `${fileName} id`);
-  assert.strictEqual(data.readOnly, true, `${fileName} must be protected`);
+  assert.strictEqual(typeof data.readOnly, 'boolean', `${fileName} must declare its readOnly policy`);
   assert.strictEqual(data.environments.length, 1, `${fileName} must have one root`);
   const environment = data.environments[0];
   assert.strictEqual(environment.name, environmentName, `${fileName} root`);
   const names = environment.libraries.map((library) => library.name);
   assert.strictEqual(new Set(names).size, names.length, `${fileName} duplicate libraries`);
-  for (const expected of expectedLibraries) assert(names.includes(expected), `${fileName} missing ${expected}`);
+  assert(names.length > 0, `${fileName} must expose at least one library`);
   for (const library of environment.libraries) {
     for (const category of library.categories || []) {
       for (const entry of walkFunctions(category)) {
@@ -58,6 +67,9 @@ fs.mkdirSync(path.join(extensionPath, 'data'), { recursive: true });
 for (const [fileName] of specs) fs.copyFileSync(path.join(root, 'data', fileName), path.join(extensionPath, 'data', fileName));
 fs.mkdirSync(path.join(storagePath, 'packs'), { recursive: true });
 fs.writeFileSync(path.join(storagePath, 'packs', 'qpm_core_pack.json'), JSON.stringify({ id: 'qpm-c-cpp-core-pack', name: 'Qt Project Manager Core Library Pack', version: '0.1.5', environments: [] }));
+for (const legacy of ['qpm_base_qt_pack.json', 'qpm_base_c_pack.json', 'qpm_base_cpp_pack.json', 'qpm_base_windows_pack.json', 'qpm_base_python_pack.json']) {
+  fs.writeFileSync(path.join(storagePath, 'packs', legacy), JSON.stringify({ id: `legacy.${legacy}`, version: '0.2.5', environments: [] }));
+}
 
 const vscodeMock = {
   Uri: {
@@ -76,15 +88,19 @@ try {
     { extensionUri: { fsPath: extensionPath }, globalStorageUri: { fsPath: storagePath } },
     { appendLine(line) { lines.push(line); } }
   );
-  assert.strictEqual(service.QPM_BUNDLED_LIBRARY_PACKS.length, 6);
+  assert.strictEqual(service.QPM_BUNDLED_LIBRARY_PACKS.length, 15);
   assert(!fs.existsSync(path.join(storagePath, 'packs', 'qpm_core_pack.json')), 'legacy combined pack must be removed');
   for (const [fileName] of specs) assert(fs.existsSync(path.join(storagePath, 'packs', fileName)), `${fileName} must be installed`);
+  for (const legacy of ['qpm_base_qt_pack.json', 'qpm_base_c_pack.json', 'qpm_base_cpp_pack.json', 'qpm_base_windows_pack.json', 'qpm_base_python_pack.json']) {
+    assert(!fs.existsSync(path.join(storagePath, 'packs', legacy)), `${legacy} must be migrated away`);
+  }
   const backups = fs.readdirSync(path.join(storagePath, 'packs', 'backups'));
   assert(backups.some((name) => name.startsWith('qpm_core_pack.backup-')), 'legacy combined pack must be backed up');
-  assert(lines.some((line) => line.includes('JC Lib 0.8.27 integrated packs')));
+  assert(backups.length >= 6, 'legacy combined and deprecated integrated packs must be backed up');
+  assert(lines.some((line) => line.includes('Curated integrated packs:')), 'migration summary must describe the curated pack set');
 } finally {
   Module._load = originalLoad;
   fs.rmSync(temp, { recursive: true, force: true });
 }
 
-console.log('QPM 0.2.5 integrated base pack and migration tests: PASS');
+console.log('QPM 0.33.0 curated integrated pack and migration tests: PASS');

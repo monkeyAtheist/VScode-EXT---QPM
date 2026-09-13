@@ -383,7 +383,7 @@ Target: ${manifest.publication.publish.target}`,
         `Debugger: ${debugProfile.debuggerType === 'auto' ? debugKit.debuggerType : debugProfile.debuggerType}\nPretty printers: ${debugProfile.enableQtPrettyPrinters ? 'enabled' : 'disabled'}\nQML debugger: ${debugProfile.qmlDebug || debugProfile.request === 'qml-attach' ? `${debugProfile.qmlHost}:${debugProfile.qmlPort}` : 'disabled'}\nRemote GDB: ${debugProfile.remoteHost}:${debugProfile.remotePort}`,
         'qpm.manageQtDebugProfiles'
       ));
-      items.push(health('deploy', 'Deploy profile', deployProfile.enabled ? 'Automatic deployment enabled' : 'Manual deployment', deployProfile.enabled ? 'ok' : 'info', `Profile: ${deployProfile.name}\nTranslations: ${deployProfile.translations ? 'included' : 'not included'}`, 'qpm.deployQtRuntime'));
+      items.push(health('deploy', 'Deploy profile', deployProfile.enabled ? 'Automatic standalone deployment enabled' : 'Manual standalone deployment', deployProfile.enabled ? 'ok' : 'info', `Profile: ${deployProfile.name}\nOutput: ${deployProfile.outputDirectory}/<debug|release>\nLinkage: ${buildProfile.linkage}\nClean staging: ${deployProfile.cleanOutput ? 'enabled' : 'disabled'}\nCompiler runtime: ${deployProfile.compilerRuntime ? 'deploy' : 'skip'}\nVerification: ${deployProfile.verifyStandalone ? 'enabled' : 'disabled'}\nTranslations: ${deployProfile.translations ? 'included' : 'not included'}`, 'qpm.deployQtRuntime'));
 
       const errorCount = items.filter((item) => item.severity === 'error').length;
       const warningCount = items.filter((item) => item.severity === 'warning').length;

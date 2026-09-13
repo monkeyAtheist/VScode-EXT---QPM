@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 const properties = pkg.contributes.configuration.properties;
 assert.strictEqual(properties['qpm.autoConfigureCppTools'].default, true, 'automatic IntelliSense synchronization must be enabled by default');
 assert.strictEqual(properties['qpm.autoAddQpmFolderToWorkspace'].default, true, 'precise project-root workspace registration must be enabled by default');

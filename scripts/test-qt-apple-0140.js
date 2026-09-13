@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const command of [
   'qpm.configureAppleEnvironment','qpm.refreshAppleDevices','qpm.selectAppleSimulator','qpm.bootAppleSimulator',
@@ -46,7 +46,7 @@ try {
   const model = require('../out/model/qtProjectManifest');
   const apple = require('../out/services/qpmQtAppleService');
   const manifest = model.createDefaultQtProjectManifest('AppleApp', 'quick-application');
-  assert.strictEqual(manifest.schemaVersion, 17);
+  assert.strictEqual(manifest.schemaVersion, 18);
   const profile = manifest.profiles.platforms[0];
   Object.assign(profile, {
     type: 'macos', name: 'macOS Release', appleBundleIdentifier: 'com.example.appleapp',
@@ -84,7 +84,7 @@ try {
   fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
   assert.strictEqual(model.migrateQtProjectManifestFile(legacyPath), true);
   const migrated = model.readQtProjectManifest(legacyPath);
-  assert.strictEqual(migrated.schemaVersion, 17);
+  assert.strictEqual(migrated.schemaVersion, 18);
   assert(fs.existsSync(`${legacyPath}.schema-v13.backup`));
   assert.deepStrictEqual(migrated.profiles.platforms[0].appleArchitectures, ['arm64']);
   assert.strictEqual(migrated.profiles.platforms[0].appleAutomaticSigning, true);
@@ -111,7 +111,7 @@ try {
   ]) assert(cmake.includes(marker), `generated Apple CMake marker missing: ${marker}`);
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 17);
+  assert.strictEqual(schema.properties.schemaVersion.const, 18);
   for (const type of ['macos','ios-simulator','ios-device']) assert(schema.$defs.platformProfile.properties.type.enum.includes(type));
   for (const key of ['appleDeveloperDirectory','appleBundleIdentifier','appleArchitectures','appleCodeSignIdentity','appleNotaryProfile','appleDmgFileSystem']) {
     assert(schema.$defs.platformProfile.properties[key], `schema property ${key} missing`);

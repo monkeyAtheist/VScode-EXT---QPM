@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 
 const homePanel = fs.readFileSync(path.join(root, 'src', 'views', 'homePanel.ts'), 'utf8');
 const createWorkspaceOccurrences = (homePanel.match(/data-command="qpm\.createWorkspaceProject"/g) || []).length;

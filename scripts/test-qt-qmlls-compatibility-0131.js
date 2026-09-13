@@ -5,7 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 
 const source = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQmlLanguageService.ts'), 'utf8');
 for (const marker of [

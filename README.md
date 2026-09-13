@@ -1,3 +1,25 @@
+### QPM 0.33.0 — Thematic project settings
+
+The Qt Project Settings editor is now organized by task instead of exposing every project option in one long page. Ten thematic pages — **Overview**, **Project**, **Build**, **Run & Deploy**, **Debug & Diagnostics**, **Qt & Languages**, **Platforms**, **Tests & Quality**, **Dependencies** and **Distribution** — are available from a persistent page bar. **Jump to a section** only lists sections from the active page, and filtering is scoped to that page.
+
+The Build page now explicitly separates common compiler/linker inputs from the selected Debug/Release variant. The old ambiguous **Debug flags** block has become **Debug compiler & linker settings**, with dedicated Linkage, Preprocessor, Compiler and Linker subsections. The top toolbar has also been reduced to the actions that must remain globally available; profile, kit and Designer controls are placed where they are configured, while the Overview page remains a quick command dashboard.
+
+A source-level UI audit validates unique field IDs, command registrations, explicit button handlers and path/suggestion bindings without changing the Qt project schema or removing supported settings.
+
+### QPM 0.32.0 — Clean standalone deployment and linkage modes
+
+QPM now separates the **build working tree** from the **standalone runtime image**. Direct/qmake/CMake builds can keep `obj`, `generated`, response files and backend files below `build/`, while deployment stages only the application and runtime dependencies below `dist/<debug|release>` by default. The deployment directory is cleaned before each staging operation, then `windeployqt` runs against the copied target. This prevents stale or architecture-mismatched Qt DLLs from remaining beside the executable.
+
+The Qt Project Settings page adds a dedicated **Standalone deployment** section with the deployment directory, automatic deployment, clean staging, compiler-runtime deployment, translation deployment and post-deploy verification. New native projects bind automatic deployment to the Release build profile by default; Debug builds are not deployed automatically unless the deploy profile is reassigned. Portable packaging consumes this clean deployment image instead of copying the complete build directory.
+
+Build profiles also expose a **Linkage mode**:
+
+- **Dynamic Qt + dynamic compiler runtime** — normal Qt installation and DLL deployment;
+- **Dynamic Qt + static MinGW/GCC runtime** — adds `-static-libgcc -static-libstdc++` so the compiler runtime no longer needs its usual DLLs, while Qt remains dynamic;
+- **Static Qt kit** — requires a Qt installation actually built with `-static` and uses qmake/CMake. The direct backend intentionally rejects static Qt kits until static plugin/transitive-library resolution is complete.
+
+A fully single-file Qt executable therefore requires a real static Qt kit and may still require explicitly static third-party dependencies. Selecting “static” cannot convert the standard dynamic Qt installation into a static one.
+
 ### QPM 0.30.0 — Structured build diagnostics and readable logs
 
 QPM now separates the human-readable build report from the raw compiler trace.

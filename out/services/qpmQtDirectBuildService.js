@@ -52,6 +52,7 @@ const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
 const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 const qpmQtDependencyModel_1 = require("./qpmQtDependencyModel");
+const qpmQtLinkage_1 = require("./qpmQtLinkage");
 /**
  * Direct Qt code generation can write outside the generic generated folder.
  * In particular, windres writes the product metadata object into the object
@@ -91,6 +92,9 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
     if (manifest.qt.majorVersion !== 'auto' && installation.majorVersion > 0 && manifest.qt.majorVersion !== installation.majorVersion) {
         throw new Error(`Project ${manifest.name} requires Qt ${manifest.qt.majorVersion}, but the selected kit is Qt ${installation.majorVersion}.`);
     }
+    const linkageDiagnostic = (0, qpmQtLinkage_1.validateQtLinkageSelection)(installation, buildProfile.linkage, 'direct');
+    if (linkageDiagnostic)
+        throw new Error(linkageDiagnostic);
     const modeIs64Bit = mode === 'debug64' || mode === 'release64';
     if (installation.architecture === 'x64' && !modeIs64Bit) {
         throw new Error(`Build mode ${mode} is 32-bit, but the selected Qt kit is x64. Select Debug x64 or Release x64.`);
@@ -233,13 +237,6 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
             throw new Error(`Qt library ${library} was not found in the selected kit: ${installation.libDir}`);
         }
     }
-    if (process.platform === 'win32') {
-        const major = installation.majorVersion || Number(installation.version.split('.')[0]) || 6;
-        const dynamicCore = [path.join(installation.binDir, `Qt${major}Core.dll`), path.join(installation.binDir, `Qt${major}Cored.dll`)].some((candidate) => fs.existsSync(candidate));
-        if (!dynamicCore) {
-            throw new Error('Static Qt kits are not yet supported by the direct backend because their plugin and transitive system-library dependencies require additional resolution.');
-        }
-    }
     let precompiledHeaderPath;
     let precompiledHeaderCopyPath;
     let precompiledHeaderOutputPath;
@@ -272,7 +269,11 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path.resolve(projectDirectory, entry)), ...(dependencyIntegration?.libraryDirectories ?? [])]),
         defines,
         compilerFlags: unique([...(modeSettings.compilerFlags ?? []), ...(dependencyIntegration?.compilerFlags ?? [])]),
-        linkerFlags: unique([...(modeSettings.linkerFlags ?? []), ...(dependencyIntegration?.linkerFlags ?? [])]),
+        linkerFlags: unique([
+            ...(0, qpmQtLinkage_1.compilerStaticRuntimeLinkerFlags)(installation, buildProfile.linkage),
+            ...(modeSettings.linkerFlags ?? []),
+            ...(dependencyIntegration?.linkerFlags ?? [])
+        ]),
         entryPointArguments: windowsEntryPoint.arguments,
         qtLibraries,
         userLibraries: unique([...manifest.libraries, ...(dependencyIntegration?.libraries ?? [])]),

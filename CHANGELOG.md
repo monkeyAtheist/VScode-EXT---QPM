@@ -1,3 +1,26 @@
+## 0.33.0 — Thematic project-settings pages and complete settings UX audit
+
+- Replaces the single 22-section scrolling settings form with ten thematic pages: Overview, Project, Build, Run & Deploy, Debug & Diagnostics, Qt & Languages, Platforms, Tests & Quality, Dependencies and Distribution.
+- Adds persistent page tabs and keeps **Jump to a section** local to the active page, reducing the section list from the entire application to the settings relevant to the current task.
+- Makes the settings filter page-local and preserves the last selected page when switching Debug/Release variants.
+- Simplifies the sticky toolbar to variant selection, Save, Reload and manifest access; profile/kit/designer controls now live in their relevant pages while the Overview control center remains the intentional quick-action surface.
+- Reclassifies the former **Debug flags / Release flags** card as **Debug/Release compiler & linker settings** and separates Linkage, Preprocessor, Compiler and Linker subsections. Linker flags are no longer visually presented as debug-only settings.
+- Makes page cards full-width so hidden sections from other pages no longer leave empty columns.
+- Audits the complete settings UI: no duplicate field IDs, no unhandled explicit buttons, all 92 settings-panel command buttons resolve to contributed QPM commands, and every browse/datalist binding references an existing field.
+- Keeps all existing manifest/profile fields and persistence semantics; this release is an information-architecture/UI refactor and does not require a schema migration.
+
+## 0.32.0 — Clean standalone deployment and linkage modes
+
+- Separates build artifacts from the standalone runtime image: automatic/manual Qt deployment now stages the application in `dist/<debug|release>` by default instead of running `windeployqt` directly inside `build/<debug|release>`.
+- Cleans the deployment directory before staging by default, preventing stale Qt DLLs/plugins from previous kits or architectures from contaminating a new deployment.
+- Adds deployment profile controls for output directory, clean staging, compiler-runtime deployment, translation deployment and post-deploy standalone verification.
+- Copies only the built target into the deployment image before running `windeployqt`; `generated`, `obj`, qmake/CMake work trees and response files remain build-only artifacts.
+- Portable packaging now consumes the clean deployment image when Qt runtime inclusion is enabled, and copies only the target when runtime inclusion is disabled.
+- Adds build-profile linkage modes: Dynamic Qt, Dynamic Qt + static MinGW/GCC compiler runtime, and Static Qt kit.
+- Static MinGW/GCC runtime mode injects `-static-libgcc -static-libstdc++` for direct/qmake/CMake builds, reducing external compiler-runtime DLLs while keeping a normal dynamic Qt installation.
+- Static Qt mode validates that the selected kit is actually a static Qt build. Static Qt is supported through qmake/CMake; the direct backend explicitly rejects it until static plugin and transitive-library resolution is complete.
+- New native Qt projects enable automatic standalone deployment by default. Existing project choices are preserved.
+
 ## 0.31.0 — CPM parity: curated packs, QPM_Utility and file drag/drop
 
 - Reduces the embedded Qt Libraries payload to the QPM-focused families: C, C++, Preprocessor, OpenCV, Build, Windows/API, Scripting/System, Python, JavaScript/HTML/CSS, TypeScript, Database, PHP, Embedded and Qt.

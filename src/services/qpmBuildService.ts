@@ -10,7 +10,7 @@ import { QpmWorkspaceService } from './qpmWorkspaceService';
 import { QpmProjectSettingsService } from './qpmProjectSettingsService';
 import { normalizeRuntimePath } from '../utils/pathUtils';
 import { QpmSdlConfiguration, createSdlBuildPlan } from './qpmSdlService';
-import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, qtGeneratedDirectory, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
+import { getActiveQtBuildProfile, getActiveQtDeployProfile, getQtKitProfileForBuild, getActiveQtRunProfile, getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, qtDeploymentDirectory, qtDeploymentTargetPath, qtGeneratedDirectory, qtObjectDirectory, qtTargetPath, readQtProjectManifest, writeQtProjectManifest, getPersistedQtBuildMode, setPersistedQtBuildMode, isReleaseBuildMode, QtProjectManifest } from '../model/qtProjectManifest';
 import { QpmQtInstallation, QpmQtInstallationService } from './qpmQtInstallationService';
 import { createQtDirectBuildPlan, generationStepIsOutdated, qtCompileArguments, qtLinkArguments, qtObjectPathForSource, sourceNeedsCompilation, qtPrecompiledHeaderArguments, qtGenerationOutputDirectories, QtDirectBuildPlan } from './qpmQtDirectBuildService';
 import { QpmQtBuildBackendService } from './qpmQtBuildBackendService';
@@ -19,6 +19,7 @@ import { cleanQtDirectModeDirectory, removePathWithRetries } from './qpmBuildCle
 import { QpmQtPythonService } from './qpmQtPythonService';
 import { QpmQtDependencyService } from './qpmQtDependencyService';
 import { QpmBuildDiagnostic, QpmBuildLogDetail, QpmToolExecutionResult, diagnosticSeverityIcon, diagnosticSeverityLabel, formatDuration, indentMultiline, parseBuildDiagnostics, relativeDiagnosticPath, toVsCodeDiagnostic } from './qpmBuildDiagnostics';
+import { detectQtKitLinkage } from './qpmQtLinkage';
 
 type QpmRuntimeDependencyMode = 'copy-dlls' | 'path-only' | 'static-link';
 
@@ -671,24 +672,56 @@ export class QpmBuildService implements vscode.Disposable {
   }
 
   private async deployNativeQtTarget(ref: QpmWorkspaceProjectRef, manifest: QtProjectManifest, installation: QpmQtInstallation, announce: boolean): Promise<boolean> {
+    const buildTargetPath = qtTargetPath(ref.absolutePath, this.buildMode, manifest);
+    if (!fs.existsSync(buildTargetPath)) {
+      vscode.window.showErrorMessage(`Build the target before deployment: ${buildTargetPath}`);
+      return false;
+    }
+
+    const deployProfile = getActiveQtDeployProfile(manifest);
+    const deployDirectory = qtDeploymentDirectory(ref.absolutePath, this.buildMode, manifest);
+    const deployedTargetPath = qtDeploymentTargetPath(ref.absolutePath, this.buildMode, manifest);
+    const buildProfile = getActiveQtBuildProfile(manifest, this.buildMode);
+    const qtKitLinkage = detectQtKitLinkage(installation);
+
+    try {
+      if (deployProfile.cleanOutput && fs.existsSync(deployDirectory)) {
+        await this.stopApplicationsForTarget(deployedTargetPath, 'rebuild');
+        if (!await removePathWithRetries(deployDirectory)) {
+          vscode.window.showErrorMessage(`Unable to clean the deployment directory: ${deployDirectory}`);
+          return false;
+        }
+      }
+      fs.mkdirSync(deployDirectory, { recursive: true });
+      fs.copyFileSync(buildTargetPath, deployedTargetPath);
+      this.output.appendLine(`[Qt/C++] Deployment target: ${deployedTargetPath}`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Unable to prepare the deployment directory: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+
+    if (deployProfile.translations && !await this.releaseAndDeployApplicationTranslations(ref, manifest, installation, deployDirectory)) {
+      return false;
+    }
+
+    const staticQt = buildProfile.linkage === 'static-qt' || qtKitLinkage === 'static';
+    if (staticQt) {
+      this.output.appendLine('[Qt/C++] Static Qt target detected: windeployqt is not required for Qt shared libraries.');
+      const verified = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, true);
+      if (verified && announce) vscode.window.showInformationMessage(`Standalone target prepared: ${deployedTargetPath}`);
+      return verified;
+    }
+
     if (!installation.deployToolPath) {
       vscode.window.showErrorMessage('The selected Qt installation does not provide a deployment tool.');
       return false;
     }
-    const targetPath = qtTargetPath(ref.absolutePath, this.buildMode, manifest);
-    if (!fs.existsSync(targetPath)) {
-      vscode.window.showErrorMessage(`Build the target before deployment: ${targetPath}`);
-      return false;
-    }
-    const deployProfile = getActiveQtDeployProfile(manifest);
-    if (deployProfile.translations && !await this.releaseAndDeployApplicationTranslations(ref, manifest, installation, path.dirname(targetPath))) {
-      return false;
-    }
+
     const args: string[] = [];
     let deploymentEnvironment: NodeJS.ProcessEnv | undefined;
     if (process.platform === 'win32') {
       const requestedVariant: QtWindowsRuntimeVariant = isReleaseBuildMode(this.buildMode) ? 'release' : 'debug';
-      const detectedVariant = detectQtRuntimeVariantFromBinary(targetPath, installation.majorVersion);
+      const detectedVariant = detectQtRuntimeVariantFromBinary(buildTargetPath, installation.majorVersion);
       const deploymentVariant = detectedVariant ?? requestedVariant;
       args.push(deploymentVariant === 'release' ? '--release' : '--debug');
       if (detectedVariant && detectedVariant !== requestedVariant) {
@@ -697,7 +730,8 @@ export class QpmBuildService implements vscode.Disposable {
         this.output.appendLine(`[Qt/C++] Qt runtime deployment variant: ${deploymentVariant}.`);
       }
       if (installation.qtPathsPath && installation.majorVersion >= 6) args.push('--qtpaths', installation.qtPathsPath);
-      args.push('--dir', path.dirname(targetPath));
+      args.push('--dir', deployDirectory);
+      if (deployProfile.compilerRuntime) args.push('--compiler-runtime');
       if (manifest.files.qml.length > 0) args.push('--qmldir', path.dirname(path.resolve(path.dirname(ref.absolutePath), manifest.files.qml[0])));
       if (!vscode.workspace.getConfiguration('qpm').get<boolean>('qtDeployTranslations', false)) args.push('--no-translations');
       deploymentEnvironment = createQtDeploymentEnvironment(installation);
@@ -707,13 +741,41 @@ export class QpmBuildService implements vscode.Disposable {
       } else if (requiresQtPlatformPlugin(manifest)) {
         const pluginsRoot = installation.pluginsDir || path.join(installation.root, 'plugins');
         this.output.appendLine(`[Qt/C++] WARNING: no ${deploymentVariant} Windows platform plugin was found below ${path.join(pluginsRoot, 'platforms')}.`);
-        this.output.appendLine('[Qt/C++] windeployqt will still run with the selected Qt kit environment; repair the Desktop Qt component if it reports that the platform plugin is unavailable.');
       }
     }
-    args.push(targetPath);
-    const deployed = await this.spawnTool(installation.deployToolPath, args, path.dirname(ref.absolutePath), `Deploy ${path.basename(targetPath)}`, deploymentEnvironment);
-    if (deployed && announce) vscode.window.showInformationMessage(`Qt runtime deployed beside ${path.basename(targetPath)}.`);
-    return deployed;
+    args.push(deployedTargetPath);
+    const deployed = await this.spawnTool(installation.deployToolPath, args, path.dirname(ref.absolutePath), `Deploy ${path.basename(deployedTargetPath)}`, deploymentEnvironment);
+    if (!deployed) return false;
+
+    const verified = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, false);
+    if (verified && announce) vscode.window.showInformationMessage(`Standalone Qt deployment ready: ${deployDirectory}`);
+    return verified;
+  }
+
+  private verifyStandaloneDeployment(manifest: QtProjectManifest, installation: QpmQtInstallation, deployedTargetPath: string, staticQt: boolean): boolean {
+    const directory = path.dirname(deployedTargetPath);
+    const issues: string[] = [];
+    if (!fs.existsSync(deployedTargetPath)) issues.push(`target missing: ${path.basename(deployedTargetPath)}`);
+
+    if (!staticQt && process.platform === 'win32') {
+      const major = installation.majorVersion || Number(installation.version.split('.')[0]) || 6;
+      const debugSuffix = isReleaseBuildMode(this.buildMode) ? '' : 'd';
+      const coreCandidates = [path.join(directory, `Qt${major}Core${debugSuffix}.dll`), path.join(directory, `Qt${major}Core.dll`)];
+      if (!coreCandidates.some((candidate) => fs.existsSync(candidate))) issues.push(`Qt${major}Core runtime DLL missing`);
+      if (requiresQtPlatformPlugin(manifest)) {
+        const platformDirectory = path.join(directory, 'platforms');
+        const platformCandidates = [path.join(platformDirectory, `qwindows${debugSuffix}.dll`), path.join(platformDirectory, 'qwindows.dll')];
+        if (!platformCandidates.some((candidate) => fs.existsSync(candidate))) issues.push('Windows platform plugin missing (platforms/qwindows*.dll)');
+      }
+    }
+
+    if (issues.length > 0) {
+      this.output.appendLine(`[Qt/C++] Standalone deployment check FAILED: ${issues.join('; ')}`);
+      vscode.window.showErrorMessage(`Standalone deployment is incomplete: ${issues.join('; ')}`);
+      return false;
+    }
+    this.output.appendLine(`[Qt/C++] Standalone deployment check OK: ${directory}`);
+    return true;
   }
 
   private async releaseAndDeployApplicationTranslations(
@@ -868,7 +930,8 @@ export class QpmBuildService implements vscode.Disposable {
       this.output.appendLine(`[Qt ${profile.system === 'qmake' ? 'qmake' : 'CMake'}] Project: ${manifest.name}`);
       this.output.appendLine(`[Qt ${profile.system === 'qmake' ? 'qmake' : 'CMake'}] Qt kit: ${installation.label}`);
       const result = await this.qtBackends.build(ref.absolutePath, this.buildMode, installation, rebuild);
-      if (result.success && getActiveQtDeployProfile(manifest).enabled) {
+      const deployProfile = getActiveQtDeployProfile(manifest);
+      if (result.success && deployProfile.enabled && deployProfile.buildProfileId === profile.id) {
         if (!await this.deployNativeQtTarget(ref, manifest, installation, false)) return false;
       }
       return result.success;
@@ -1004,9 +1067,10 @@ export class QpmBuildService implements vscode.Disposable {
     const linked = await this.spawnTool(installation.toolchain.cppCompilerPath!, linkArguments, plan.projectDirectory, `Link ${path.basename(plan.targetPath)}`);
     if (!linked || !this.validateProducedFile(plan.targetPath, 'linker output')) return false;
     if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, 'import library output')) return false;
-    if (getActiveQtDeployProfile(manifest).enabled) {
+    const deployProfile = getActiveQtDeployProfile(manifest);
+    if (deployProfile.enabled && deployProfile.buildProfileId === plan.buildProfile.id) {
       this.logSection('DEPLOYMENT');
-      this.output.appendLine('  Automatic Qt runtime deployment enabled.');
+      this.output.appendLine('  Automatic standalone deployment enabled for this build profile.');
       if (!await this.deployNativeQtTarget(ref, manifest, installation, false)) return false;
     }
     return true;

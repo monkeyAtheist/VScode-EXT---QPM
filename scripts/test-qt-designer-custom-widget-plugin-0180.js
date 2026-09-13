@@ -9,7 +9,7 @@ const Module = require('module');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const pkg = JSON.parse(read('package.json'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 
 const serviceSource = read('src/services/qpmQtDesignerWidgetService.ts');
 assert(serviceSource.includes('QDesignerCustomWidgetInterface'), 'Designer plugin must expose QDesignerCustomWidgetInterface');

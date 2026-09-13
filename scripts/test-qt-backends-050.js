@@ -7,7 +7,7 @@ const Module = require('module');
 
 const projectRoot = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.30.0');
+assert.strictEqual(pkg.version, '0.33.0');
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of ['qpm.manageQtKits','qpm.detectQtKits','qpm.assignQtKit','qpm.selectQtBackend','qpm.importQtBuildProject','qpm.configureQtBackend','qpm.openQtBackendProject']) {
   assert(commands.has(id), `${id} must be contributed`);
@@ -53,7 +53,7 @@ function executable(filePath, body) {
     debug.useResponseFiles = true;
     model.writeQtProjectManifest(manifestPath, manifest);
     const migrated = model.readQtProjectManifest(manifestPath);
-    assert.strictEqual(migrated.schemaVersion, 17);
+    assert.strictEqual(migrated.schemaVersion, 18);
     assert.strictEqual(model.getActiveQtBuildProfile(migrated, 'debug64').parallelJobs, 3);
     assert.strictEqual(model.getActiveQtKitProfile(migrated).debuggerType, 'auto');
     const schemaText = fs.readFileSync(path.join(projectRoot, 'schemas', 'qtproject.schema.json'), 'utf8');

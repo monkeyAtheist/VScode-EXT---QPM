@@ -7,6 +7,7 @@ import {
   QtProjectManifest,
   getQtInstallationPreference,
   isQtProjectManifestPath,
+  qtDeploymentDirectory,
   qtTargetPath,
   readQtProjectManifest
 } from '../model/qtProjectManifest';
@@ -70,9 +71,11 @@ export class QpmQtPackagingService implements vscode.Disposable {
     }
 
     const metadata = writeQtPackagingMetadata(ref.absolutePath, manifest, this.builds.buildMode);
+    let runtimeSourceDirectory: string | undefined;
     if (manifest.packaging.includeQtRuntime && manifest.kind !== 'static-library') {
-      this.output.appendLine('[Packaging] Deploy Qt runtime before staging.');
+      this.output.appendLine('[Packaging] Prepare clean standalone deployment before staging.');
       if (!await this.builds.deployQtRuntime(ref)) return false;
+      runtimeSourceDirectory = qtDeploymentDirectory(ref.absolutePath, this.builds.buildMode, manifest);
     }
 
     const report = this.createReport(ref, manifest, metadata);
@@ -84,7 +87,11 @@ export class QpmQtPackagingService implements vscode.Disposable {
 
     if (manifest.packaging.cleanOutput && fs.existsSync(report.stageDirectory)) fs.rmSync(report.stageDirectory, { recursive: true, force: true });
     fs.mkdirSync(report.stageDirectory, { recursive: true });
-    this.copyRuntimeTree(path.dirname(targetPath), report.stageDirectory, manifest.packaging.includeDebugSymbols);
+    if (runtimeSourceDirectory) {
+      this.copyRuntimeTree(runtimeSourceDirectory, report.stageDirectory, manifest.packaging.includeDebugSymbols);
+    } else {
+      fs.copyFileSync(targetPath, path.join(report.stageDirectory, path.basename(targetPath)));
+    }
     this.copyProjectFile(ref.absolutePath, manifest.packaging.readmeFile, report.stageDirectory);
     this.copyProjectFile(ref.absolutePath, manifest.packaging.licenseFile, report.stageDirectory);
     for (const entry of manifest.packaging.extraFiles) this.copyProjectFile(ref.absolutePath, entry, report.stageDirectory);

@@ -1873,6 +1873,8 @@ var require_qtProjectManifest = __commonJS({
     exports2.qtManifestToQpmProject = qtManifestToQpmProject;
     exports2.qtManifestToStandaloneWorkspace = qtManifestToStandaloneWorkspace;
     exports2.qtTargetPath = qtTargetPath;
+    exports2.qtDeploymentDirectory = qtDeploymentDirectory;
+    exports2.qtDeploymentTargetPath = qtDeploymentTargetPath;
     exports2.qtImportLibraryPath = qtImportLibraryPath;
     exports2.qtGeneratedDirectory = qtGeneratedDirectory;
     exports2.qtObjectDirectory = qtObjectDirectory;
@@ -1888,7 +1890,7 @@ var require_qtProjectManifest = __commonJS({
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
     exports2.QT_PROJECT_SUFFIX = ".qtproject.json";
-    exports2.QT_PROJECT_SCHEMA_VERSION = 17;
+    exports2.QT_PROJECT_SCHEMA_VERSION = 18;
     var FILE_KEYS = ["sources", "headers", "forms", "resources", "qml", "python", "translations", "other"];
     function isQtProjectManifestPath(filePath) {
       return filePath.toLowerCase().endsWith(exports2.QT_PROJECT_SUFFIX);
@@ -2138,11 +2140,11 @@ var require_qtProjectManifest = __commonJS({
       return {
         kits: [{ id: kitId, name: "Desktop Qt", ...qtInstallation ? { qtInstallation } : {}, architecture: "auto", debuggerType: "auto", deviceType: "desktop" }],
         builds: [
-          { id: debugId, name: "Debug", variant: "debug", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: [], compilerFlags: ["-O0", "-g"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true },
-          { id: releaseId, name: "Release", variant: "release", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: ["QT_NO_DEBUG"], compilerFlags: ["-O2"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true }
+          { id: debugId, name: "Debug", variant: "debug", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: [], compilerFlags: ["-O0", "-g"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" },
+          { id: releaseId, name: "Release", variant: "release", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: ["QT_NO_DEBUG"], compilerFlags: ["-O2"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" }
         ],
         runs: [{ id: "default-run", name: "Desktop Run", buildProfileId: debugId, arguments: "", workingDirectory: "", environment: {} }],
-        deploys: [{ id: "desktop-deploy", name: "Desktop Deploy", buildProfileId: releaseId, enabled: false, translations: false }],
+        deploys: [{ id: "desktop-deploy", name: "Desktop Deploy", buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: "dist", cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
         debugs: [createDefaultDebugProfile(debugId, "default-run")],
         platforms: [createDefaultPlatformProfile(kitId, debugId, "default-run", "desktop-deploy", "local-debug")],
         active: { kitProfileId: kitId, debugBuildProfileId: debugId, releaseBuildProfileId: releaseId, runProfileId: "default-run", deployProfileId: "desktop-deploy", debugProfileId: "local-debug", platformProfileId: "desktop-platform", buildMode: "debug64" }
@@ -2604,7 +2606,8 @@ var require_qtProjectManifest = __commonJS({
         generateProjectFiles: booleanValue(value.generateProjectFiles, fallback.generateProjectFiles),
         precompiledHeader: normalizeOptionalRelativePath(optionalString(value.precompiledHeader)),
         unityBuild: booleanValue(value.unityBuild, fallback.unityBuild),
-        useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles)
+        useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles),
+        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage)
       };
     }
     function normalizeRunProfile(raw, fallbackId, buildProfileId) {
@@ -2624,7 +2627,17 @@ var require_qtProjectManifest = __commonJS({
       if (!Object.keys(value).length)
         return void 0;
       const id = normalizeProfileId(optionalString(value.id) || fallbackId);
-      return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), enabled: booleanValue(value.enabled, false), translations: booleanValue(value.translations, false) };
+      return {
+        id,
+        name: optionalString(value.name) || id,
+        buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId),
+        enabled: booleanValue(value.enabled, false),
+        translations: booleanValue(value.translations, false),
+        outputDirectory: normalizeRelativeDirectory(optionalString(value.outputDirectory) || "dist"),
+        cleanOutput: booleanValue(value.cleanOutput, true),
+        compilerRuntime: booleanValue(value.compilerRuntime, true),
+        verifyStandalone: booleanValue(value.verifyStandalone, true)
+      };
     }
     function normalizeNonNegativeInteger(value, fallback) {
       const parsed = Number(value);
@@ -2653,6 +2666,9 @@ var require_qtProjectManifest = __commonJS({
     }
     function selectExistingId(requested, entries, fallback) {
       return entries.some((entry) => entry.id === requested) ? requested : fallback;
+    }
+    function normalizeQtLinkageMode(value, fallback = "dynamic") {
+      return value === "static-runtime" || value === "static-qt" || value === "dynamic" ? value : fallback;
     }
     function normalizeBuildSystem(value) {
       return value === "qmake" || value === "cmake" ? value : "direct";
@@ -2719,6 +2735,15 @@ var require_qtProjectManifest = __commonJS({
       const modeFolder = isReleaseBuildMode(mode) ? "release" : "debug";
       const profile = getActiveQtBuildProfile(manifest, mode);
       return path2.resolve(root, profile.outputDirectory, modeFolder, targetFileName(manifest));
+    }
+    function qtDeploymentDirectory(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
+      const root = path2.dirname(manifestPath);
+      const modeFolder = isReleaseBuildMode(mode) ? "release" : "debug";
+      const profile = getActiveQtDeployProfile(manifest);
+      return path2.resolve(root, profile.outputDirectory || "dist", modeFolder);
+    }
+    function qtDeploymentTargetPath(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
+      return path2.join(qtDeploymentDirectory(manifestPath, mode, manifest), targetFileName(manifest));
     }
     function qtImportLibraryPath(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
       if (manifest.kind !== "shared-library" || process.platform !== "win32")
@@ -5219,6 +5244,115 @@ var require_qpmQtDependencyModel = __commonJS({
   }
 });
 
+// out/services/qpmQtLinkage.js
+var require_qpmQtLinkage = __commonJS({
+  "out/services/qpmQtLinkage.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.detectQtKitLinkage = detectQtKitLinkage;
+    exports2.compilerStaticRuntimeLinkerFlags = compilerStaticRuntimeLinkerFlags;
+    exports2.validateQtLinkageSelection = validateQtLinkageSelection;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    function detectQtKitLinkage(installation) {
+      const major = installation.majorVersion || Number(installation.version.split(".")[0]) || 6;
+      const family = installation.toolchain.family || installation.compilerFamily;
+      const windowsKit = family === "mingw" || family === "msvc";
+      const qconfigCandidates = [
+        path2.join(installation.root, "mkspecs", "qconfig.pri"),
+        path2.join(installation.libDir, "mkspecs", "qconfig.pri")
+      ];
+      for (const qconfigPath of qconfigCandidates) {
+        try {
+          const text = fs.readFileSync(qconfigPath, "utf8");
+          const configTokens = [...text.matchAll(/^QT_CONFIG\s*(?:\+?=)\s*(.*)$/gm)].flatMap((match) => match[1].split(/\s+/)).map((token) => token.trim().toLowerCase()).filter(Boolean);
+          if (configTokens.includes("static"))
+            return "static";
+          if (configTokens.includes("shared"))
+            return "dynamic";
+        } catch {
+        }
+      }
+      const dynamicCandidates = windowsKit ? [path2.join(installation.binDir, `Qt${major}Core.dll`), path2.join(installation.binDir, `Qt${major}Cored.dll`)] : process.platform === "darwin" ? [path2.join(installation.libDir, "QtCore.framework"), path2.join(installation.libDir, `libQt${major}Core.dylib`)] : [path2.join(installation.libDir, `libQt${major}Core.so`), path2.join(installation.libDir, `libQt${major}Core.so.${major}`)];
+      if (dynamicCandidates.some((candidate) => fs.existsSync(candidate)))
+        return "dynamic";
+      if (!windowsKit) {
+        const staticCandidates = [
+          path2.join(installation.libDir, `libQt${major}Core.a`),
+          path2.join(installation.libDir, `Qt${major}Core.a`)
+        ];
+        if (staticCandidates.some((candidate) => fs.existsSync(candidate)))
+          return "static";
+      }
+      return "unknown";
+    }
+    function compilerStaticRuntimeLinkerFlags(installation, linkage) {
+      if (linkage !== "static-runtime" && linkage !== "static-qt")
+        return [];
+      const family = installation.toolchain.family || installation.compilerFamily;
+      if (family === "mingw" || family === "gcc")
+        return ["-static-libgcc", "-static-libstdc++"];
+      return [];
+    }
+    function validateQtLinkageSelection(installation, linkage, backend) {
+      const kitLinkage = detectQtKitLinkage(installation);
+      const family = installation.toolchain.family || installation.compilerFamily;
+      if ((linkage === "dynamic" || linkage === "static-runtime") && kitLinkage === "static") {
+        return `The selected Qt kit (${installation.label}) is static. Select \u201CStatic Qt kit\u201D linkage, or choose a normal dynamic Qt kit.`;
+      }
+      if (linkage === "static-runtime" && family !== "mingw" && family !== "gcc") {
+        return `Static compiler-runtime linkage is currently automated for MinGW/GCC kits. The selected compiler family is ${family}.`;
+      }
+      if (linkage === "static-qt") {
+        if (kitLinkage !== "static") {
+          return `Static Qt linkage requires a Qt kit built with -static. The selected kit (${installation.label}) is ${kitLinkage === "dynamic" ? "dynamic" : "not recognized as static"}.`;
+        }
+        if (backend === "direct") {
+          return "Static Qt kits are supported through the qmake or CMake backend. The direct backend does not yet resolve static Qt plugins and all transitive platform libraries.";
+        }
+      }
+      return void 0;
+    }
+  }
+});
+
 // out/services/qpmQtDirectBuildService.js
 var require_qpmQtDirectBuildService = __commonJS({
   "out/services/qpmQtDirectBuildService.js"(exports2) {
@@ -5280,6 +5414,7 @@ var require_qpmQtDirectBuildService = __commonJS({
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
+    var qpmQtLinkage_1 = require_qpmQtLinkage();
     function qtGenerationOutputDirectories(plan) {
       return unique([
         plan.generatedDirectory,
@@ -5314,6 +5449,9 @@ var require_qpmQtDirectBuildService = __commonJS({
       if (manifest.qt.majorVersion !== "auto" && installation.majorVersion > 0 && manifest.qt.majorVersion !== installation.majorVersion) {
         throw new Error(`Project ${manifest.name} requires Qt ${manifest.qt.majorVersion}, but the selected kit is Qt ${installation.majorVersion}.`);
       }
+      const linkageDiagnostic = (0, qpmQtLinkage_1.validateQtLinkageSelection)(installation, buildProfile.linkage, "direct");
+      if (linkageDiagnostic)
+        throw new Error(linkageDiagnostic);
       const modeIs64Bit = mode === "debug64" || mode === "release64";
       if (installation.architecture === "x64" && !modeIs64Bit) {
         throw new Error(`Build mode ${mode} is 32-bit, but the selected Qt kit is x64. Select Debug x64 or Release x64.`);
@@ -5472,13 +5610,6 @@ var require_qpmQtDirectBuildService = __commonJS({
           throw new Error(`Qt library ${library} was not found in the selected kit: ${installation.libDir}`);
         }
       }
-      if (process.platform === "win32") {
-        const major = installation.majorVersion || Number(installation.version.split(".")[0]) || 6;
-        const dynamicCore = [path2.join(installation.binDir, `Qt${major}Core.dll`), path2.join(installation.binDir, `Qt${major}Cored.dll`)].some((candidate) => fs.existsSync(candidate));
-        if (!dynamicCore) {
-          throw new Error("Static Qt kits are not yet supported by the direct backend because their plugin and transitive system-library dependencies require additional resolution.");
-        }
-      }
       let precompiledHeaderPath;
       let precompiledHeaderCopyPath;
       let precompiledHeaderOutputPath;
@@ -5511,7 +5642,11 @@ var require_qpmQtDirectBuildService = __commonJS({
         libraryDirectories: unique([installation.libDir, ...manifest.libraryDirectories.map((entry) => path2.resolve(projectDirectory, entry)), ...dependencyIntegration?.libraryDirectories ?? []]),
         defines,
         compilerFlags: unique([...modeSettings.compilerFlags ?? [], ...dependencyIntegration?.compilerFlags ?? []]),
-        linkerFlags: unique([...modeSettings.linkerFlags ?? [], ...dependencyIntegration?.linkerFlags ?? []]),
+        linkerFlags: unique([
+          ...(0, qpmQtLinkage_1.compilerStaticRuntimeLinkerFlags)(installation, buildProfile.linkage),
+          ...modeSettings.linkerFlags ?? [],
+          ...dependencyIntegration?.linkerFlags ?? []
+        ]),
         entryPointArguments: windowsEntryPoint.arguments,
         qtLibraries,
         userLibraries: unique([...manifest.libraries, ...dependencyIntegration?.libraries ?? []]),
@@ -6548,7 +6683,12 @@ Environment variables: ${Object.keys(runProfile.environment).length}`, "qpm.choo
 Pretty printers: ${debugProfile.enableQtPrettyPrinters ? "enabled" : "disabled"}
 QML debugger: ${debugProfile.qmlDebug || debugProfile.request === "qml-attach" ? `${debugProfile.qmlHost}:${debugProfile.qmlPort}` : "disabled"}
 Remote GDB: ${debugProfile.remoteHost}:${debugProfile.remotePort}`, "qpm.manageQtDebugProfiles"));
-          items.push(health("deploy", "Deploy profile", deployProfile.enabled ? "Automatic deployment enabled" : "Manual deployment", deployProfile.enabled ? "ok" : "info", `Profile: ${deployProfile.name}
+          items.push(health("deploy", "Deploy profile", deployProfile.enabled ? "Automatic standalone deployment enabled" : "Manual standalone deployment", deployProfile.enabled ? "ok" : "info", `Profile: ${deployProfile.name}
+Output: ${deployProfile.outputDirectory}/<debug|release>
+Linkage: ${buildProfile.linkage}
+Clean staging: ${deployProfile.cleanOutput ? "enabled" : "disabled"}
+Compiler runtime: ${deployProfile.compilerRuntime ? "deploy" : "skip"}
+Verification: ${deployProfile.verifyStandalone ? "enabled" : "disabled"}
 Translations: ${deployProfile.translations ? "included" : "not included"}`, "qpm.deployQtRuntime"));
           const errorCount = items.filter((item) => item.severity === "error").length;
           const warningCount = items.filter((item) => item.severity === "warning").length;
@@ -7806,6 +7946,7 @@ var require_qpmQtBuildBackendService = __commonJS({
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
+    var qpmQtLinkage_1 = require_qpmQtLinkage();
     var QpmQtBuildBackendService = class {
       output;
       constructor(output) {
@@ -8024,6 +8165,9 @@ var require_qpmQtBuildBackendService = __commonJS({
         const buildDirectory = path2.resolve(root, profile.outputDirectory, modeFolder, profile.system);
         const dependencyIntegration = manifest.dependencies.enabled ? (0, qpmQtDependencyModel_1.readDependencyIntegration)(root, manifest.dependencies.outputDirectory) : (0, qpmQtDependencyModel_1.emptyDependencyIntegration)();
         const environment = { ...createKitEnvironment(kit, installation), ...dependencyIntegration.environment };
+        const linkageDiagnostic = (0, qpmQtLinkage_1.validateQtLinkageSelection)(installation, profile.linkage, profile.system);
+        if (linkageDiagnostic)
+          throw new Error(linkageDiagnostic);
         return {
           manifestPath,
           manifest,
@@ -8268,8 +8412,9 @@ ${closeTarget}`,
       return [...new Set(translated)];
     }
     function backendLinkerFlags(context) {
+      const staticRuntimeFlags = (0, qpmQtLinkage_1.compilerStaticRuntimeLinkerFlags)(context.installation, context.profile.linkage);
       if (context.installation.compilerFamily !== "msvc")
-        return [...context.profile.linkerFlags];
+        return [...staticRuntimeFlags, ...context.profile.linkerFlags];
       return context.profile.linkerFlags.filter((flag) => flag.startsWith("/") || !flag.startsWith("-"));
     }
     function cmakeConfiguration(context) {
@@ -8871,6 +9016,7 @@ var require_qpmBuildService = __commonJS({
     var qpmGnuResponseFile_1 = require_qpmGnuResponseFile();
     var qpmBuildCleanup_1 = require_qpmBuildCleanup();
     var qpmBuildDiagnostics_1 = require_qpmBuildDiagnostics();
+    var qpmQtLinkage_1 = require_qpmQtLinkage();
     var QpmBuildService = class {
       parser;
       workspaces;
@@ -9462,24 +9608,51 @@ var require_qpmBuildService = __commonJS({
         return await this.deployNativeQtTarget(ref, manifest, installation, true);
       }
       async deployNativeQtTarget(ref, manifest, installation, announce) {
-        if (!installation.deployToolPath) {
-          vscode2.window.showErrorMessage("The selected Qt installation does not provide a deployment tool.");
-          return false;
-        }
-        const targetPath = (0, qtProjectManifest_12.qtTargetPath)(ref.absolutePath, this.buildMode, manifest);
-        if (!fs.existsSync(targetPath)) {
-          vscode2.window.showErrorMessage(`Build the target before deployment: ${targetPath}`);
+        const buildTargetPath = (0, qtProjectManifest_12.qtTargetPath)(ref.absolutePath, this.buildMode, manifest);
+        if (!fs.existsSync(buildTargetPath)) {
+          vscode2.window.showErrorMessage(`Build the target before deployment: ${buildTargetPath}`);
           return false;
         }
         const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
-        if (deployProfile.translations && !await this.releaseAndDeployApplicationTranslations(ref, manifest, installation, path2.dirname(targetPath))) {
+        const deployDirectory = (0, qtProjectManifest_12.qtDeploymentDirectory)(ref.absolutePath, this.buildMode, manifest);
+        const deployedTargetPath = (0, qtProjectManifest_12.qtDeploymentTargetPath)(ref.absolutePath, this.buildMode, manifest);
+        const buildProfile = (0, qtProjectManifest_12.getActiveQtBuildProfile)(manifest, this.buildMode);
+        const qtKitLinkage = (0, qpmQtLinkage_1.detectQtKitLinkage)(installation);
+        try {
+          if (deployProfile.cleanOutput && fs.existsSync(deployDirectory)) {
+            await this.stopApplicationsForTarget(deployedTargetPath, "rebuild");
+            if (!await (0, qpmBuildCleanup_1.removePathWithRetries)(deployDirectory)) {
+              vscode2.window.showErrorMessage(`Unable to clean the deployment directory: ${deployDirectory}`);
+              return false;
+            }
+          }
+          fs.mkdirSync(deployDirectory, { recursive: true });
+          fs.copyFileSync(buildTargetPath, deployedTargetPath);
+          this.output.appendLine(`[Qt/C++] Deployment target: ${deployedTargetPath}`);
+        } catch (error) {
+          vscode2.window.showErrorMessage(`Unable to prepare the deployment directory: ${error instanceof Error ? error.message : String(error)}`);
+          return false;
+        }
+        if (deployProfile.translations && !await this.releaseAndDeployApplicationTranslations(ref, manifest, installation, deployDirectory)) {
+          return false;
+        }
+        const staticQt = buildProfile.linkage === "static-qt" || qtKitLinkage === "static";
+        if (staticQt) {
+          this.output.appendLine("[Qt/C++] Static Qt target detected: windeployqt is not required for Qt shared libraries.");
+          const verified2 = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, true);
+          if (verified2 && announce)
+            vscode2.window.showInformationMessage(`Standalone target prepared: ${deployedTargetPath}`);
+          return verified2;
+        }
+        if (!installation.deployToolPath) {
+          vscode2.window.showErrorMessage("The selected Qt installation does not provide a deployment tool.");
           return false;
         }
         const args = [];
         let deploymentEnvironment;
         if (process.platform === "win32") {
           const requestedVariant = (0, qtProjectManifest_12.isReleaseBuildMode)(this.buildMode) ? "release" : "debug";
-          const detectedVariant = detectQtRuntimeVariantFromBinary(targetPath, installation.majorVersion);
+          const detectedVariant = detectQtRuntimeVariantFromBinary(buildTargetPath, installation.majorVersion);
           const deploymentVariant = detectedVariant ?? requestedVariant;
           args.push(deploymentVariant === "release" ? "--release" : "--debug");
           if (detectedVariant && detectedVariant !== requestedVariant) {
@@ -9489,7 +9662,9 @@ var require_qpmBuildService = __commonJS({
           }
           if (installation.qtPathsPath && installation.majorVersion >= 6)
             args.push("--qtpaths", installation.qtPathsPath);
-          args.push("--dir", path2.dirname(targetPath));
+          args.push("--dir", deployDirectory);
+          if (deployProfile.compilerRuntime)
+            args.push("--compiler-runtime");
           if (manifest.files.qml.length > 0)
             args.push("--qmldir", path2.dirname(path2.resolve(path2.dirname(ref.absolutePath), manifest.files.qml[0])));
           if (!vscode2.workspace.getConfiguration("qpm").get("qtDeployTranslations", false))
@@ -9501,14 +9676,42 @@ var require_qpmBuildService = __commonJS({
           } else if (requiresQtPlatformPlugin(manifest)) {
             const pluginsRoot = installation.pluginsDir || path2.join(installation.root, "plugins");
             this.output.appendLine(`[Qt/C++] WARNING: no ${deploymentVariant} Windows platform plugin was found below ${path2.join(pluginsRoot, "platforms")}.`);
-            this.output.appendLine("[Qt/C++] windeployqt will still run with the selected Qt kit environment; repair the Desktop Qt component if it reports that the platform plugin is unavailable.");
           }
         }
-        args.push(targetPath);
-        const deployed = await this.spawnTool(installation.deployToolPath, args, path2.dirname(ref.absolutePath), `Deploy ${path2.basename(targetPath)}`, deploymentEnvironment);
-        if (deployed && announce)
-          vscode2.window.showInformationMessage(`Qt runtime deployed beside ${path2.basename(targetPath)}.`);
-        return deployed;
+        args.push(deployedTargetPath);
+        const deployed = await this.spawnTool(installation.deployToolPath, args, path2.dirname(ref.absolutePath), `Deploy ${path2.basename(deployedTargetPath)}`, deploymentEnvironment);
+        if (!deployed)
+          return false;
+        const verified = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, false);
+        if (verified && announce)
+          vscode2.window.showInformationMessage(`Standalone Qt deployment ready: ${deployDirectory}`);
+        return verified;
+      }
+      verifyStandaloneDeployment(manifest, installation, deployedTargetPath, staticQt) {
+        const directory = path2.dirname(deployedTargetPath);
+        const issues = [];
+        if (!fs.existsSync(deployedTargetPath))
+          issues.push(`target missing: ${path2.basename(deployedTargetPath)}`);
+        if (!staticQt && process.platform === "win32") {
+          const major = installation.majorVersion || Number(installation.version.split(".")[0]) || 6;
+          const debugSuffix = (0, qtProjectManifest_12.isReleaseBuildMode)(this.buildMode) ? "" : "d";
+          const coreCandidates = [path2.join(directory, `Qt${major}Core${debugSuffix}.dll`), path2.join(directory, `Qt${major}Core.dll`)];
+          if (!coreCandidates.some((candidate) => fs.existsSync(candidate)))
+            issues.push(`Qt${major}Core runtime DLL missing`);
+          if (requiresQtPlatformPlugin(manifest)) {
+            const platformDirectory = path2.join(directory, "platforms");
+            const platformCandidates = [path2.join(platformDirectory, `qwindows${debugSuffix}.dll`), path2.join(platformDirectory, "qwindows.dll")];
+            if (!platformCandidates.some((candidate) => fs.existsSync(candidate)))
+              issues.push("Windows platform plugin missing (platforms/qwindows*.dll)");
+          }
+        }
+        if (issues.length > 0) {
+          this.output.appendLine(`[Qt/C++] Standalone deployment check FAILED: ${issues.join("; ")}`);
+          vscode2.window.showErrorMessage(`Standalone deployment is incomplete: ${issues.join("; ")}`);
+          return false;
+        }
+        this.output.appendLine(`[Qt/C++] Standalone deployment check OK: ${directory}`);
+        return true;
       }
       async releaseAndDeployApplicationTranslations(ref, manifest, installation, targetDirectory) {
         const projectRoot = path2.dirname(ref.absolutePath);
@@ -9655,7 +9858,8 @@ var require_qpmBuildService = __commonJS({
           this.output.appendLine(`[Qt ${profile.system === "qmake" ? "qmake" : "CMake"}] Project: ${manifest.name}`);
           this.output.appendLine(`[Qt ${profile.system === "qmake" ? "qmake" : "CMake"}] Qt kit: ${installation.label}`);
           const result = await this.qtBackends.build(ref.absolutePath, this.buildMode, installation, rebuild);
-          if (result.success && (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest).enabled) {
+          const deployProfile2 = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
+          if (result.success && deployProfile2.enabled && deployProfile2.buildProfileId === profile.id) {
             if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
               return false;
           }
@@ -9800,9 +10004,10 @@ var require_qpmBuildService = __commonJS({
           return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, "import library output"))
           return false;
-        if ((0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest).enabled) {
+        const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
+        if (deployProfile.enabled && deployProfile.buildProfileId === plan.buildProfile.id) {
           this.logSection("DEPLOYMENT");
-          this.output.appendLine("  Automatic Qt runtime deployment enabled.");
+          this.output.appendLine("  Automatic standalone deployment enabled for this build profile.");
           if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
             return false;
         }
@@ -50437,7 +50642,7 @@ var require_qtProjectSettingsPanel = __commonJS({
       kind: "Selects the Qt application or library template and the mandatory Qt modules for the target.",
       cppStandard: "C++ language standard passed to the selected backend. Qt 6 requires at least C++17.",
       buildArchitecture: "Selects x86 or x64 for the active Debug or Release variant. It must match the selected Qt kit ABI.",
-      outputDirectory: "Directory containing the final target and build outputs. Relative paths are resolved from the project root.",
+      outputDirectory: "Build working tree containing the compiled target plus intermediate/generated backend artifacts. Use Standalone deployment for a clean runtime-only folder.",
       generatedDirectory: "Directory used for MOC, UIC, RCC and other generated Qt sources.",
       majorVersion: "Restricts the project to Qt 5 or Qt 6. Auto accepts the version supplied by the selected kit.",
       buildSystem: "Direct invokes moc/uic/rcc and the compiler itself. qmake and CMake delegate project generation to those tools.",
@@ -50449,7 +50654,12 @@ var require_qtProjectSettingsPanel = __commonJS({
       generateProjectFiles: "Regenerates the isolated qmake or CMake project files managed by QPM.",
       unityBuild: "Combines source files into fewer translation units to reduce compile time. It can expose symbol-name collisions.",
       useResponseFiles: "Uses response files when linker command lines become too long, especially on Windows.",
-      autoDeploy: "Runs the active deployment profile after a successful build.",
+      linkage: "Dynamic keeps Qt/compiler DLL dependencies. Static compiler runtime links the MinGW/GCC runtime into the target while Qt stays dynamic. Static Qt requires a Qt kit built with -static and currently uses the qmake or CMake backend.",
+      autoDeploy: "Runs the active deployment profile after a successful build. QPM stages the final application in a clean deployment folder instead of mixing runtime files with generated build artifacts.",
+      deployOutputDirectory: "Standalone deployment root. QPM writes only the executable/library, Qt runtime, plugins, compiler runtime and requested translations below this directory.",
+      deployCleanOutput: "Removes the previous deployment directory before staging the new target so obsolete DLLs and plugins cannot remain.",
+      deployCompilerRuntime: "Asks windeployqt to include the compiler runtime where supported. Static compiler-runtime linkage can remove the MinGW libgcc/libstdc++ DLL requirement instead.",
+      deployVerifyStandalone: "Checks that the staged target and the essential Qt runtime/platform plugin are present after deployment.",
       deployTranslations: "Runs lrelease and copies application .qm catalogs during deployment.",
       sourceDirectory: "Source directory used by qmake or CMake. Relative paths are resolved from the project root.",
       projectFile: "Optional existing .pro or CMakeLists.txt. Leave empty to let QPM generate isolated backend files.",
@@ -50736,6 +50946,18 @@ var require_qtProjectSettingsPanel = __commonJS({
       steps: "Commands executed before, during or after the selected build backend.",
       files: "Summary of files registered in the native Qt project manifest."
     };
+    var SETTINGS_PAGES = [
+      { id: "overview", label: "Overview", description: "Project status and the most common QPM actions." },
+      { id: "project", label: "Project", description: "Target identity, language settings and project file summary." },
+      { id: "build", label: "Build", description: "Qt kit, modules, backend, compiler, linker and build-step configuration." },
+      { id: "run", label: "Run & Deploy", description: "Local execution and standalone runtime deployment." },
+      { id: "debug", label: "Debug & Diagnostics", description: "Native/QML debugging, profiling and diagnostics." },
+      { id: "qt", label: "Qt & Languages", description: "QML language tooling and Qt for Python / PySide6." },
+      { id: "platforms", label: "Platforms", description: "Desktop, Remote Linux, Docker, WebAssembly, Android and Apple targets." },
+      { id: "quality", label: "Tests & Quality", description: "Automated tests, static analysis and quality settings." },
+      { id: "dependencies", label: "Dependencies", description: "vcpkg, Conan, pkg-config and project dependency integration." },
+      { id: "distribution", label: "Distribution", description: "Portable packages, installers, signing, publication and updates." }
+    ];
     var QtProjectSettingsPanel = class {
       workspaces;
       installations;
@@ -51268,6 +51490,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         buildProfile.precompiledHeader = String(payload.precompiledHeader ?? "").trim();
         buildProfile.unityBuild = payload.unityBuild === true;
         buildProfile.useResponseFiles = payload.useResponseFiles === true;
+        buildProfile.linkage = normalizeQtLinkageMode(payload.linkage);
         buildProfile.defines = normalizeList(payload.variantDefines);
         buildProfile.compilerFlags = normalizeList(payload.compilerFlags);
         buildProfile.linkerFlags = normalizeList(payload.linkerFlags);
@@ -51280,6 +51503,10 @@ var require_qtProjectSettingsPanel = __commonJS({
         const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
         deployProfile.enabled = payload.autoDeploy === true;
         deployProfile.translations = payload.deployTranslations === true;
+        deployProfile.outputDirectory = String(payload.deployOutputDirectory ?? "dist").trim() || "dist";
+        deployProfile.cleanOutput = payload.deployCleanOutput === true;
+        deployProfile.compilerRuntime = payload.deployCompilerRuntime === true;
+        deployProfile.verifyStandalone = payload.deployVerifyStandalone === true;
         const platformProfile = (0, qtProjectManifest_12.getActiveQtPlatformProfile)(manifest);
         platformProfile.name = String(payload.platformName ?? platformProfile.name).trim() || platformProfile.name;
         platformProfile.type = normalizePlatformType(payload.platformType);
@@ -51499,6 +51726,8 @@ var require_qtProjectSettingsPanel = __commonJS({
         const designerDetails = installation?.designerPath ? `${installation.designerPath} (${installation.designerLauncherKind ?? "designer"}, ${installation.designerSource ?? "unknown source"})` : "not resolved \u2014 select designer.exe or Qt Creator";
         const linguistDetails = installation ? `Linguist ${installation.linguistPath ? "ready" : "missing"} \xB7 lupdate ${installation.lupdatePath ? "ready" : "missing"} \xB7 lrelease ${installation.lreleasePath ? "ready" : "missing"}` : "Qt Linguist tools not resolved";
         const qmlToolDetails = installation ? `qmllint ${installation.qmlLintPath ? "ready" : "missing"} \xB7 qmlformat ${installation.qmlFormatPath ? "ready" : "missing"} \xB7 qmlls ${installation.qmlLanguageServerPath ? "ready" : "missing"} \xB7 preview ${installation.qmlRuntimePath || installation.qmlScenePath ? "ready" : "missing"}` : "QML tools not resolved";
+        const pageNavigation = SETTINGS_PAGES.map((page, index) => `<button type="button" class="page-tab ${index === 0 ? "active" : ""}" data-settings-page-target="${page.id}" title="${escapeAttribute(page.description)}">${escapeHtml(page.label)}</button>`).join("");
+        const settingsPageMetadata = JSON.stringify(SETTINGS_PAGES);
         const nonce = makeNonce();
         return `<!DOCTYPE html>
 <html lang="en">
@@ -51508,7 +51737,40 @@ var require_qtProjectSettingsPanel = __commonJS({
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Qt Project Settings</title>
 <style>
-:root{color-scheme:light dark;--qpm-sticky-offset:150px}*{box-sizing:border-box}body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:22px;max-width:1380px;margin:auto}h1{margin:0 0 4px;font-size:26px}h2{font-size:16px;margin:0}.subtitle,.muted{color:var(--vscode-descriptionForeground)}.settings-sticky-header{position:sticky;top:0;z-index:4;background:var(--vscode-editor-background);isolation:isolate;margin-bottom:12px}.toolbar{position:static;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border);margin:0}.toolbar .actions,.actions{display:flex;gap:8px;flex-wrap:wrap}.settings-nav{position:static;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,320px) auto;gap:10px;align-items:center;padding:10px 0 14px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border)}.dirty{font-size:12px;color:var(--vscode-descriptionForeground);white-space:nowrap}.dirty.changed{color:var(--vscode-editorWarning-foreground);font-weight:600}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{border:1px solid var(--vscode-panel-border);border-radius:7px;background:var(--vscode-sideBar-background);padding:16px;min-width:0;scroll-margin-top:var(--qpm-sticky-offset)}.wide{grid-column:1/-1}.card h2{margin-bottom:13px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.wide{grid-column:1/-1}.field-label{display:inline-flex;align-items:center;gap:6px;font-weight:600}.input-row{display:flex;gap:6px;align-items:stretch}.input-row input{min-width:0;flex:1}.browse{min-width:34px;padding:6px 9px}.help{position:relative;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid var(--vscode-textLink-foreground);border-radius:50%;font-size:11px;line-height:1;color:var(--vscode-textLink-foreground);cursor:help;font-weight:700;outline:none}.help:hover::after,.help:focus::after{content:attr(data-help);position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-20%);width:min(360px,70vw);padding:9px 11px;border:1px solid var(--vscode-widget-border,var(--vscode-panel-border));border-radius:5px;background:var(--vscode-editorHoverWidget-background);color:var(--vscode-editorHoverWidget-foreground);box-shadow:0 4px 16px var(--vscode-widget-shadow);font-size:12px;font-weight:400;line-height:1.4;white-space:normal;pointer-events:none}.section-hidden{display:none!important}.conditional-group{display:contents}.conditional-group.hidden{display:none}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.control-group{border:1px solid var(--vscode-panel-border);border-radius:5px;padding:11px;background:var(--vscode-editorWidget-background)}.control-group h3{font-size:13px;margin:0 0 9px}.control-group .actions{gap:6px}.control-group button{font-size:12px;padding:6px 9px}label{font-weight:600}input,select,textarea{width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:7px 8px;font:inherit;border-radius:2px}input:focus,select:focus,textarea:focus,button:focus,.help:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}textarea{min-height:92px;resize:vertical;font-family:var(--vscode-editor-font-family);font-size:12px}.checkbox{display:flex;align-items:center;gap:8px;font-weight:400}.checkbox input,.module input{width:auto}.kit{font-family:var(--vscode-editor-font-family);font-size:12px;padding:10px;background:var(--vscode-textCodeBlock-background);border-radius:4px;overflow-wrap:anywhere;border-left:4px solid var(--vscode-testing-iconPassed)}.kit.warning{border-left-color:var(--vscode-editorWarning-foreground)}.kit.error{border-left-color:var(--vscode-errorForeground)}.modules{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}.module{display:flex;align-items:center;gap:6px;font-weight:400;border:1px solid var(--vscode-panel-border);padding:7px;border-radius:4px}.module small{margin-left:auto;color:var(--vscode-errorForeground);font-size:10px}.module.missing{opacity:.72}.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}.stats{display:flex;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--vscode-panel-border);border-radius:999px;padding:4px 9px;font-size:12px;color:var(--vscode-descriptionForeground)}button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 11px;border-radius:3px;cursor:pointer;font:inherit}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:hover{background:var(--vscode-button-hoverBackground)}code{font-family:var(--vscode-editor-font-family)}@media(max-width:800px){.grid,.fields{grid-template-columns:1fr}.wide{grid-column:auto}.settings-sticky-header{position:static}.toolbar{align-items:flex-start;flex-direction:column}.settings-nav{grid-template-columns:1fr}.help:hover::after,.help:focus::after{left:0;transform:none}}
+:root{color-scheme:light dark;--qpm-sticky-offset:184px;--qpm-page-nav-height:42px}
+*{box-sizing:border-box}
+body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:20px;max-width:1440px;margin:auto}
+h1{margin:0 0 4px;font-size:26px}
+h2{font-size:17px;margin:0}
+h3{font-size:14px}
+.subtitle,.muted{color:var(--vscode-descriptionForeground)}
+.settings-sticky-header{position:sticky;top:0;z-index:8;background:var(--vscode-editor-background);isolation:isolate;margin-bottom:14px;border-bottom:1px solid var(--vscode-panel-border);box-shadow:0 5px 12px rgba(0,0,0,.08)}
+.toolbar{position:static;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:10px 0;background:var(--vscode-editor-background);margin:0}
+.toolbar .actions,.actions{display:flex;gap:8px;flex-wrap:wrap}
+.toolbar .field{min-width:210px}
+.page-nav{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;padding:6px 0 8px;scrollbar-width:thin;background:var(--vscode-editor-background)}
+.page-tab{flex:0 0 auto;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--vscode-descriptionForeground);padding:8px 11px;border-radius:4px 4px 0 0;font-weight:600}
+.page-tab:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-foreground)}
+.page-tab.active{color:var(--vscode-textLink-foreground);border-bottom-color:var(--vscode-textLink-foreground);background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}
+.settings-nav{position:static;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,340px) minmax(180px,auto);gap:10px;align-items:center;padding:8px 0 12px;background:var(--vscode-editor-background)}
+.page-context{display:flex;flex-direction:column;gap:2px;min-width:0}.page-context strong{font-size:13px}.page-context span{font-size:11px;color:var(--vscode-descriptionForeground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dirty{font-size:12px;color:var(--vscode-descriptionForeground);white-space:nowrap}.dirty.changed{color:var(--vscode-editorWarning-foreground);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{grid-column:1/-1;border:1px solid var(--vscode-panel-border);border-radius:7px;background:var(--vscode-sideBar-background);padding:16px;min-width:0;scroll-margin-top:var(--qpm-sticky-offset)}
+.card.page-hidden,.card.filter-hidden{display:none!important}
+.wide{grid-column:1/-1}.card h2{margin-bottom:13px;display:flex;align-items:center;gap:7px}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.wide{grid-column:1/-1}
+.field-label{display:inline-flex;align-items:center;gap:6px;font-weight:600}.input-row{display:flex;gap:6px;align-items:stretch}.input-row input{min-width:0;flex:1}.browse{min-width:34px;padding:6px 9px}
+.settings-subsection{border-top:1px solid var(--vscode-panel-border);margin-top:14px;padding-top:12px}.settings-subsection:first-child{border-top:0;margin-top:0;padding-top:0}.settings-subsection h3{margin:0 0 10px;color:var(--vscode-foreground)}
+.help{position:relative;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid var(--vscode-textLink-foreground);border-radius:50%;font-size:11px;line-height:1;color:var(--vscode-textLink-foreground);cursor:help;font-weight:700;outline:none}
+.help:hover::after,.help:focus::after{content:attr(data-help);position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-20%);width:min(360px,70vw);padding:9px 11px;border:1px solid var(--vscode-widget-border,var(--vscode-panel-border));border-radius:5px;background:var(--vscode-editorHoverWidget-background);color:var(--vscode-editorHoverWidget-foreground);box-shadow:0 4px 16px var(--vscode-widget-shadow);font-size:12px;font-weight:400;line-height:1.4;white-space:normal;pointer-events:none}
+.conditional-group{display:contents}.conditional-group.hidden{display:none}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.control-group{border:1px solid var(--vscode-panel-border);border-radius:5px;padding:11px;background:var(--vscode-editorWidget-background)}.control-group h3{font-size:13px;margin:0 0 9px}.control-group .actions{gap:6px}.control-group button{font-size:12px;padding:6px 9px}
+label{font-weight:600}input,select,textarea{width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:7px 8px;font:inherit;border-radius:2px}input:focus,select:focus,textarea:focus,button:focus,.help:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}textarea{min-height:92px;resize:vertical;font-family:var(--vscode-editor-font-family);font-size:12px}.checkbox{display:flex;align-items:center;gap:8px;font-weight:400}.checkbox input,.module input{width:auto}
+.kit{font-family:var(--vscode-editor-font-family);font-size:12px;padding:10px;background:var(--vscode-textCodeBlock-background);border-radius:4px;overflow-wrap:anywhere;border-left:4px solid var(--vscode-testing-iconPassed)}.kit.warning{border-left-color:var(--vscode-editorWarning-foreground)}.kit.error{border-left-color:var(--vscode-errorForeground)}
+.modules{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}.module{display:flex;align-items:center;gap:6px;font-weight:400;border:1px solid var(--vscode-panel-border);padding:7px;border-radius:4px}.module small{margin-left:auto;color:var(--vscode-errorForeground);font-size:10px}.module.missing{opacity:.72}.checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}.stats{display:flex;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--vscode-panel-border);border-radius:999px;padding:4px 9px;font-size:12px;color:var(--vscode-descriptionForeground)}
+button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 11px;border-radius:3px;cursor:pointer;font:inherit}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:not(.page-tab):hover{background:var(--vscode-button-hoverBackground)}code{font-family:var(--vscode-editor-font-family)}
+@media(max-width:900px){body{padding:14px}.grid,.fields{grid-template-columns:1fr}.wide{grid-column:auto}.settings-sticky-header{position:static;box-shadow:none}.toolbar{align-items:flex-start;flex-direction:column}.settings-nav{grid-template-columns:1fr}.page-context span{white-space:normal}.help:hover::after,.help:focus::after{left:0;transform:none}}
+
 </style>
 </head>
 <body>
@@ -51517,15 +51779,16 @@ var require_qtProjectSettingsPanel = __commonJS({
 <div id="settingsStickyHeader" class="settings-sticky-header">
   <div id="settingsToolbar" class="toolbar">
     <div>${selectField("Edited build variant", "variant", `<option value="debug" ${this.variant === "debug" ? "selected" : ""}>Debug</option><option value="release" ${this.variant === "release" ? "selected" : ""}>Release</option>`)}</div>
-    <div class="actions"><button id="save">Save Qt settings</button><button class="secondary" id="reloadSettings" title="Discard unsaved edits and reload the manifest">Reload</button><button class="secondary" id="manageProfiles">Manage profiles</button><button class="secondary" id="manageDebugProfiles">Debug profiles</button><button class="secondary" id="managePlatformProfiles">Platforms</button><button class="secondary" id="manageNamedKits">Manage named kits</button><button class="secondary" id="selectKit">Select Qt installation</button><button class="secondary" id="repairToolchain">Repair compiler</button><button class="secondary" id="selectDesigner">Locate Designer</button><button class="secondary" id="openManifest">Open manifest JSON</button></div>
+    <div class="actions"><button id="save">Save Qt settings</button><button class="secondary" id="reloadSettings" title="Discard unsaved edits and reload the manifest">Reload</button><button class="secondary" id="openManifest">Open manifest JSON</button></div>
   </div>
+  <nav id="pageNav" class="page-nav" aria-label="Settings pages">${pageNavigation}</nav>
   <div id="settingsNavigation" class="settings-nav">
-    <input id="settingsFilter" type="search" placeholder="Filter settings, fields or tools\u2026" aria-label="Filter project settings">
-    <select id="sectionNav" aria-label="Jump to settings section"><option value="">Jump to a section\u2026</option><option value="section-control">Control center</option><option value="section-project">Project and target</option><option value="section-kit">Qt kit and generators</option><option value="section-modules">Qt modules</option><option value="section-backend">Backend configuration</option><option value="section-compiler">Compiler and linker</option><option value="section-run">Run</option><option value="section-platforms">Platforms</option><option value="section-debug">Advanced debugging</option><option value="section-tests">Tests</option><option value="section-quality">Quality</option><option value="section-dependencies">Dependencies / package managers</option><option value="section-python">Qt for Python / PySide6</option><option value="section-qml-language">QML language and modules</option><option value="section-profiling">Profiling and diagnostics</option><option value="section-packaging">Packaging</option><option value="section-installers">Installers and signing</option><option value="section-publication">Publication and updates</option><option value="section-build-steps">Build steps</option><option value="section-files">Files</option></select>
-    <span id="dirtyState" class="dirty">Saved state</span>
+    <input id="settingsFilter" type="search" placeholder="Filter settings on this page\u2026" aria-label="Filter current settings page">
+    <select id="sectionNav" aria-label="Jump to a section"><option value="">Jump to a section\u2026</option></select>
+    <div class="page-context"><strong id="pageTitle">Overview</strong><span id="pageDescription">Project status and the most common QPM actions.</span><span id="dirtyState" class="dirty">Saved state</span></div>
   </div>
 </div>
-<section id="section-control" data-settings-section class="card wide" style="margin-bottom:18px"><h2>${sectionHeading("control", "Project control center")}</h2><div class="control-grid">
+<section id="section-control" data-settings-section data-settings-page="overview" data-settings-title="Control center" class="card wide" style="margin-bottom:18px"><h2>${sectionHeading("control", "Project control center")}</h2><div class="control-grid">
   <div class="control-group"><h3>Build and run</h3><div class="actions"><button class="secondary" data-command="qpm.selectBuildMode">Build mode</button><button class="secondary" data-command="qpm.selectQtBackend">Backend</button><button class="secondary" data-command="qpm.configureQtBackend">Configure</button><button class="secondary" data-command="qpm.chooseBuildAction">Build / rebuild / clean</button><button class="secondary" data-command="qpm.chooseRunAction">Run options</button><button class="secondary" data-command="qpm.startQtDebugProfile">Start debugging</button></div></div>
   <div class="control-group"><h3>Project and kits</h3><div class="actions"><button class="secondary" id="manageProfilesControl">Profiles</button><button class="secondary" id="manageNamedKitsControl">Named kits</button><button class="secondary" data-command="qpm.syncCppTools">IntelliSense</button><button class="secondary" data-command="qpm.openProjectHealthReport">Project health</button><button class="secondary" data-command="qpm.editQtModules">Qt modules</button></div></div>
   <div class="control-group"><h3>Qt tools</h3><div class="actions"><button class="secondary" id="selectDesignerControl">Designer</button><button class="secondary" data-command="qpm.updateTranslations">Update translations</button><button class="secondary" data-command="qpm.releaseTranslations">Release translations</button><button class="secondary" data-command="qpm.qmlLintProject">Lint QML</button><button class="secondary" data-command="qpm.qmlFormatProject">Format QML</button><button class="secondary" data-command="qpm.restartQmlLanguageServer">Restart qmlls</button><button class="secondary" data-command="qpm.openQtDocumentation">Documentation</button></div></div>
@@ -51535,22 +51798,24 @@ var require_qtProjectSettingsPanel = __commonJS({
   <div class="control-group"><h3>Packaging</h3><div class="actions"><button class="secondary" data-command="qpm.createPortablePackage">Create package</button><button class="secondary" data-command="qpm.generateProductMetadata">Generate metadata</button><button class="secondary" data-command="qpm.openPackagingReport">Report</button><button class="secondary" data-command="qpm.revealPackagingOutput">Reveal output</button></div></div>
 </div></section>
 <div class="grid">
-<section id="section-project" data-settings-section class="card"><h2>${sectionHeading("project", "Project and target")}</h2><div class="fields">
+<section id="section-project" data-settings-section data-settings-page="project" data-settings-title="Project and target" class="card"><h2>${sectionHeading("project", "Project and target")}</h2><div class="fields">
   ${field("Project name", "name", manifest.name)}
   ${field("Target file name", "targetName", manifest.targetName)}
   ${selectField("Project type", "kind", kindOptions(manifest.kind))}
   ${selectField("C++ standard", "cppStandard", cppStandardOptions(buildProfile.cppStandard))}
   ${selectField("Active build architecture", "buildArchitecture", `<option value="x64" ${configuredX64 ? "selected" : ""}>64-bit (recommended for this kit)</option><option value="x86" ${!configuredX64 ? "selected" : ""}>32-bit</option>`)}
-  ${field("Output directory", "outputDirectory", buildProfile.outputDirectory)}
+  ${field("Build working directory", "outputDirectory", buildProfile.outputDirectory)}
   ${field("Generated Qt files directory", "generatedDirectory", buildProfile.generatedDirectory)}
-</div></section>
-<section id="section-kit" data-settings-section class="card"><h2>${sectionHeading("kit", "Qt kit and generators")}</h2>
+</div><div class="actions"><button class="secondary" id="manageProfiles">Manage build/run profiles</button><button class="secondary" id="openManifestProject">Open manifest JSON</button></div></section>
+<section id="section-kit" data-settings-section data-settings-page="build" data-settings-title="Qt kit and generators" class="card"><h2>${sectionHeading("kit", "Qt kit and generators")}</h2>
   <div class="kit ${toolchainState}">${installation || kitProfile.qtInstallation ? `${escapeHtml(kitProfile.name)}<br>Qt: ${escapeHtml(installation?.label || kitProfile.qtInstallation || "not resolved")}<br>Root: ${escapeHtml(installation?.root || kitProfile.qtInstallation || "not resolved")}<br>Compiler: ${escapeHtml(compilerDetails)}<br>Source: ${escapeHtml(compilerSource)} \xB7 Compatibility: ${escapeHtml(kitCompatibility)}${toolchainDiagnostic}<br>Debugger: ${escapeHtml(debuggerDetails)}<br>qmake: ${escapeHtml(qmakeDetails)}<br>CMake: ${escapeHtml(cmakeDetails)}<br>Build tool: ${escapeHtml(buildToolDetails)} \xB7 Generator: ${escapeHtml(generatorDetails)}<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}` : `No valid Qt kit is resolved.<br>Configured path: ${escapeHtml((0, qtProjectManifest_12.getQtInstallationPreference)(manifest, mode) || "project/workspace active kit")}<br>Use \u201CManage named kits\u201D to create or assign a reusable kit.<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}`}</div>
   <div class="fields" style="margin-top:12px">${selectField("Required Qt major version", "majorVersion", `<option value="auto" ${manifest.qt.majorVersion === "auto" ? "selected" : ""}>Auto</option><option value="5" ${manifest.qt.majorVersion === 5 ? "selected" : ""}>Qt 5</option><option value="6" ${manifest.qt.majorVersion === 6 ? "selected" : ""}>Qt 6</option>`)}${selectField("Build backend", "buildSystem", buildSystemOptions(buildProfile.system))}<div class="field"><label for="parallelJobs" class="field-label">Parallel jobs (0 = automatic)${helpIcon("parallelJobs")}</label><input id="parallelJobs" type="number" min="0" value="${buildProfile.parallelJobs}"></div>${readOnlyField("Kit generator", "kitGenerator", kitProfile.generator || (installation?.ninjaPath ? "Ninja" : installation?.compilerFamily === "msvc" ? "NMake Makefiles" : "Auto"))}</div>
-  <div class="checks">${check("autoMoc", "Automatic MOC", buildProfile.autoMoc)}${check("autoUic", "Automatic UIC", buildProfile.autoUic)}${check("autoRcc", "Automatic RCC", buildProfile.autoRcc)}${check("generateProjectFiles", "Generate backend project files", buildProfile.generateProjectFiles)}${check("unityBuild", "Unity build", buildProfile.unityBuild)}${check("useResponseFiles", "Use response files when needed", buildProfile.useResponseFiles)}${check("autoDeploy", "Run deployment tool after build", deployProfile.enabled)}${check("deployTranslations", "Release and deploy application translations", deployProfile.translations)}</div>
+  <div class="checks">${check("autoMoc", "Automatic MOC", buildProfile.autoMoc)}${check("autoUic", "Automatic UIC", buildProfile.autoUic)}${check("autoRcc", "Automatic RCC", buildProfile.autoRcc)}${check("generateProjectFiles", "Generate backend project files", buildProfile.generateProjectFiles)}${check("unityBuild", "Unity build", buildProfile.unityBuild)}${check("useResponseFiles", "Use response files when needed", buildProfile.useResponseFiles)}</div>
+  <div class="actions" style="margin-top:12px"><button class="secondary" id="manageNamedKits">Manage named kits</button><button class="secondary" id="selectKit">Select Qt installation</button><button class="secondary" id="repairToolchain">Repair compiler</button><button class="secondary" id="selectDesigner">Locate Designer</button></div>
 </section>
-<section id="section-modules" data-settings-section class="card wide"><h2>${sectionHeading("modules", "Qt modules")}</h2><div class="modules">${moduleHtml}</div></section>
-<section id="section-backend" data-settings-section class="card wide"><h2>${sectionHeading("backend", "Backend configuration")}</h2><div class="fields">
+
+<section id="section-modules" data-settings-section data-settings-page="build" data-settings-title="Qt modules" class="card wide"><h2>${sectionHeading("modules", "Qt modules")}</h2><div class="modules">${moduleHtml}</div></section>
+<section id="section-backend" data-settings-section data-settings-page="build" data-settings-title="Backend configuration" class="card wide"><h2>${sectionHeading("backend", "Backend configuration")}</h2><div class="fields">
   <div class="conditional-group" data-build-systems="qmake cmake">
     ${field("Backend source directory", "sourceDirectory", buildProfile.sourceDirectory)}
     ${field("Existing .pro or CMakeLists.txt (optional)", "projectFile", buildProfile.projectFile)}
@@ -51566,24 +51831,30 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${area("Build arguments", "buildArguments", buildProfile.buildArguments)}
   ${area("Clean arguments", "cleanArguments", buildProfile.cleanArguments, true)}
 </div><p class="muted">Fields that do not apply to the selected backend are hidden automatically. QPM can generate isolated qmake/CMake files under .qpm or use an existing project file.</p></section>
-<section id="section-compiler" data-settings-section class="card"><h2>${sectionHeading("compiler", "Common compiler and linker inputs")}</h2><div class="fields">
+<section id="section-compiler" data-settings-section data-settings-page="build" data-settings-title="Compiler and linker inputs" class="card"><h2>${sectionHeading("compiler", "Common compiler and linker inputs")}</h2><div class="fields">
   ${area("Global defines", "defines", manifest.defines)}
   ${area("Include directories", "includeDirectories", manifest.includeDirectories)}
   ${area("Library directories", "libraryDirectories", manifest.libraryDirectories)}
   ${area("Additional libraries", "libraries", manifest.libraries)}
 </div></section>
-<section id="section-flags" data-settings-section class="card"><h2>${sectionHeading("compiler", this.variant === "release" ? "Release flags" : "Debug flags")}</h2><div class="fields">
-  ${area("Variant defines", "variantDefines", buildVariant.defines)}
-  ${area("Compiler flags", "compilerFlags", buildVariant.compilerFlags)}
-  ${area("Linker flags", "linkerFlags", buildVariant.linkerFlags, true)}
-</div></section>
-<section id="section-run" data-settings-section class="card wide"><h2>${sectionHeading("run", "Run")}</h2><div class="fields">
+<section id="section-flags" data-settings-section data-settings-page="build" data-settings-title="Variant compiler and linker settings" class="card wide"><h2>${sectionHeading("compiler", `${this.variant === "release" ? "Release" : "Debug"} compiler & linker settings`)}</h2>
+  <div class="settings-subsection"><h3>Linkage</h3><div class="fields">${selectField("Linkage mode", "linkage", `<option value="dynamic" ${buildProfile.linkage === "dynamic" ? "selected" : ""}>Dynamic Qt + dynamic compiler runtime</option><option value="static-runtime" ${buildProfile.linkage === "static-runtime" ? "selected" : ""}>Dynamic Qt + static MinGW/GCC runtime</option><option value="static-qt" ${buildProfile.linkage === "static-qt" ? "selected" : ""}>Static Qt kit (qmake/CMake)</option>`)}</div></div>
+  <div class="settings-subsection"><h3>Preprocessor</h3><div class="fields">${area("Variant defines", "variantDefines", buildVariant.defines, true)}</div></div>
+  <div class="settings-subsection"><h3>Compiler</h3><div class="fields">${area("Compiler flags", "compilerFlags", buildVariant.compilerFlags, true)}</div></div>
+  <div class="settings-subsection"><h3>Linker</h3><div class="fields">${area("Linker flags", "linkerFlags", buildVariant.linkerFlags, true)}</div></div>
+</section>
+<section id="section-run" data-settings-section data-settings-page="run" data-settings-title="Run profile" class="card wide"><h2>${sectionHeading("run", "Run")}</h2><div class="fields">
   ${field("Command-line arguments", "runArguments", runArguments, true)}
   ${field("Working directory", "workingDirectory", runWorkingDirectory)}
   ${field("Environment options (NAME=value;OTHER=value)", "environmentOptions", runEnvironmentOptions, true)}
   ${field("External executable for shared-library debugging", "externalProcessPath", projectSettings.run.externalProcessPath)}
 </div></section>
-<section id="section-platforms" data-settings-section class="card wide"><h2>${sectionHeading("platforms", "Platforms")}</h2><div class="fields">
+<section id="section-deployment" data-settings-section data-settings-page="run" data-settings-title="Standalone deployment" class="card wide"><h2>${sectionHeading("run", "Standalone deployment")}</h2>
+  <div class="fields">${field("Deployment output directory", "deployOutputDirectory", deployProfile.outputDirectory)}</div>
+  <div class="checks">${check("autoDeploy", "Run deployment tool after build", deployProfile.enabled)}${check("deployCleanOutput", "Clean deployment directory first", deployProfile.cleanOutput)}${check("deployCompilerRuntime", "Deploy compiler runtime", deployProfile.compilerRuntime)}${check("deployVerifyStandalone", "Verify standalone runtime", deployProfile.verifyStandalone)}${check("deployTranslations", "Release and deploy application translations", deployProfile.translations)}</div>
+  <p class="muted">Build intermediates stay in the build tree. The deployment directory is a clean runtime image intended for double-click execution, packaging or copying to another PC.</p>
+</section>
+<section id="section-platforms" data-settings-section data-settings-page="platforms" data-settings-title="Platform profile and target" class="card wide"><h2>${sectionHeading("platforms", "Platforms")}</h2><div class="fields">
   ${field("Platform profile name", "platformName", platformProfile.name)}
   ${selectField("Platform type", "platformType", platformTypeOptions(platformProfile.type))}
   ${selectField("Build location", "platformBuildLocation", platformBuildLocationOptions(platformProfile.buildLocation))}
@@ -51689,7 +51960,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   <span class="conditional-group" data-platform-types="macos">${check("platformAppleCreateDmg", "Create a DMG after deployment", platformProfile.appleCreateDmg)}${check("platformAppleStapleAfterNotarization", "Staple notarization ticket automatically", platformProfile.appleStapleAfterNotarization)}${check("platformAppleAppStoreCompliant", "Use App Store compliant deployment", platformProfile.appleAppStoreCompliant)}${check("platformAppleHardenedRuntime", "Enable hardened runtime", platformProfile.appleHardenedRuntime)}${check("platformAppleTimestamp", "Timestamp signatures", platformProfile.appleTimestamp)}</span>
   <span class="conditional-group" data-platform-types="android">${check("platformAndroidBuildAllAbis", "Build all installed Qt Android ABIs", platformProfile.androidBuildAllAbis)}${check("platformAndroidInstallReplace", "Replace existing APK during installation", platformProfile.androidInstallReplace)}${check("platformAndroidUninstallBeforeInstall", "Uninstall before installation", platformProfile.androidUninstallBeforeInstall)}${check("platformAndroidOpenLogcatAfterRun", "Open logcat after run", platformProfile.androidOpenLogcatAfterRun)}</span>
 </div><div class="actions"><button class="secondary" id="managePlatformProfilesInline">Manage platform profiles</button><button class="secondary" data-command="qpm.detectPlatformCapabilities">Detect capabilities</button><button class="secondary" data-command="qpm.buildForPlatform">Build platform</button><button class="secondary" data-command="qpm.deployToPlatform">Deploy platform</button><button class="secondary" data-command="qpm.runOnPlatform">Run platform</button><span class="conditional-group" data-platform-types="macos ios-simulator ios-device"><button class="secondary" data-command="qpm.configureAppleEnvironment">Configure Apple</button><button class="secondary" data-command="qpm.buildAppleTarget">Build Apple target</button><button class="secondary" data-command="qpm.openAppleReport">Apple report</button></span><span class="conditional-group" data-platform-types="macos"><button class="secondary" data-command="qpm.createMacDmg">Create DMG</button><button class="secondary" data-command="qpm.notarizeAppleArtifact">Notarize</button></span><span class="conditional-group" data-platform-types="ios-simulator"><button class="secondary" data-command="qpm.selectAppleSimulator">Select simulator</button><button class="secondary" data-command="qpm.installRunIosSimulator">Build / install / run</button></span><span class="conditional-group" data-platform-types="android"><button class="secondary" data-command="qpm.configureAndroidEnvironment">Configure Android</button><button class="secondary" data-command="qpm.buildAndroidApk">Build APK</button><button class="secondary" data-command="qpm.buildInstallRunAndroid">Build / install / run</button><button class="secondary" data-command="qpm.openAndroidReport">Android report</button></span></div><p class="muted">Fields that do not apply to the selected platform type are preserved but ignored.</p></section>
-<section id="section-debug" data-settings-section class="card wide"><h2>${sectionHeading("debugging", "Advanced debugging")}</h2><div class="fields">
+<section id="section-debug" data-settings-section data-settings-page="debug" data-settings-title="Advanced debugging" class="card wide"><h2>${sectionHeading("debugging", "Advanced debugging")}</h2><div class="fields">
   ${field("Profile name", "debugName", debugProfile.name)}
   ${selectField("Request", "debugRequest", debugRequestOptions(debugProfile.request))}
   ${selectField("Debugger", "debuggerType", debuggerTypeOptions(debugProfile.debuggerType))}
@@ -51728,7 +51999,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${check("debugBreakOnQtWarnings", "Break on qFatal / Qt assertions", debugProfile.breakOnQtWarnings)}
   <span class="conditional-group" data-debug-requests="launch qml-attach">${check("debugQmlEnabled", "Enable mixed C++ / QML debugging", debugProfile.qmlDebug)}${check("debugQmlBlock", "Block until QML debugger attaches", debugProfile.qmlBlock)}</span>
 </div><div class="actions"><button class="secondary" id="manageDebugProfilesInline">Manage debug profiles</button><button class="secondary" id="generateLaunchJson">Generate launch.json</button><button class="secondary" data-command="qpm.debugWithGdb">Build and debug</button><button class="secondary" data-command="qpm.attachQtProcess">Attach process</button></div><p class="muted">All fields of the active debug profile are editable here. Request-specific fields are ignored when they do not apply.</p></section>
-<section id="section-tests" data-settings-section class="card wide"><h2>${sectionHeading("tests", "Tests")}</h2><div class="fields">
+<section id="section-tests" data-settings-section data-settings-page="quality" data-settings-title="Tests" class="card wide"><h2>${sectionHeading("tests", "Tests")}</h2><div class="fields">
   ${selectField("Framework discovery", "testFramework", testFrameworkOptions(manifest.testing.framework))}
   <div class="field"><label for="testTimeoutMs" class="field-label">Timeout per test run (ms)${helpIcon("testTimeoutMs")}</label><input id="testTimeoutMs" type="number" min="1000" step="1000" value="${manifest.testing.timeoutMs}"></div>
   <div class="field"><label for="testParallelJobs" class="field-label">Parallel test jobs${helpIcon("testParallelJobs")}</label><input id="testParallelJobs" type="number" min="0" max="256" value="${manifest.testing.parallelJobs}"></div>
@@ -51753,12 +52024,12 @@ var require_qtProjectSettingsPanel = __commonJS({
   <div class="field"><label for="testBoostRandomSeed" class="field-label">Random seed${helpIcon("testBoostRandomSeed")}</label><input id="testBoostRandomSeed" type="number" min="0" value="${manifest.testing.boost.randomSeed}"></div>
 </div><div class="checks">${check("testBoostCatchSystemErrors", "Catch system errors", manifest.testing.boost.catchSystemErrors)}</div></div></div>
 <div class="actions"><button type="button" class="secondary" data-command="qpm.rerunFailedTests">Rerun failed</button><button type="button" class="secondary" data-command="qpm.openTestHistory">Open history</button><button type="button" class="secondary" data-command="qpm.clearTestHistory">Clear history</button></div></section>
-<section id="section-quality" data-settings-section class="card"><h2>${sectionHeading("quality", "Static analysis and quality")}</h2><div class="fields">
+<section id="section-quality" data-settings-section data-settings-page="quality" data-settings-title="Static analysis and quality" class="card"><h2>${sectionHeading("quality", "Static analysis and quality")}</h2><div class="fields">
   ${field("Clang-Tidy checks", "clangTidyChecks", manifest.quality.clangTidyChecks, true)}
   ${field("Clazy checks", "clazyChecks", manifest.quality.clazyChecks, true)}
   ${field("Header filter regular expression", "qualityHeaderFilter", manifest.quality.headerFilter, true)}
 </div><p class="muted">Use the Qt Tests & Quality view to run analyzers and create sanitizer or coverage profiles.</p></section>
-<section id="section-dependencies" data-settings-section class="card wide"><h2>${sectionHeading("dependencies", "Dependencies and package managers")}</h2>
+<section id="section-dependencies" data-settings-section data-settings-page="dependencies" data-settings-title="Dependencies and package managers" class="card wide"><h2>${sectionHeading("dependencies", "Dependencies and package managers")}</h2>
 <p class="muted">Project-scoped C/C++ dependencies with vcpkg manifest mode, Conan 2 and pkg-config. Generated integration is shared by the direct, qmake and CMake backends.</p>
 <div class="fields">
   ${field("Dependency output directory", "dependenciesOutputDirectory", manifest.dependencies.outputDirectory)}
@@ -51800,7 +52071,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${area("Additional pkg-config arguments", "dependenciesPkgConfigArguments", manifest.dependencies.pkgConfig.additionalArguments, true)}
 </div><div class="checks">${check("dependenciesPkgConfigEnabled", "Enable pkg-config", manifest.dependencies.pkgConfig.enabled)}${check("dependenciesPkgConfigStatic", "Request static pkg-config flags", manifest.dependencies.pkgConfig.staticLink)}</div>
 <div class="actions"><button class="secondary" data-command="qpm.dependencies.detectTools">Detect tools</button><button class="secondary" data-command="qpm.dependencies.generateManifests">Generate manifests</button><button class="secondary" data-command="qpm.dependencies.install">Install / synchronize</button><button class="secondary" data-command="qpm.dependencies.openReport">Open report</button><button class="secondary" data-command="qpm.dependencies.revealOutput">Reveal output</button></div></section>
-<section id="section-python" data-settings-section class="card wide"><h2>${sectionHeading("python", "Qt for Python / PySide6")}</h2>
+<section id="section-python" data-settings-section data-settings-page="qt" data-settings-title="Qt for Python / PySide6" class="card wide"><h2>${sectionHeading("python", "Qt for Python / PySide6")}</h2>
 <p class="muted">Official Qt for Python workflow using PySide6, a project-local Python environment, pyside6-project, Designer and deployment tools.</p>
 <h3>Python environment</h3><div class="fields">
   ${field("Python interpreter", "pythonInterpreter", manifest.python.interpreter, true)}
@@ -51826,7 +52097,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${area("Additional pyside6-project arguments", "pythonProjectArguments", manifest.python.additionalProjectArguments, true)}
   ${area("Additional deployment arguments", "pythonDeployArguments", manifest.python.additionalDeployArguments, true)}
 </div><div class="actions"><button class="secondary" data-command="qpm.python.bootstrap">Prepare environment</button><button class="secondary" data-command="qpm.python.selectInterpreter">Select interpreter</button><button class="secondary" data-command="qpm.python.createVirtualEnvironment">Create venv</button><button class="secondary" data-command="qpm.python.installPySide6">Install PySide6</button><button class="secondary" data-command="qpm.python.build">Build</button><button class="secondary" data-command="qpm.python.run">Run</button><button class="secondary" data-command="qpm.python.debug">Debug</button><button class="secondary" data-command="qpm.python.openDesigner">Designer</button><button class="secondary" data-command="qpm.python.deploy">Deploy</button><button class="secondary" data-command="qpm.python.openReport">Open report</button></div></section>
-<section id="section-qml-language" data-settings-section class="card wide"><h2>${sectionHeading("qml-language", "QML language and modules")}</h2>
+<section id="section-qml-language" data-settings-section data-settings-page="qt" data-settings-title="QML language and modules" class="card wide"><h2>${sectionHeading("qml-language", "QML language and modules")}</h2>
 <p class="muted">Project-scoped QML code intelligence powered by qmlls, with explicit build/import directories and duplicate-server protection.</p>
 <h3>QML Language Server</h3><div class="fields">
   ${field("qmlls executable override", "qmlLanguageServerExecutable", manifest.qml.languageServer.executable, true)}
@@ -51844,7 +52115,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${field("Module import root", "qmlModuleImportRoot", manifest.qml.module.importRoot)}
   ${field("Resource prefix", "qmlModuleResourcePrefix", manifest.qml.module.resourcePrefix, true)}
 </div><div class="actions"><button class="secondary" data-command="qpm.startQmlLanguageServer">Start qmlls</button><button class="secondary" data-command="qpm.restartQmlLanguageServer">Restart qmlls</button><button class="secondary" data-command="qpm.stopQmlLanguageServer">Stop qmlls</button><button class="secondary" data-command="qpm.generateQmllsConfiguration">Generate .qmlls.ini</button><button class="secondary" data-command="qpm.openQmllsConfiguration">Open .qmlls.ini</button><button class="secondary" data-command="qpm.generateQmldir">Generate qmldir</button><button class="secondary" data-command="qpm.openQmlLanguageReport">Open report</button></div></section>
-<section id="section-profiling" data-settings-section class="card wide"><h2>${sectionHeading("profiling", "Profiling and diagnostics")}</h2><div class="fields">
+<section id="section-profiling" data-settings-section data-settings-page="debug" data-settings-title="Profiling and diagnostics" class="card wide"><h2>${sectionHeading("profiling", "Profiling and diagnostics")}</h2><div class="fields">
   ${field("Profiling output directory", "profilingOutputDirectory", manifest.profiling.outputDirectory)}
   ${numberField("Profiler timeout (ms)", "profilingTimeoutMs", manifest.profiling.timeoutMs)}
   ${area("Application arguments for profiling", "profilingArguments", manifest.profiling.arguments)}
@@ -51877,7 +52148,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${field("Trace output file", "profilingTraceOutputFile", manifest.profiling.tracing.outputFile)}
 </div><div class="checks">${check("profilingTraceFollowForks", "Follow child processes", manifest.profiling.tracing.followForks)}${check("profilingTraceTimestamps", "Add timestamps", manifest.profiling.tracing.timestamps)}</div>
 <div class="actions"><button class="secondary" data-command="qpm.profileQmlApplication">Profile QML</button><button class="secondary" data-command="qpm.profileCpu">Profile CPU</button><button class="secondary" data-command="qpm.profileMemory">Analyze memory</button><button class="secondary" data-command="qpm.runCppcheck">Run Cppcheck</button><button class="secondary" data-command="qpm.traceSystemCalls">Trace system calls</button><button class="secondary" data-command="qpm.openProfilingReport">Open report</button></div></section>
-<section id="section-packaging" data-settings-section class="card wide"><h2>${sectionHeading("packaging", "Packaging and product metadata")}</h2><div class="fields">
+<section id="section-packaging" data-settings-section data-settings-page="distribution" data-settings-title="Packaging and product metadata" class="card wide"><h2>${sectionHeading("packaging", "Packaging and product metadata")}</h2><div class="fields">
   ${field("Product name", "packagingProductName", manifest.packaging.productName)}
   ${field("Product version", "packagingProductVersion", manifest.packaging.productVersion)}
   ${field("Company / publisher", "packagingCompanyName", manifest.packaging.companyName)}
@@ -51914,7 +52185,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${area("Desktop categories", "packagingCategories", manifest.packaging.linux.categories)}
 </div><div class="checks">${check("packagingLinuxDesktop", "Generate Linux desktop entry", manifest.packaging.linux.generateDesktopEntry)}</div>
 <div class="actions"><button class="secondary" data-command="qpm.generateProductMetadata">Generate metadata</button><button class="secondary" data-command="qpm.createPortablePackage">Create portable package</button><button class="secondary" data-command="qpm.openPackagingReport">Open report</button><button class="secondary" data-command="qpm.cleanPackagingOutput">Clean output</button></div></section>
-<section id="section-installers" data-settings-section class="card wide"><h2>${sectionHeading("installers", "Desktop installers, updates and signing")}</h2><div class="fields">
+<section id="section-installers" data-settings-section data-settings-page="distribution" data-settings-title="Installers and signing" class="card wide"><h2>${sectionHeading("installers", "Desktop installers, updates and signing")}</h2><div class="fields">
   ${selectField("Installer backend", "installerBackend", installerBackendOptions(manifest.packaging.installer.backend))}
   ${field("Installer output directory", "installerOutputDirectory", manifest.packaging.installer.outputDirectory)}
   ${field("Installer filename pattern", "installerFileNamePattern", manifest.packaging.installer.fileNamePattern, true)}
@@ -51975,7 +52246,7 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${check("installerVerifyAfterSigning", "Verify signatures after signing", manifest.packaging.installer.signing.verifyAfterSigning)}
 </div><p class="muted">Certificate passwords are read only from the configured environment variable and are never written to .qtproject.json.</p>
 <div class="actions"><button class="secondary" data-command="qpm.detectInstallerTools">Detect tools</button><button class="secondary" data-command="qpm.generateInstallerProject">Generate sources</button><button class="secondary" data-command="qpm.createDesktopInstaller">Create installer</button><button class="secondary" data-command="qpm.createQtIfwRepository">Create update repository</button><button class="secondary" data-command="qpm.signDistributionArtifacts">Sign artifacts</button><button class="secondary" data-command="qpm.verifyDistributionSignatures">Verify signatures</button><button class="secondary" data-command="qpm.openInstallerReport">Open report</button></div></section>
-<section id="section-publication" data-settings-section class="card wide"><h2>${sectionHeading("publication", "Publication and application updates")}</h2><div class="fields">
+<section id="section-publication" data-settings-section data-settings-page="distribution" data-settings-title="Publication and updates" class="card wide"><h2>${sectionHeading("publication", "Publication and application updates")}</h2><div class="fields">
   ${selectField("Release channel", "publicationChannel", publicationChannelOptions(manifest.publication.channel))}
   ${field("Publication output directory", "publicationOutputDirectory", manifest.publication.outputDirectory)}
   ${field("Public base URL", "publicationBaseUrl", manifest.publication.baseUrl, true)}
@@ -52057,12 +52328,12 @@ var require_qtProjectSettingsPanel = __commonJS({
   ${check("publicationDeleteRemote", "Delete obsolete remote files with rsync", manifest.publication.publish.deleteRemote)}
 </div><p class="muted">QPM stores no GitHub token, SSH password or certificate password. Authentication remains delegated to gh, SSH keys and the configured certificate environment variable.</p>
 <div class="actions"><button class="secondary" data-command="qpm.detectPublicationTools">Detect tools</button><button class="secondary" data-command="qpm.generatePublicationSources">Generate sources</button><button class="secondary" data-command="qpm.createMsixPackage">Create MSIX</button><button class="secondary" data-command="qpm.generateAppInstaller">Generate App Installer</button><button class="secondary" data-command="qpm.generateWingetManifests">Generate WinGet</button><button class="secondary" data-command="qpm.validateWingetManifests">Validate WinGet</button><button class="secondary" data-command="qpm.createReleaseBundle">Create release bundle</button><button class="secondary" data-command="qpm.publishRelease">Publish release</button><button class="secondary" data-command="qpm.openPublicationReport">Open report</button></div></section>
-<section id="section-build-steps" data-settings-section class="card wide"><h2>${sectionHeading("steps", "Build steps")}</h2><div class="fields">
+<section id="section-build-steps" data-settings-section data-settings-page="build" data-settings-title="Build steps" class="card wide"><h2>${sectionHeading("steps", "Build steps")}</h2><div class="fields">
   ${area("Pre-build actions", "preBuildActions", projectSettings.preBuildActions)}
   ${area("Custom build actions", "customBuildActions", projectSettings.customBuildActions)}
   ${area("Post-build actions", "postBuildActions", projectSettings.postBuildActions, true)}
 </div><p class="muted">One command per line. These actions run around the selected Direct, qmake or CMake backend.</p></section>
-<section id="section-files" data-settings-section class="card wide"><h2>${sectionHeading("files", "Manifest file summary")}</h2><div class="stats">
+<section id="section-files" data-settings-section data-settings-page="project" data-settings-title="Manifest file summary" class="card wide"><h2>${sectionHeading("files", "Manifest file summary")}</h2><div class="stats">
   ${pill("Sources", counts.sources.length)}${pill("Headers", counts.headers.length)}${pill("Forms", counts.forms.length)}${pill("Resources", counts.resources.length)}${pill("QML", counts.qml.length)}${pill("Translations", counts.translations.length)}${pill("Other", counts.other.length)}
 </div><p class="muted" style="margin-top:10px">Files are managed from the project tree with \u201CAdd Existing File\u201D and the Qt creation templates.</p></section>
 </div>
@@ -52071,16 +52342,16 @@ const vscode = acquireVsCodeApi();
 const byId = (id) => document.getElementById(id);
 const on = (id, event, handler) => { const element = byId(id); if (element) element.addEventListener(event, handler); };
 const post = (type) => () => vscode.postMessage({ type });
-on('variant', 'change', () => vscode.postMessage({ type:'changeVariant', variant:byId('variant').value }));
+on('variant', 'change', () => { vscode.setState({ ...(vscode.getState() || {}), activePage }); vscode.postMessage({ type:'changeVariant', variant:byId('variant').value }); });
 ['manageProfiles','manageProfilesControl'].forEach((id) => on(id, 'click', post('manageProfiles')));
-['manageDebugProfiles','manageDebugProfilesInline'].forEach((id) => on(id, 'click', post('manageDebugProfiles')));
-['managePlatformProfiles','managePlatformProfilesInline','managePlatformProfilesControl'].forEach((id) => on(id, 'click', post('managePlatformProfiles')));
+on('manageDebugProfilesInline', 'click', post('manageDebugProfiles'));
+['managePlatformProfilesInline','managePlatformProfilesControl'].forEach((id) => on(id, 'click', post('managePlatformProfiles')));
 ['manageNamedKits','manageNamedKitsControl'].forEach((id) => on(id, 'click', post('manageNamedKits')));
 ['selectDesigner','selectDesignerControl'].forEach((id) => on(id, 'click', post('selectQtDesigner')));
 on('generateLaunchJson', 'click', post('generateLaunchJson'));
 on('selectKit', 'click', post('selectQtKit'));
 on('repairToolchain', 'click', post('repairQtToolchain'));
-on('openManifest', 'click', post('openManifest'));
+['openManifest','openManifestProject'].forEach((id) => on(id, 'click', post('openManifest')));
 on('reloadSettings', 'click', post('reload'));
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => vscode.postMessage({ type:'runCommand', command:button.dataset.command })));
 document.querySelectorAll('[data-browse-id]').forEach((button) => button.addEventListener('click', () => {
@@ -52122,11 +52393,59 @@ if (typeof ResizeObserver !== 'undefined') {
 }
 window.addEventListener('resize', updateStickyOffsets);
 window.requestAnimationFrame(updateStickyOffsets);
-on('sectionNav', 'change', () => { const target = byId(byId('sectionNav').value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
-on('settingsFilter', 'input', () => {
-  const query = byId('settingsFilter').value.trim().toLowerCase();
-  document.querySelectorAll('[data-settings-section]').forEach((section) => section.classList.toggle('section-hidden', Boolean(query) && !section.textContent.toLowerCase().includes(query)));
-});
+const settingsPages = ${settingsPageMetadata};
+const webviewState = vscode.getState() || {};
+let activePage = settingsPages.some((page) => page.id === webviewState.activePage) ? webviewState.activePage : 'overview';
+const sectionNav = byId('sectionNav');
+const settingsFilter = byId('settingsFilter');
+const pageTitle = byId('pageTitle');
+const pageDescription = byId('pageDescription');
+const sections = [...document.querySelectorAll('[data-settings-section]')];
+const pageButtons = [...document.querySelectorAll('[data-settings-page-target]')];
+const refreshSectionNavigation = () => {
+  if (!sectionNav) return;
+  const previous = sectionNav.value;
+  sectionNav.innerHTML = '<option value="">Jump to a section\u2026</option>';
+  sections.filter((section) => section.dataset.settingsPage === activePage).forEach((section) => {
+    const option = document.createElement('option');
+    option.value = section.id;
+    option.textContent = section.dataset.settingsTitle || section.querySelector('h2')?.textContent?.replace(/\\?+$/, '').trim() || section.id;
+    sectionNav.appendChild(option);
+  });
+  if ([...sectionNav.options].some((option) => option.value === previous)) sectionNav.value = previous;
+};
+const applySettingsFilter = () => {
+  const query = settingsFilter ? settingsFilter.value.trim().toLowerCase() : '';
+  sections.forEach((section) => {
+    const belongsToPage = section.dataset.settingsPage === activePage;
+    section.classList.toggle('page-hidden', !belongsToPage);
+    section.classList.toggle('filter-hidden', belongsToPage && Boolean(query) && !section.textContent.toLowerCase().includes(query));
+  });
+};
+const activatePage = (pageId, scrollToTop = false) => {
+  const meta = settingsPages.find((page) => page.id === pageId) || settingsPages[0];
+  activePage = meta.id;
+  pageButtons.forEach((button) => {
+    const selected = button.dataset.settingsPageTarget === activePage;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-current', selected ? 'page' : 'false');
+  });
+  if (pageTitle) pageTitle.textContent = meta.label;
+  if (pageDescription) pageDescription.textContent = meta.description;
+  if (settingsFilter) settingsFilter.value = '';
+  vscode.setState({ ...webviewState, activePage });
+  refreshSectionNavigation();
+  applySettingsFilter();
+  window.requestAnimationFrame(updateStickyOffsets);
+  if (scrollToTop) {
+    const first = sections.find((section) => section.dataset.settingsPage === activePage && !section.classList.contains('filter-hidden'));
+    if (first) first.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+};
+pageButtons.forEach((button) => button.addEventListener('click', () => activatePage(button.dataset.settingsPageTarget, true)));
+on('sectionNav', 'change', () => { const target = byId(sectionNav.value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
+on('settingsFilter', 'input', applySettingsFilter);
+activatePage(activePage, false);
 const dirtyState = byId('dirtyState');
 const markDirty = () => { if (dirtyState) { dirtyState.textContent = 'Unsaved changes'; dirtyState.classList.add('changed'); } };
 document.querySelectorAll('input,select,textarea').forEach((element) => {
@@ -52138,8 +52457,8 @@ on('save', 'click', () => {
   vscode.postMessage({
     type:'save',
     name:value('name'), targetName:value('targetName'), kind:value('kind'), cppStandard:value('cppStandard'), buildArchitecture:value('buildArchitecture'), buildSystem:value('buildSystem'), parallelJobs:value('parallelJobs'),
-    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'),
-    autoMoc:checked('autoMoc'), autoUic:checked('autoUic'), autoRcc:checked('autoRcc'), generateProjectFiles:checked('generateProjectFiles'), unityBuild:checked('unityBuild'), useResponseFiles:checked('useResponseFiles'), autoDeploy:checked('autoDeploy'), deployTranslations:checked('deployTranslations'),
+    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'), linkage:value('linkage'),
+    autoMoc:checked('autoMoc'), autoUic:checked('autoUic'), autoRcc:checked('autoRcc'), generateProjectFiles:checked('generateProjectFiles'), unityBuild:checked('unityBuild'), useResponseFiles:checked('useResponseFiles'), autoDeploy:checked('autoDeploy'), deployTranslations:checked('deployTranslations'), deployOutputDirectory:value('deployOutputDirectory'), deployCleanOutput:checked('deployCleanOutput'), deployCompilerRuntime:checked('deployCompilerRuntime'), deployVerifyStandalone:checked('deployVerifyStandalone'),
     modules:[...document.querySelectorAll('input[name="qtModule"]:checked')].map((input) => input.value),
     defines:value('defines'), includeDirectories:value('includeDirectories'), libraryDirectories:value('libraryDirectories'), libraries:value('libraries'),
     variantDefines:value('variantDefines'), compilerFlags:value('compilerFlags'), linkerFlags:value('linkerFlags'), sourceDirectory:value('sourceDirectory'), projectFile:value('projectFile'), cmakeConfigurePreset:value('cmakeConfigurePreset'), cmakeBuildPreset:value('cmakeBuildPreset'), precompiledHeader:value('precompiledHeader'), configureArguments:value('configureArguments'), buildArguments:value('buildArguments'), cleanArguments:value('cleanArguments'),
@@ -52188,6 +52507,9 @@ on('save', 'click', () => {
         default:
           return ["Core"];
       }
+    }
+    function normalizeQtLinkageMode(value) {
+      return value === "static-runtime" || value === "static-qt" ? value : "dynamic";
     }
     function normalizeTestFramework(value) {
       const allowed = ["auto", "qttest", "qtquicktest", "gtest", "catch2", "boost", "ctest"];
@@ -63143,10 +63465,12 @@ var require_qpmQtPackagingService = __commonJS({
           return false;
         }
         const metadata = (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(ref.absolutePath, manifest, this.builds.buildMode);
+        let runtimeSourceDirectory;
         if (manifest.packaging.includeQtRuntime && manifest.kind !== "static-library") {
-          this.output.appendLine("[Packaging] Deploy Qt runtime before staging.");
+          this.output.appendLine("[Packaging] Prepare clean standalone deployment before staging.");
           if (!await this.builds.deployQtRuntime(ref))
             return false;
+          runtimeSourceDirectory = (0, qtProjectManifest_12.qtDeploymentDirectory)(ref.absolutePath, this.builds.buildMode, manifest);
         }
         const report = this.createReport(ref, manifest, metadata);
         if (report.issues.some((issue) => issue.severity === "error")) {
@@ -63157,7 +63481,11 @@ var require_qpmQtPackagingService = __commonJS({
         if (manifest.packaging.cleanOutput && fs.existsSync(report.stageDirectory))
           fs.rmSync(report.stageDirectory, { recursive: true, force: true });
         fs.mkdirSync(report.stageDirectory, { recursive: true });
-        this.copyRuntimeTree(path2.dirname(targetPath), report.stageDirectory, manifest.packaging.includeDebugSymbols);
+        if (runtimeSourceDirectory) {
+          this.copyRuntimeTree(runtimeSourceDirectory, report.stageDirectory, manifest.packaging.includeDebugSymbols);
+        } else {
+          fs.copyFileSync(targetPath, path2.join(report.stageDirectory, path2.basename(targetPath)));
+        }
         this.copyProjectFile(ref.absolutePath, manifest.packaging.readmeFile, report.stageDirectory);
         this.copyProjectFile(ref.absolutePath, manifest.packaging.licenseFile, report.stageDirectory);
         for (const entry of manifest.packaging.extraFiles)

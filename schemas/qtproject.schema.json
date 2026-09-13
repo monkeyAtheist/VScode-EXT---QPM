@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Qt Project Manager native project (schema v17)",
+  "title": "Qt Project Manager native project (schema v18)",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -24,7 +24,7 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 17
+      "const": 18
     },
     "name": {
       "type": "string",
@@ -91,7 +91,7 @@
         },
         "autoDeploy": {
           "type": "boolean",
-          "default": false
+          "default": true
         }
       }
     },
@@ -2296,7 +2296,8 @@
         "generateProjectFiles",
         "precompiledHeader",
         "unityBuild",
-        "useResponseFiles"
+        "useResponseFiles",
+        "linkage"
       ],
       "properties": {
         "id": {
@@ -2413,6 +2414,15 @@
         "useResponseFiles": {
           "type": "boolean",
           "default": true
+        },
+        "linkage": {
+          "type": "string",
+          "enum": [
+            "dynamic",
+            "static-runtime",
+            "static-qt"
+          ],
+          "default": "dynamic"
         }
       }
     },
@@ -2460,7 +2470,11 @@
         "name",
         "buildProfileId",
         "enabled",
-        "translations"
+        "translations",
+        "outputDirectory",
+        "cleanOutput",
+        "compilerRuntime",
+        "verifyStandalone"
       ],
       "properties": {
         "id": {
@@ -2478,6 +2492,23 @@
         },
         "translations": {
           "type": "boolean"
+        },
+        "outputDirectory": {
+          "type": "string",
+          "default": "dist",
+          "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "cleanOutput": {
+          "type": "boolean",
+          "default": true
+        },
+        "compilerRuntime": {
+          "type": "boolean",
+          "default": true
+        },
+        "verifyStandalone": {
+          "type": "boolean",
+          "default": true
         }
       }
     },

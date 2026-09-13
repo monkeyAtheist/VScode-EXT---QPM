@@ -43,6 +43,7 @@ const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
 const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 const qpmQtDependencyModel_1 = require("./qpmQtDependencyModel");
+const qpmQtLinkage_1 = require("./qpmQtLinkage");
 class QpmQtBuildBackendService {
     output;
     constructor(output) {
@@ -263,6 +264,9 @@ class QpmQtBuildBackendService {
         const buildDirectory = path.resolve(root, profile.outputDirectory, modeFolder, profile.system);
         const dependencyIntegration = manifest.dependencies.enabled ? (0, qpmQtDependencyModel_1.readDependencyIntegration)(root, manifest.dependencies.outputDirectory) : (0, qpmQtDependencyModel_1.emptyDependencyIntegration)();
         const environment = { ...createKitEnvironment(kit, installation), ...dependencyIntegration.environment };
+        const linkageDiagnostic = (0, qpmQtLinkage_1.validateQtLinkageSelection)(installation, profile.linkage, profile.system);
+        if (linkageDiagnostic)
+            throw new Error(linkageDiagnostic);
         return {
             manifestPath, manifest, profile, kit, installation, mode, root, buildDirectory,
             targetPath: backendTargetPath(manifestPath, mode, manifest, installation),
@@ -486,8 +490,9 @@ function backendCompilerFlags(context) {
     return [...new Set(translated)];
 }
 function backendLinkerFlags(context) {
+    const staticRuntimeFlags = (0, qpmQtLinkage_1.compilerStaticRuntimeLinkerFlags)(context.installation, context.profile.linkage);
     if (context.installation.compilerFamily !== 'msvc')
-        return [...context.profile.linkerFlags];
+        return [...staticRuntimeFlags, ...context.profile.linkerFlags];
     return context.profile.linkerFlags.filter((flag) => flag.startsWith('/') || !flag.startsWith('-'));
 }
 function cmakeConfiguration(context) { return context.profile.variant === 'release' ? 'Release' : 'Debug'; }

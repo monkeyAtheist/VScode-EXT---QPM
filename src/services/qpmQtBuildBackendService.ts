@@ -19,6 +19,7 @@ import { QpmQtInstallation } from './qpmQtInstallationService';
 import { writeQtPackagingMetadata } from './qpmQtPackagingModel';
 import { effectiveQtModules } from './qpmQtModuleInference';
 import { QpmDependencyIntegration, emptyDependencyIntegration, readDependencyIntegration } from './qpmQtDependencyModel';
+import { compilerStaticRuntimeLinkerFlags, validateQtLinkageSelection } from './qpmQtLinkage';
 
 export interface QpmQtBackendResult {
   success: boolean;
@@ -257,6 +258,8 @@ export class QpmQtBuildBackendService {
     const buildDirectory = path.resolve(root, profile.outputDirectory, modeFolder, profile.system);
     const dependencyIntegration = manifest.dependencies.enabled ? readDependencyIntegration(root, manifest.dependencies.outputDirectory) : emptyDependencyIntegration();
     const environment = { ...createKitEnvironment(kit, installation), ...dependencyIntegration.environment };
+    const linkageDiagnostic = validateQtLinkageSelection(installation, profile.linkage, profile.system);
+    if (linkageDiagnostic) throw new Error(linkageDiagnostic);
     return {
       manifestPath, manifest, profile, kit, installation, mode, root, buildDirectory,
       targetPath: backendTargetPath(manifestPath, mode, manifest, installation),
@@ -469,7 +472,8 @@ function backendCompilerFlags(context: BackendContext): string[] {
 }
 
 function backendLinkerFlags(context: BackendContext): string[] {
-  if (context.installation.compilerFamily !== 'msvc') return [...context.profile.linkerFlags];
+  const staticRuntimeFlags = compilerStaticRuntimeLinkerFlags(context.installation, context.profile.linkage);
+  if (context.installation.compilerFamily !== 'msvc') return [...staticRuntimeFlags, ...context.profile.linkerFlags];
   return context.profile.linkerFlags.filter((flag) => flag.startsWith('/') || !flag.startsWith('-'));
 }
 

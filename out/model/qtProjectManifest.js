@@ -58,6 +58,8 @@ exports.resolveQtProjectFiles = resolveQtProjectFiles;
 exports.qtManifestToQpmProject = qtManifestToQpmProject;
 exports.qtManifestToStandaloneWorkspace = qtManifestToStandaloneWorkspace;
 exports.qtTargetPath = qtTargetPath;
+exports.qtDeploymentDirectory = qtDeploymentDirectory;
+exports.qtDeploymentTargetPath = qtDeploymentTargetPath;
 exports.qtImportLibraryPath = qtImportLibraryPath;
 exports.qtGeneratedDirectory = qtGeneratedDirectory;
 exports.qtObjectDirectory = qtObjectDirectory;
@@ -73,7 +75,7 @@ exports.qtProjectLanguage = qtProjectLanguage;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 exports.QT_PROJECT_SUFFIX = '.qtproject.json';
-exports.QT_PROJECT_SCHEMA_VERSION = 17;
+exports.QT_PROJECT_SCHEMA_VERSION = 18;
 const FILE_KEYS = ['sources', 'headers', 'forms', 'resources', 'qml', 'python', 'translations', 'other'];
 function isQtProjectManifestPath(filePath) {
     return filePath.toLowerCase().endsWith(exports.QT_PROJECT_SUFFIX);
@@ -324,11 +326,11 @@ function createDefaultProfiles(qtInstallation) {
     return {
         kits: [{ id: kitId, name: 'Desktop Qt', ...(qtInstallation ? { qtInstallation } : {}), architecture: 'auto', debuggerType: 'auto', deviceType: 'desktop' }],
         builds: [
-            { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true },
-            { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true }
+            { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' },
+            { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' }
         ],
         runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {} }],
-        deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: false, translations: false }],
+        deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: 'dist', cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
         debugs: [createDefaultDebugProfile(debugId, 'default-run')],
         platforms: [createDefaultPlatformProfile(kitId, debugId, 'default-run', 'desktop-deploy', 'local-debug')],
         active: { kitProfileId: kitId, debugBuildProfileId: debugId, releaseBuildProfileId: releaseId, runProfileId: 'default-run', deployProfileId: 'desktop-deploy', debugProfileId: 'local-debug', platformProfileId: 'desktop-platform', buildMode: 'debug64' }
@@ -790,7 +792,8 @@ function normalizeBuildProfile(raw, fallbackVariant, defaultKitId, fallback) {
         generateProjectFiles: booleanValue(value.generateProjectFiles, fallback.generateProjectFiles),
         precompiledHeader: normalizeOptionalRelativePath(optionalString(value.precompiledHeader)),
         unityBuild: booleanValue(value.unityBuild, fallback.unityBuild),
-        useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles)
+        useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles),
+        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage)
     };
 }
 function normalizeRunProfile(raw, fallbackId, buildProfileId) {
@@ -810,7 +813,17 @@ function normalizeDeployProfile(raw, fallbackId, buildProfileId) {
     if (!Object.keys(value).length)
         return undefined;
     const id = normalizeProfileId(optionalString(value.id) || fallbackId);
-    return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), enabled: booleanValue(value.enabled, false), translations: booleanValue(value.translations, false) };
+    return {
+        id,
+        name: optionalString(value.name) || id,
+        buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId),
+        enabled: booleanValue(value.enabled, false),
+        translations: booleanValue(value.translations, false),
+        outputDirectory: normalizeRelativeDirectory(optionalString(value.outputDirectory) || 'dist'),
+        cleanOutput: booleanValue(value.cleanOutput, true),
+        compilerRuntime: booleanValue(value.compilerRuntime, true),
+        verifyStandalone: booleanValue(value.verifyStandalone, true)
+    };
 }
 function normalizeNonNegativeInteger(value, fallback) {
     const parsed = Number(value);
@@ -839,6 +852,9 @@ function normalizeProfileId(value) {
 }
 function selectExistingId(requested, entries, fallback) {
     return entries.some((entry) => entry.id === requested) ? requested : fallback;
+}
+function normalizeQtLinkageMode(value, fallback = 'dynamic') {
+    return value === 'static-runtime' || value === 'static-qt' || value === 'dynamic' ? value : fallback;
 }
 function normalizeBuildSystem(value) {
     return value === 'qmake' || value === 'cmake' ? value : 'direct';
@@ -905,6 +921,15 @@ function qtTargetPath(manifestPath, mode, manifest = readQtProjectManifest(manif
     const modeFolder = isReleaseBuildMode(mode) ? 'release' : 'debug';
     const profile = getActiveQtBuildProfile(manifest, mode);
     return path.resolve(root, profile.outputDirectory, modeFolder, targetFileName(manifest));
+}
+function qtDeploymentDirectory(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
+    const root = path.dirname(manifestPath);
+    const modeFolder = isReleaseBuildMode(mode) ? 'release' : 'debug';
+    const profile = getActiveQtDeployProfile(manifest);
+    return path.resolve(root, profile.outputDirectory || 'dist', modeFolder);
+}
+function qtDeploymentTargetPath(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
+    return path.join(qtDeploymentDirectory(manifestPath, mode, manifest), targetFileName(manifest));
 }
 function qtImportLibraryPath(manifestPath, mode, manifest = readQtProjectManifest(manifestPath)) {
     if (manifest.kind !== 'shared-library' || process.platform !== 'win32')
