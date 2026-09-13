@@ -380,8 +380,9 @@ class QpmQtInstallerService {
         copyDirectoryContents(report.stageDirectory, dataDirectory);
         const targetName = path.basename((0, qtProjectManifest_1.qtTargetPath)(ref.absolutePath, this.builds.buildMode, manifest));
         let iconBase = '';
-        if (manifest.packaging.icon) {
-            const source = resolveProjectPath(path.dirname(ref.absolutePath), manifest.packaging.icon);
+        const configuredPackageIcon = (0, qtProjectManifest_1.packageIconPath)(manifest);
+        if (configuredPackageIcon) {
+            const source = resolveProjectPath(path.dirname(ref.absolutePath), configuredPackageIcon);
             if (fs.existsSync(source)) {
                 const destination = path.join(path.dirname(paths.qtIfwConfig), path.basename(source));
                 fs.mkdirSync(path.dirname(destination), { recursive: true });

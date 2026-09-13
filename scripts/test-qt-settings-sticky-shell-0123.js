@@ -24,4 +24,4 @@ assert(wrapperStart >= 0 && toolbarStart > wrapperStart && pageNavStart > toolba
 const betweenNavigationAndSection = source.slice(navigationStart, firstSection);
 assert(betweenNavigationAndSection.includes('</div>\n</div>'), 'navigation and wrapper must both close before settings sections');
 
-console.log('QPM 0.33.0 opaque unified settings header and page navigation: PASS');
+console.log('QPM 0.34.0 opaque unified settings header and page navigation: PASS');

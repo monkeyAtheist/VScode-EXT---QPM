@@ -8,7 +8,7 @@ const childProcess = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 const commandIds = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of ['qpm.rerunFailedTests', 'qpm.openTestHistory', 'qpm.clearTestHistory']) assert(commandIds.has(id), `${id} must be contributed`);
 assert(pkg.contributes.configuration.properties['qpm.ctestPath']);
@@ -32,7 +32,7 @@ try {
   const model = require('../out/model/qtProjectManifest');
   const testing = require('../out/services/qpmQtTestingService');
   const manifest = model.createDefaultQtProjectManifest('ExtendedTests', 'test-application');
-  assert.strictEqual(manifest.schemaVersion, 18);
+  assert.strictEqual(manifest.schemaVersion, 19);
   assert.strictEqual(manifest.testing.parallelJobs, 0);
   assert.strictEqual(manifest.testing.repeatMode, 'never');
   assert.strictEqual(manifest.testing.ctest.outputOnFailure, true);
@@ -92,7 +92,7 @@ try {
   assert(actualJunit.some((entry) => entry.name === 'pass' && entry.status === 'passed'));
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 18);
+  assert.strictEqual(schema.properties.schemaVersion.const, 19);
   assert(schema.properties.testing.properties.ctest);
   assert(schema.properties.testing.properties.boost);
   const settingsSource = fs.readFileSync(path.join(root, 'src/views/qtProjectSettingsPanel.ts'), 'utf8');

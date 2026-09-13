@@ -6,6 +6,7 @@ import { QpmWorkspaceProjectRef } from '../model/types';
 import {
   QtInstallerBackend,
   QtProjectManifest,
+  packageIconPath,
   getQtInstallationPreference,
   isQtProjectManifestPath,
   qtTargetPath,
@@ -362,8 +363,9 @@ export class QpmQtInstallerService implements vscode.Disposable {
 
     const targetName = path.basename(qtTargetPath(ref.absolutePath, this.builds.buildMode, manifest));
     let iconBase = '';
-    if (manifest.packaging.icon) {
-      const source = resolveProjectPath(path.dirname(ref.absolutePath), manifest.packaging.icon);
+    const configuredPackageIcon = packageIconPath(manifest);
+    if (configuredPackageIcon) {
+      const source = resolveProjectPath(path.dirname(ref.absolutePath), configuredPackageIcon);
       if (fs.existsSync(source)) {
         const destination = path.join(path.dirname(paths.qtIfwConfig), path.basename(source));
         fs.mkdirSync(path.dirname(destination), { recursive: true });

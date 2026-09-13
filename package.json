@@ -1,8 +1,8 @@
 {
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
-  "description": "Qt Project Manager and Build for VS Code \u2014 C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.33.0",
+  "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
+  "version": "0.34.2",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -326,7 +326,7 @@
     "test:qt-direct": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js",
     "test:qt-ux": "npm run compile && node scripts/test-qt-ux-021.js",
     "test:qt-workspace": "npm run compile && node scripts/test-qt-workspace-021.js",
-    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js && node scripts/test-qt-python-0160.js && node scripts/test-qt-dependency-managers-0170.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-direct-0175.js && node scripts/test-qt-designer-regression-0176.js && node scripts/test-workspace-generated-0177.js && node scripts/test-qt-form-class-conversion-0178.js && node scripts/test-qt-custom-painted-widgets-0179.js && node scripts/test-qt-designer-custom-widget-plugin-0180.js && node scripts/test-qt-instrumentation-widgets-0190.js && node scripts/test-qt-advanced-instrumentation-0200.js && node scripts/test-qt-oscilloscope-analysis-0210.js && node scripts/test-qt-realtime-acquisition-0220.js && node scripts/test-qt-acquisition-sources-0230.js && node scripts/test-qt-scpi-instrument-manager-0240.js && node scripts/test-qt-instrument-profiles-0250.js && node scripts/test-qt-instrument-profile-editor-0260.js && node scripts/test-qt-scpi-profile-auto-detection-0270.js && node scripts/test-qt-instrument-driver-registry-0280.js && node scripts/test-qt-acquisition-dashboard-0290.js && node scripts/test-qt-designer-regressions-0291.js && node scripts/test-qt-signal-plot-bridge-qpointer-0292.js && node scripts/test-build-diagnostics-0300.js && node scripts/test-qt-standalone-deployment-0320.js",
+    "test:qt-all": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js && node scripts/test-qt-workspace-021.js && node scripts/test-qt-ux-021.js && node scripts/test-qt-toolchain-022.js && node scripts/test-qt-intellisense-022.js && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-jclib-hierarchy-025.js && node scripts/test-jclib-base-packs-025.js && node scripts/test-qt-manifest-profiles-026.js && node scripts/test-qt-dependencies-026.js && node scripts/test-qt-health-026.js && node scripts/test-qt-auto-intellisense-027.js && node scripts/test-qt-workspace-autoload-028.js && node scripts/test-qt-home-workspace-actions-029.js && node scripts/test-qt-tools-030.js && node scripts/test-qt-resource-editor-032.js && node scripts/test-qt-testing-040.js && node scripts/test-qt-quality-040.js && node scripts/test-qt-backends-050.js && node scripts/test-qt-response-files-051.js && node scripts/test-qt-stale-workspace-052.js && node scripts/test-qt-debugging-060.js && node scripts/test-qt-platforms-070.js && node scripts/test-qt-persistence-071.js && node scripts/test-qt-snippets-072.js && node scripts/test-qt-ui-audit-073.js && node scripts/test-qt-packaging-080.js && node scripts/test-qt-profiling-090.js && node scripts/test-qt-extended-testing-0100.js && node scripts/test-qt-android-0110.js && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js && node scripts/test-qt-last-workspace-0132.js && node scripts/test-qt-apple-0140.js && node scripts/test-qt-publication-0150.js && node scripts/test-qt-ui-modules-clean-0151.js && node scripts/test-qt-clean-deferred-directories-0152.js && node scripts/test-qt-python-0160.js && node scripts/test-qt-dependency-managers-0170.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-direct-0175.js && node scripts/test-qt-designer-regression-0176.js && node scripts/test-workspace-generated-0177.js && node scripts/test-qt-form-class-conversion-0178.js && node scripts/test-qt-custom-painted-widgets-0179.js && node scripts/test-qt-designer-custom-widget-plugin-0180.js && node scripts/test-qt-instrumentation-widgets-0190.js && node scripts/test-qt-advanced-instrumentation-0200.js && node scripts/test-qt-oscilloscope-analysis-0210.js && node scripts/test-qt-realtime-acquisition-0220.js && node scripts/test-qt-acquisition-sources-0230.js && node scripts/test-qt-scpi-instrument-manager-0240.js && node scripts/test-qt-instrument-profiles-0250.js && node scripts/test-qt-instrument-profile-editor-0260.js && node scripts/test-qt-scpi-profile-auto-detection-0270.js && node scripts/test-qt-instrument-driver-registry-0280.js && node scripts/test-qt-acquisition-dashboard-0290.js && node scripts/test-qt-designer-regressions-0291.js && node scripts/test-qt-signal-plot-bridge-qpointer-0292.js && node scripts/test-build-diagnostics-0300.js && node scripts/test-qt-standalone-deployment-0320.js && node scripts/test-qt-deployment-binary-sync-0341.js && node scripts/test-qt-application-icons-0340.js && node scripts/test-qt-auto-deployment-0342.js",
     "test:qt-toolchain": "npm run compile && node scripts/test-qt-toolchain-022.js",
     "test:qt-intellisense": "npm run compile && node scripts/test-qt-intellisense-022.js",
     "test:qt-designer": "npm run compile && node scripts/test-qt-designer-023.js && node scripts/test-qt-intellisense-root-024.js && node scripts/test-qt-designer-launch-0171.js && node scripts/test-qt-python-designer-console-0172.js && node scripts/test-qt-designer-session-0173.js && node scripts/test-qt-designer-recovery-fallback-0174.js && node scripts/test-qt-designer-regression-0176.js",
@@ -348,7 +348,7 @@
     "test:profiling": "npm run compile && node scripts/test-qt-profiling-090.js",
     "test:extended-testing": "npm run compile && node scripts/test-qt-extended-testing-0100.js",
     "test:qt-installers": "npm run compile && node scripts/test-qt-installers-0120.js && node scripts/test-qt-installer-service-0120.js && node scripts/test-qt-build-directory-reliability-0121.js && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js",
-    "test:qt-deployment": "npm run compile && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-standalone-deployment-0320.js",
+    "test:qt-deployment": "npm run compile && node scripts/test-qt-windeployqt-ui-0122.js && node scripts/test-qt-settings-sticky-shell-0123.js && node scripts/test-qt-standalone-deployment-0320.js && node scripts/test-qt-deployment-binary-sync-0341.js && node scripts/test-qt-application-icons-0340.js && node scripts/test-qt-auto-deployment-0342.js",
     "test:qml-language": "npm run compile && node scripts/test-qt-qml-language-0130.js && node scripts/test-qt-qmlls-compatibility-0131.js",
     "bundle": "node ./scripts/bundle-extension.js",
     "test:qt-apple": "npm run compile && node scripts/test-qt-apple-0140.js",
@@ -368,7 +368,9 @@
     "test:qt-scpi-profile-auto-detection": "npm run compile && node scripts/test-qt-scpi-profile-auto-detection-0270.js",
     "test:qt-acquisition-dashboard": "npm run compile && node scripts/test-qt-acquisition-dashboard-0290.js",
     "test:build-diagnostics": "npm run compile && node scripts/test-build-diagnostics-0300.js && node scripts/test-qt-standalone-deployment-0320.js",
-    "test:settings-pages": "npm run compile && node scripts/test-qt-settings-pages-0330.js"
+    "test:settings-pages": "npm run compile && node scripts/test-qt-settings-pages-0330.js",
+    "test:application-icons": "npm run compile && node scripts/test-qt-application-icons-0340.js",
+    "test:auto-deployment": "npm run compile && node scripts/test-qt-auto-deployment-0342.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -1100,7 +1102,7 @@
       },
       {
         "command": "qpm.editBuildSettingsSafeMode",
-        "title": "Qt Project Settings (Safe Mode)\u2026",
+        "title": "Qt Project Settings (Safe Mode)…",
         "icon": "$(shield)",
         "category": "Qt Project Manager"
       },
@@ -1530,37 +1532,37 @@
       },
       {
         "command": "qpm.insertSnippetC",
-        "title": "Choose C snippet\u2026",
+        "title": "Choose C snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetCpp",
-        "title": "Choose C++ snippet\u2026",
+        "title": "Choose C++ snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetQt",
-        "title": "Choose Qt snippet\u2026",
+        "title": "Choose Qt snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetWindows",
-        "title": "Choose Windows / communication snippet\u2026",
+        "title": "Choose Windows / communication snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetDocumentation",
-        "title": "Choose documentation snippet\u2026",
+        "title": "Choose documentation snippet…",
         "category": "QPM",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "qpm.insertSnippetUser",
-        "title": "Choose saved user snippet\u2026",
+        "title": "Choose saved user snippet…",
         "category": "QPM",
         "icon": "$(bookmark)"
       },
@@ -5130,11 +5132,11 @@
       },
       {
         "id": "qpm.snippetsC",
-        "label": "C \u2014 classic"
+        "label": "C — classic"
       },
       {
         "id": "qpm.snippetsCpp",
-        "label": "C++ \u2014 classic"
+        "label": "C++ — classic"
       },
       {
         "id": "qpm.snippetsWindows",

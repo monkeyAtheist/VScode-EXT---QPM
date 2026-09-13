@@ -77,7 +77,9 @@ const PATH_BROWSE_FIELDS = {
     debugCoreDumpPath: { kind: 'file' },
     debugSshExecutable: { kind: 'file' },
     debugSymbolSearchPath: { kind: 'folder' },
-    packagingIcon: { kind: 'file', relative: true },
+    executableIcon: { kind: 'file', relative: true, filters: { 'Windows icon': ['ico'] } },
+    windowIcon: { kind: 'file', relative: true, filters: { 'Image files': ['png', 'ico', 'bmp', 'jpg', 'jpeg', 'svg', 'webp', 'xpm'] } },
+    packagingIcon: { kind: 'file', relative: true, filters: { 'Application icons': ['ico', 'png', 'svg', 'icns'] } },
     packagingLicenseFile: { kind: 'file', relative: true },
     packagingReadmeFile: { kind: 'file', relative: true },
     packagingOutputDirectory: { kind: 'folder', relative: true },
@@ -461,13 +463,16 @@ const FIELD_HELP = {
     profilingTraceFollowForks: 'Makes strace follow child processes.',
     profilingTraceTimestamps: 'Adds timestamps to system-call trace lines.',
     profilingTraceOutputFile: 'Output file for the system trace.',
+    executableIcon: 'Native executable icon. On Windows use an .ico file; QPM embeds it in the PE executable independently from the Qt window icon.',
+    windowIcon: 'Default icon shown by Qt top-level windows and normally the running application/taskbar. QPM embeds this image in a generated Qt resource.',
+    autoApplyWindowIcon: 'Automatically injects QGuiApplication::setWindowIcon() through QPM-generated C++ branding code. Individual windows can still override the icon in application code.',
     packagingProductName: 'Human-readable product name used by Windows version resources, Linux desktop entries and package names.',
     packagingProductVersion: 'Semantic product version such as 1.2.3. Windows resources use the numeric part as a four-component version.',
     packagingCompanyName: 'Company or publisher displayed in executable metadata and package information.',
     packagingDescription: 'Short product description embedded in platform metadata.',
     packagingCopyright: 'Legal copyright string embedded in Windows version information.',
     packagingIdentifier: 'Reverse-DNS application identifier such as com.company.product.',
-    packagingIcon: 'Product icon. Use .ico for Windows executable embedding; PNG or SVG can be used for Linux package metadata.',
+    packagingIcon: 'Optional package/installer icon override. Leave empty to reuse the executable icon configured under Project > Application icons.',
     packagingLicenseFile: 'Optional license copied to the portable package root.',
     packagingReadmeFile: 'Optional README copied to the portable package root.',
     packagingOutputDirectory: 'Project-relative directory receiving staged folders and archives.',
@@ -496,6 +501,7 @@ const FIELD_HELP = {
 const SECTION_HELP = {
     control: 'Direct access to the principal commands that are also available from QPM views and context menus.',
     project: 'Identity, target type, language standard, architecture and output directories.',
+    branding: 'Executable and runtime Qt window icons are separate resources. QPM can manage both without modifying your main.cpp.',
     kit: 'Qt SDK, compiler, debugger and code-generation tool configuration.',
     modules: 'Qt modules linked to the target. Required dependencies are added automatically.',
     backend: 'Backend-specific qmake, CMake and direct-build configuration.',
@@ -690,7 +696,7 @@ class QtProjectSettingsPanel {
             return;
         }
         if (message?.type === 'browsePath' && typeof message.id === 'string') {
-            await this.browsePath(ref, message.id, message.kind === 'file' ? 'file' : 'folder', message.relative === true, String(message.currentValue ?? ''));
+            await this.browsePath(ref, message.id, message.kind === 'file' ? 'file' : 'folder', message.relative === true, String(message.currentValue ?? ''), PATH_BROWSE_FIELDS[message.id]?.filters);
             return;
         }
         if (message?.type === 'runCommand' && typeof message.command === 'string') {
@@ -877,6 +883,9 @@ class QtProjectSettingsPanel {
         manifest.qml.module.version = String(payload.qmlModuleVersion ?? manifest.qml.module.version).trim() || manifest.qml.module.version;
         manifest.qml.module.importRoot = String(payload.qmlModuleImportRoot ?? manifest.qml.module.importRoot).trim() || manifest.qml.module.importRoot;
         manifest.qml.module.resourcePrefix = String(payload.qmlModuleResourcePrefix ?? manifest.qml.module.resourcePrefix).trim() || manifest.qml.module.resourcePrefix;
+        manifest.branding.executableIcon = String(payload.executableIcon ?? '').trim();
+        manifest.branding.windowIcon = String(payload.windowIcon ?? '').trim();
+        manifest.branding.autoApplyWindowIcon = payload.autoApplyWindowIcon === true;
         manifest.packaging.enabled = payload.packagingEnabled === true;
         manifest.packaging.productName = String(payload.packagingProductName ?? manifest.name).trim() || manifest.name;
         manifest.packaging.productVersion = normalizePackagingVersion(payload.packagingProductVersion);
@@ -1070,6 +1079,7 @@ class QtProjectSettingsPanel {
         runProfile.environment = parseEnvironmentProfile(String(payload.environmentOptions ?? ''));
         const deployProfile = (0, qtProjectManifest_1.getActiveQtDeployProfile)(manifest);
         deployProfile.enabled = payload.autoDeploy === true;
+        deployProfile.buildProfileId = String(payload.deployBuildProfileId ?? deployProfile.buildProfileId).trim() || buildProfile.id;
         deployProfile.translations = payload.deployTranslations === true;
         deployProfile.outputDirectory = String(payload.deployOutputDirectory ?? 'dist').trim() || 'dist';
         deployProfile.cleanOutput = payload.deployCleanOutput === true;
@@ -1230,7 +1240,7 @@ class QtProjectSettingsPanel {
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(manifestPath));
         await vscode.window.showTextDocument(document, { preview: false });
     }
-    async browsePath(ref, targetId, kind, relative, currentValue) {
+    async browsePath(ref, targetId, kind, relative, currentValue, filters) {
         const projectRoot = path.dirname(ref.absolutePath);
         const currentPath = currentValue.trim()
             ? (path.isAbsolute(currentValue.trim()) ? currentValue.trim() : path.resolve(projectRoot, currentValue.trim()))
@@ -1246,7 +1256,8 @@ class QtProjectSettingsPanel {
             canSelectFiles: kind === 'file',
             canSelectFolders: kind === 'folder',
             canSelectMany: false,
-            openLabel: 'Select'
+            openLabel: 'Select',
+            ...(filters ? { filters } : {})
         });
         const selectedPath = selected?.[0]?.fsPath;
         if (!selectedPath || !this.panel)
@@ -1397,6 +1408,11 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field('Build working directory', 'outputDirectory', buildProfile.outputDirectory)}
   ${field('Generated Qt files directory', 'generatedDirectory', buildProfile.generatedDirectory)}
 </div><div class="actions"><button class="secondary" id="manageProfiles">Manage build/run profiles</button><button class="secondary" id="openManifestProject">Open manifest JSON</button></div></section>
+<section id="section-branding" data-settings-section data-settings-page="project" data-settings-title="Application icons" class="card"><h2>${sectionHeading('branding', 'Application icons')}</h2><div class="fields">
+  ${field('Executable icon (Windows .ico)', 'executableIcon', manifest.branding.executableIcon)}
+  ${field('Qt window / application icon', 'windowIcon', manifest.branding.windowIcon)}
+</div><div class="checks">${check('autoApplyWindowIcon', 'Apply Qt window icon automatically', manifest.branding.autoApplyWindowIcon)}</div>
+<p class="muted">The executable icon is the file icon embedded in the Windows binary. The Qt window icon is the runtime default for top-level windows and the running application. They may use different files. For native C++ GUI projects, QPM injects the window icon through generated resources without editing main.cpp. A window can still override it explicitly with QWidget::setWindowIcon() or QWindow::setIcon().</p></section>
 <section id="section-kit" data-settings-section data-settings-page="build" data-settings-title="Qt kit and generators" class="card"><h2>${sectionHeading('kit', 'Qt kit and generators')}</h2>
   <div class="kit ${toolchainState}">${installation || kitProfile.qtInstallation ? `${escapeHtml(kitProfile.name)}<br>Qt: ${escapeHtml(installation?.label || kitProfile.qtInstallation || 'not resolved')}<br>Root: ${escapeHtml(installation?.root || kitProfile.qtInstallation || 'not resolved')}<br>Compiler: ${escapeHtml(compilerDetails)}<br>Source: ${escapeHtml(compilerSource)} · Compatibility: ${escapeHtml(kitCompatibility)}${toolchainDiagnostic}<br>Debugger: ${escapeHtml(debuggerDetails)}<br>qmake: ${escapeHtml(qmakeDetails)}<br>CMake: ${escapeHtml(cmakeDetails)}<br>Build tool: ${escapeHtml(buildToolDetails)} · Generator: ${escapeHtml(generatorDetails)}<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}` : `No valid Qt kit is resolved.<br>Configured path: ${escapeHtml((0, qtProjectManifest_1.getQtInstallationPreference)(manifest, mode) || 'project/workspace active kit')}<br>Use “Manage named kits” to create or assign a reusable kit.<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}`}</div>
   <div class="fields" style="margin-top:12px">${selectField('Required Qt major version', 'majorVersion', `<option value="auto" ${manifest.qt.majorVersion === 'auto' ? 'selected' : ''}>Auto</option><option value="5" ${manifest.qt.majorVersion === 5 ? 'selected' : ''}>Qt 5</option><option value="6" ${manifest.qt.majorVersion === 6 ? 'selected' : ''}>Qt 6</option>`)}${selectField('Build backend', 'buildSystem', buildSystemOptions(buildProfile.system))}<div class="field"><label for="parallelJobs" class="field-label">Parallel jobs (0 = automatic)${helpIcon('parallelJobs')}</label><input id="parallelJobs" type="number" min="0" value="${buildProfile.parallelJobs}"></div>${readOnlyField('Kit generator', 'kitGenerator', kitProfile.generator || (installation?.ninjaPath ? 'Ninja' : installation?.compilerFamily === 'msvc' ? 'NMake Makefiles' : 'Auto'))}</div>
@@ -1440,9 +1456,12 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field('External executable for shared-library debugging', 'externalProcessPath', projectSettings.run.externalProcessPath)}
 </div></section>
 <section id="section-deployment" data-settings-section data-settings-page="run" data-settings-title="Standalone deployment" class="card wide"><h2>${sectionHeading('run', 'Standalone deployment')}</h2>
-  <div class="fields">${field('Deployment output directory', 'deployOutputDirectory', deployProfile.outputDirectory)}</div>
+  <div class="fields">
+    ${selectField('Automatic deployment build profile', 'deployBuildProfileId', profileOptions(manifest.profiles.builds, deployProfile.buildProfileId))}
+    ${field('Deployment output directory', 'deployOutputDirectory', deployProfile.outputDirectory)}
+  </div>
   <div class="checks">${check('autoDeploy', 'Run deployment tool after build', deployProfile.enabled)}${check('deployCleanOutput', 'Clean deployment directory first', deployProfile.cleanOutput)}${check('deployCompilerRuntime', 'Deploy compiler runtime', deployProfile.compilerRuntime)}${check('deployVerifyStandalone', 'Verify standalone runtime', deployProfile.verifyStandalone)}${check('deployTranslations', 'Release and deploy application translations', deployProfile.translations)}</div>
-  <p class="muted">Build intermediates stay in the build tree. The deployment directory is a clean runtime image intended for double-click execution, packaging or copying to another PC.</p>
+  <p class="muted">Automatic deployment runs after the selected build profile and after post-build actions. If the dist directory was deleted, QPM recreates it from the freshly built target before running windeployqt. Build intermediates remain in the build tree.</p>
 </section>
 <section id="section-platforms" data-settings-section data-settings-page="platforms" data-settings-title="Platform profile and target" class="card wide"><h2>${sectionHeading('platforms', 'Platforms')}</h2><div class="fields">
   ${field('Platform profile name', 'platformName', platformProfile.name)}
@@ -1745,7 +1764,7 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field('Application identifier', 'packagingIdentifier', manifest.packaging.identifier)}
   ${field('Description', 'packagingDescription', manifest.packaging.description, true)}
   ${field('Copyright', 'packagingCopyright', manifest.packaging.copyright, true)}
-  ${field('Product icon', 'packagingIcon', manifest.packaging.icon)}
+  ${field('Package / installer icon override', 'packagingIcon', manifest.packaging.icon)}
   ${field('License file', 'packagingLicenseFile', manifest.packaging.licenseFile)}
   ${field('README file', 'packagingReadmeFile', manifest.packaging.readmeFile)}
   ${field('Packaging output directory', 'packagingOutputDirectory', manifest.packaging.outputDirectory)}
@@ -2068,6 +2087,7 @@ on('save', 'click', () => {
     pythonEnabled:checked('pythonEnabled'), pythonInterpreter:value('pythonInterpreter'), pythonVirtualEnvironment:value('pythonVirtualEnvironment'), pythonAutoCreateVirtualEnvironment:checked('pythonAutoCreateVirtualEnvironment'), pythonAutoInstallPySide6:checked('pythonAutoInstallPySide6'), pythonPySideVersion:value('pythonPySideVersion'), pythonProjectFile:value('pythonProjectFile'), pythonEntryPoint:value('pythonEntryPoint'), pythonUiMode:value('pythonUiMode'), pythonBuildBeforeRun:checked('pythonBuildBeforeRun'), pythonDeployEnabled:checked('pythonDeployEnabled'), pythonDeploySpecFile:value('pythonDeploySpecFile'), pythonAndroidDeployEnabled:checked('pythonAndroidDeployEnabled'), pythonToolProject:value('pythonToolProject'), pythonToolDesigner:value('pythonToolDesigner'), pythonToolUic:value('pythonToolUic'), pythonToolRcc:value('pythonToolRcc'), pythonToolDeploy:value('pythonToolDeploy'), pythonToolAndroidDeploy:value('pythonToolAndroidDeploy'), pythonToolLinguist:value('pythonToolLinguist'), pythonToolLupdate:value('pythonToolLupdate'), pythonToolLrelease:value('pythonToolLrelease'), pythonToolQmllint:value('pythonToolQmllint'), pythonProjectArguments:value('pythonProjectArguments'), pythonDeployArguments:value('pythonDeployArguments'), pythonEnvironment:value('pythonEnvironment'),
     qmlLanguageServerEnabled:checked('qmlLanguageServerEnabled'), qmlLanguageServerAutoStart:checked('qmlLanguageServerAutoStart'), qmlLanguageServerExecutable:value('qmlLanguageServerExecutable'), qmlLanguageServerBuildDirectories:value('qmlLanguageServerBuildDirectories'), qmlLanguageServerImportPaths:value('qmlLanguageServerImportPaths'), qmlLanguageServerUseEnvironment:checked('qmlLanguageServerUseEnvironment'), qmlLanguageServerNoCmakeCalls:checked('qmlLanguageServerNoCmakeCalls'), qmlLanguageServerCmakeJobs:value('qmlLanguageServerCmakeJobs'), qmlLanguageServerMaxFiles:value('qmlLanguageServerMaxFiles'), qmlLanguageServerTrace:value('qmlLanguageServerTrace'), qmlLanguageServerVerbose:checked('qmlLanguageServerVerbose'), qmlLanguageServerConflictPolicy:value('qmlLanguageServerConflictPolicy'), qmlLanguageServerGenerateConfig:checked('qmlLanguageServerGenerateConfig'), qmlLanguageServerArguments:value('qmlLanguageServerArguments'), qmlModuleUri:value('qmlModuleUri'), qmlModuleVersion:value('qmlModuleVersion'), qmlModuleImportRoot:value('qmlModuleImportRoot'), qmlModuleResourcePrefix:value('qmlModuleResourcePrefix'),
 
+    executableIcon:value('executableIcon'), windowIcon:value('windowIcon'), autoApplyWindowIcon:checked('autoApplyWindowIcon'),
     packagingEnabled:checked('packagingEnabled'), packagingProductName:value('packagingProductName'), packagingProductVersion:value('packagingProductVersion'), packagingCompanyName:value('packagingCompanyName'), packagingDescription:value('packagingDescription'), packagingCopyright:value('packagingCopyright'), packagingIdentifier:value('packagingIdentifier'), packagingIcon:value('packagingIcon'), packagingLicenseFile:value('packagingLicenseFile'), packagingReadmeFile:value('packagingReadmeFile'), packagingOutputDirectory:value('packagingOutputDirectory'), packagingNamePattern:value('packagingNamePattern'), packagingArchiveFormat:value('packagingArchiveFormat'), packagingExtraFiles:value('packagingExtraFiles'), packagingCleanOutput:checked('packagingCleanOutput'), packagingBuildBefore:checked('packagingBuildBefore'), packagingQtRuntime:checked('packagingQtRuntime'), packagingTranslations:checked('packagingTranslations'), packagingDebugSymbols:checked('packagingDebugSymbols'), packagingEmbedVersion:checked('packagingEmbedVersion'), packagingFileDescription:value('packagingFileDescription'), packagingInternalName:value('packagingInternalName'), packagingOriginalFilename:value('packagingOriginalFilename'), packagingExecutionLevel:value('packagingExecutionLevel'), packagingDpiAwareness:value('packagingDpiAwareness'), packagingWindowsManifestFile:value('packagingWindowsManifestFile'), packagingResourceCompilerPath:value('packagingResourceCompilerPath'), packagingLinuxDesktop:checked('packagingLinuxDesktop'), packagingLinuxAppId:value('packagingLinuxAppId'), packagingCategories:value('packagingCategories'), packagingLinuxComment:value('packagingLinuxComment'), packagingInstallPrefix:value('packagingInstallPrefix'),
     installerEnabled:checked('installerEnabled'), installerBackend:value('installerBackend'), installerBuildPortablePackage:checked('installerBuildPortablePackage'), installerOutputDirectory:value('installerOutputDirectory'), installerFileNamePattern:value('installerFileNamePattern'), installerInstallDirectoryName:value('installerInstallDirectoryName'), installerDesktopShortcut:checked('installerDesktopShortcut'), installerStartMenuShortcut:checked('installerStartMenuShortcut'), installerRunAfterInstall:checked('installerRunAfterInstall'), installerQtIfwMode:value('installerQtIfwMode'), installerQtIfwBinaryCreatorPath:value('installerQtIfwBinaryCreatorPath'), installerQtIfwRepogenPath:value('installerQtIfwRepogenPath'), installerQtIfwInstallerBasePath:value('installerQtIfwInstallerBasePath'), installerQtIfwComponentId:value('installerQtIfwComponentId'), installerQtIfwComponentDisplayName:value('installerQtIfwComponentDisplayName'), installerQtIfwComponentDescription:value('installerQtIfwComponentDescription'), installerQtIfwReleaseDate:value('installerQtIfwReleaseDate'), installerQtIfwRepositoryUrl:value('installerQtIfwRepositoryUrl'), installerQtIfwRepositoryOutputDirectory:value('installerQtIfwRepositoryOutputDirectory'), installerQtIfwMaintenanceToolName:value('installerQtIfwMaintenanceToolName'), installerQtIfwWizardStyle:value('installerQtIfwWizardStyle'), installerQtIfwControlScript:value('installerQtIfwControlScript'), installerQtIfwComponentScript:value('installerQtIfwComponentScript'), installerQtIfwArchiveFormat:value('installerQtIfwArchiveFormat'), installerQtIfwCompression:value('installerQtIfwCompression'), installerQtIfwArguments:value('installerQtIfwArguments'), installerInnoIsccPath:value('installerInnoIsccPath'), installerInnoScriptFile:value('installerInnoScriptFile'), installerInnoLanguages:value('installerInnoLanguages'), installerInnoPrivileges:value('installerInnoPrivileges'), installerInnoArchitecture:value('installerInnoArchitecture'), installerInnoCompression:value('installerInnoCompression'), installerInnoSolidCompression:checked('installerInnoSolidCompression'), installerInnoDirectives:value('installerInnoDirectives'), installerNsisMakensisPath:value('installerNsisMakensisPath'), installerNsisScriptFile:value('installerNsisScriptFile'), installerNsisExecutionLevel:value('installerNsisExecutionLevel'), installerNsisCompressor:value('installerNsisCompressor'), installerNsisDefines:value('installerNsisDefines'), installerSigningEnabled:checked('installerSigningEnabled'), installerSignToolPath:value('installerSignToolPath'), installerCertificateFile:value('installerCertificateFile'), installerCertificateThumbprint:value('installerCertificateThumbprint'), installerCertificateSubject:value('installerCertificateSubject'), installerCertificatePasswordEnvironment:value('installerCertificatePasswordEnvironment'), installerTimestampUrl:value('installerTimestampUrl'), installerFileDigest:value('installerFileDigest'), installerTimestampDigest:value('installerTimestampDigest'), installerSignTargetBinary:checked('installerSignTargetBinary'), installerSignInstaller:checked('installerSignInstaller'), installerVerifyAfterSigning:checked('installerVerifyAfterSigning'), installerSigningArguments:value('installerSigningArguments'),
     publicationEnabled:checked('publicationEnabled'), publicationOutputDirectory:value('publicationOutputDirectory'), publicationChannel:value('publicationChannel'), publicationBaseUrl:value('publicationBaseUrl'), publicationReleaseNotesFile:value('publicationReleaseNotesFile'), publicationIncludePortablePackage:checked('publicationIncludePortablePackage'), publicationIncludeInstaller:checked('publicationIncludeInstaller'), publicationIncludeQtIfwRepository:checked('publicationIncludeQtIfwRepository'), publicationGenerateChecksums:checked('publicationGenerateChecksums'), publicationGenerateLatestManifest:checked('publicationGenerateLatestManifest'),

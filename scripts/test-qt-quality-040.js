@@ -6,7 +6,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 const commandIds = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of ['qpm.runClangTidyFile','qpm.runClangTidyProject','qpm.applyClangTidyFixes','qpm.runClazyFile','qpm.runClazyProject','qpm.createSanitizerProfiles','qpm.createCoverageProfile','qpm.openQualityReport']) {
   assert(commandIds.has(id), `${id} must be contributed`);
@@ -26,7 +26,7 @@ try {
   const model = require('../out/model/qtProjectManifest');
   const quality = require('../out/services/qpmQtQualityService');
   const manifest = model.createDefaultQtProjectManifest('QualityApp', 'widgets-application');
-  assert.strictEqual(manifest.schemaVersion, 18);
+  assert.strictEqual(manifest.schemaVersion, 19);
   assert(manifest.quality.clangTidyChecks.includes('bugprone'));
 
   const diagnostics = quality.parseCompilerDiagnostics(`C:\\work\\main.cpp:12:7: warning: use nullptr [modernize-use-nullptr]\nC:\\work\\main.cpp:20:3: error: invalid call\nC:\\work\\main.cpp:21:1: note: candidate here`);

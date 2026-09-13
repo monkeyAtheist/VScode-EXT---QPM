@@ -52,6 +52,7 @@ const qpmGnuResponseFile_1 = require("./qpmGnuResponseFile");
 const qpmBuildCleanup_1 = require("./qpmBuildCleanup");
 const qpmBuildDiagnostics_1 = require("./qpmBuildDiagnostics");
 const qpmQtLinkage_1 = require("./qpmQtLinkage");
+const qpmDeploymentFileSync_1 = require("./qpmDeploymentFileSync");
 class QpmBuildService {
     parser;
     workspaces;
@@ -213,6 +214,18 @@ class QpmBuildService {
                 this.failedPhase = 'Post-build actions';
                 this.finishBuild(false);
                 return false;
+            }
+            // Automatic standalone deployment is deliberately centralized here, after
+            // the backend build AND user post-build actions. This guarantees the same
+            // behavior for Direct, qmake and CMake projects and recreates dist/ when it
+            // has been deleted between builds.
+            if ((0, qtProjectManifest_1.isQtProjectManifestPath)(item.absolutePath)) {
+                const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(item.absolutePath);
+                if (!(0, qtProjectManifest_1.isQtPythonProject)(manifest) && !await this.deployNativeQtAfterSuccessfulBuild(item, manifest)) {
+                    this.failedPhase = 'Standalone deployment';
+                    this.finishBuild(false);
+                    return false;
+                }
             }
         }
         try {
@@ -653,6 +666,26 @@ class QpmBuildService {
             throw new Error('No valid Qt installation is selected for this project.');
         await this.qtBackends.openGeneratedProject(ref.absolutePath, this.buildMode, installation);
     }
+    async deployNativeQtAfterSuccessfulBuild(ref, manifest) {
+        const deployProfile = (0, qtProjectManifest_1.getActiveQtDeployProfile)(manifest);
+        if (!deployProfile.enabled)
+            return true;
+        const buildProfile = (0, qtProjectManifest_1.getActiveQtBuildProfile)(manifest, this.buildMode);
+        if (deployProfile.buildProfileId !== buildProfile.id) {
+            const assigned = manifest.profiles.builds.find((entry) => entry.id === deployProfile.buildProfileId);
+            this.output.appendLine(`[Qt/C++] Automatic standalone deployment skipped for ${buildProfile.name}: deploy profile "${deployProfile.name}" is assigned to ${assigned?.name ?? deployProfile.buildProfileId}.`);
+            this.output.appendLine('[Qt/C++] Open Project Settings > Run & Deploy > Standalone deployment to change the automatic deployment build profile.');
+            return true;
+        }
+        const installation = this.resolveQtInstallation(manifest);
+        if (!installation) {
+            vscode.window.showErrorMessage('Automatic standalone deployment cannot run because no valid Qt installation is selected.');
+            return false;
+        }
+        this.logSection('DEPLOYMENT');
+        this.output.appendLine(`  Automatic standalone deployment: ${buildProfile.name} -> ${(0, qtProjectManifest_1.qtDeploymentDirectory)(ref.absolutePath, this.buildMode, manifest)}`);
+        return await this.deployNativeQtTarget(ref, manifest, installation, false);
+    }
     async deployQtRuntime(projectRef) {
         const ref = projectRef ?? this.workspaces.activeProjectRef;
         if (!ref?.exists || !(0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
@@ -688,8 +721,15 @@ class QpmBuildService {
                 }
             }
             fs.mkdirSync(deployDirectory, { recursive: true });
-            fs.copyFileSync(buildTargetPath, deployedTargetPath);
+            // Always replace the deployed executable instead of overwriting it in place.
+            // Besides guaranteeing a byte-for-byte copy of the freshly linked target,
+            // this gives Windows Explorer a fresh file identity when PE icon resources change.
+            if (fs.existsSync(deployedTargetPath)) {
+                await this.stopApplicationsForTarget(deployedTargetPath, 'rebuild');
+            }
+            const stagedTarget = (0, qpmDeploymentFileSync_1.stageDeploymentTarget)(buildTargetPath, deployedTargetPath);
             this.output.appendLine(`[Qt/C++] Deployment target: ${deployedTargetPath}`);
+            this.output.appendLine(`[Qt/C++] Deployment binary synchronized: ${stagedTarget.size} bytes, SHA-256 ${stagedTarget.targetHash.slice(0, 16)}...${stagedTarget.replacedExistingTarget ? ' (replaced previous target)' : ''}`);
         }
         catch (error) {
             vscode.window.showErrorMessage(`Unable to prepare the deployment directory: ${error instanceof Error ? error.message : String(error)}`);
@@ -743,9 +783,23 @@ class QpmBuildService {
             }
         }
         args.push(deployedTargetPath);
+        const buildTargetHashBeforeDeploy = process.platform === 'win32' ? (0, qpmDeploymentFileSync_1.sha256File)(buildTargetPath) : undefined;
         const deployed = await this.spawnTool(installation.deployToolPath, args, path.dirname(ref.absolutePath), `Deploy ${path.basename(deployedTargetPath)}`, deploymentEnvironment);
         if (!deployed)
             return false;
+        // windeployqt deploys DLLs/plugins beside the application; it must not replace
+        // the application binary itself. Verify that the PE staged from build/ is still
+        // the exact same binary, then touch it to encourage Explorer to refresh its icon.
+        if (process.platform === 'win32' && buildTargetHashBeforeDeploy) {
+            const deployedHashAfterTool = (0, qpmDeploymentFileSync_1.sha256File)(deployedTargetPath);
+            if (deployedHashAfterTool !== buildTargetHashBeforeDeploy) {
+                this.output.appendLine('[Qt/C++] Standalone deployment check FAILED: windeployqt changed or replaced the application executable.');
+                vscode.window.showErrorMessage('The deployed executable no longer matches the freshly built executable after windeployqt. Open the QPM output for details.');
+                return false;
+            }
+            (0, qpmDeploymentFileSync_1.touchDeploymentTarget)(deployedTargetPath);
+            this.output.appendLine('[Qt/C++] Deployed executable identity verified after windeployqt; Windows icon timestamp refreshed.');
+        }
         const verified = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, false);
         if (verified && announce)
             vscode.window.showInformationMessage(`Standalone Qt deployment ready: ${deployDirectory}`);
@@ -927,11 +981,6 @@ class QpmBuildService {
             this.output.appendLine(`[Qt ${profile.system === 'qmake' ? 'qmake' : 'CMake'}] Project: ${manifest.name}`);
             this.output.appendLine(`[Qt ${profile.system === 'qmake' ? 'qmake' : 'CMake'}] Qt kit: ${installation.label}`);
             const result = await this.qtBackends.build(ref.absolutePath, this.buildMode, installation, rebuild);
-            const deployProfile = (0, qtProjectManifest_1.getActiveQtDeployProfile)(manifest);
-            if (result.success && deployProfile.enabled && deployProfile.buildProfileId === profile.id) {
-                if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
-                    return false;
-            }
             return result.success;
         }
         const plan = (0, qpmQtDirectBuildService_1.createQtDirectBuildPlan)(ref.absolutePath, this.buildMode, installation);
@@ -1080,13 +1129,6 @@ class QpmBuildService {
             return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, 'import library output'))
             return false;
-        const deployProfile = (0, qtProjectManifest_1.getActiveQtDeployProfile)(manifest);
-        if (deployProfile.enabled && deployProfile.buildProfileId === plan.buildProfile.id) {
-            this.logSection('DEPLOYMENT');
-            this.output.appendLine('  Automatic standalone deployment enabled for this build profile.');
-            if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
-                return false;
-        }
         return true;
     }
     async linkArtifacts(ref, targetType, artifacts, files, config) {

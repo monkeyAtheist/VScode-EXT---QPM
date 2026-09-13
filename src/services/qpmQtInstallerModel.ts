@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { QpmBuildMode } from '../model/types';
-import { QtProjectManifest } from '../model/qtProjectManifest';
+import { QtProjectManifest, packageIconPath } from '../model/qtProjectManifest';
 import { QtPackageIdentity, resolveQtPackageIdentity, sanitizePackageName } from './qpmQtPackagingModel';
 
 export interface QtInstallerGeneratedPaths {
@@ -92,7 +92,8 @@ export function renderInnoSetupScript(manifest: QtProjectManifest, identity: QtI
   const installer = manifest.packaging.installer;
   const inno = installer.inno;
   const targetExe = windowsExecutableName(manifest.targetName, manifest.kind);
-  const iconPath = manifest.packaging.icon ? path.resolve(projectRoot, manifest.packaging.icon) : '';
+  const configuredIcon = packageIconPath(manifest);
+  const iconPath = configuredIcon ? path.resolve(projectRoot, configuredIcon) : '';
   const icon = iconPath ? `\nSetupIconFile=${innoEscape(iconPath)}` : '';
   const architecture = inno.architecture === 'x64'
     ? 'ArchitecturesAllowed=x64compatible\nArchitecturesInstallIn64BitMode=x64compatible'

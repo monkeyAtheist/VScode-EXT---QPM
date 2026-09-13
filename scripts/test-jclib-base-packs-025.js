@@ -103,4 +103,4 @@ try {
   fs.rmSync(temp, { recursive: true, force: true });
 }
 
-console.log('QPM 0.33.0 curated integrated pack and migration tests: PASS');
+console.log('QPM 0.34.0 curated integrated pack and migration tests: PASS');

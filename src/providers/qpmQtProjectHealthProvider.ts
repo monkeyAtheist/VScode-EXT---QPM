@@ -12,6 +12,7 @@ import { QpmQtPlatformService } from '../services/qpmQtPlatformService';
 import { QpmQtProfilingService } from '../services/qpmQtProfilingService';
 import { QpmQtInstallerService } from '../services/qpmQtInstallerService';
 import { QpmQtPublicationService } from '../services/qpmQtPublicationService';
+import { validateQtBranding } from '../services/qpmQtBrandingService';
 import { readQtResourceDocument, validateQtResourceDocument } from '../views/qtResourceEditorPanel';
 
 export type QtHealthSeverity = 'ok' | 'info' | 'warning' | 'error';
@@ -295,6 +296,25 @@ Preview runtime: ${installation?.qmlRuntimePath ?? installation?.qmlScenePath ??
         ));
         if (!qmlPreviewReady) items.push(health('qml-preview', 'QML preview', 'Runtime not resolved', 'info', 'Select a Qt kit that provides qml or qmlscene.', 'qpm.qmlPreviewFile'));
       }
+
+      const brandingValidation = validateQtBranding(ref.absolutePath, manifest);
+      const brandingSeverity: QtHealthSeverity = brandingValidation.errors.length > 0 ? 'error' : brandingValidation.warnings.length > 0 ? 'warning' : 'ok';
+      items.push(health(
+        'branding',
+        'Application icons',
+        manifest.branding.executableIcon || manifest.branding.windowIcon
+          ? `Executable ${manifest.branding.executableIcon ? 'configured' : 'default'} · Window ${manifest.branding.windowIcon ? 'configured' : 'default'}`
+          : 'Platform defaults',
+        brandingSeverity,
+        [
+          `Executable icon: ${manifest.branding.executableIcon || 'not configured'}`,
+          `Qt window icon: ${manifest.branding.windowIcon || 'not configured'}`,
+          `Automatic Qt window icon: ${manifest.branding.autoApplyWindowIcon ? 'enabled' : 'disabled'}`,
+          ...brandingValidation.errors.map((entry) => `Error: ${entry}`),
+          ...brandingValidation.warnings.map((entry) => `Warning: ${entry}`)
+        ].join('\n'),
+        'qpm.editBuildSettings'
+      ));
 
       const packaging = manifest.packaging;
       const packagingFiles = [

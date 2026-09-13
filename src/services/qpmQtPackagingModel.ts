@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { QpmBuildMode } from '../model/types';
-import { QtProjectManifest, getActiveQtKitProfile, getActiveQtPlatformProfile, inferQtKitArchitecture } from '../model/qtProjectManifest';
+import { QtProjectManifest, executableIconPath, packageIconPath, getActiveQtKitProfile, getActiveQtPlatformProfile, inferQtKitArchitecture } from '../model/qtProjectManifest';
 
 export interface QtPackagingMetadataPaths {
   root: string;
@@ -54,7 +54,24 @@ export function writeQtPackagingMetadata(manifestPath: string, manifest: QtProje
   writeIfChanged(paths.windowsResource, renderWindowsResourceScript(manifestPath, manifest, paths.windowsManifest));
   writeIfChanged(paths.linuxDesktopEntry, renderLinuxDesktopEntry(manifestPath, manifest));
   const identity = resolveQtPackageIdentity(manifest, mode);
-  writeIfChanged(paths.packageInfo, `${JSON.stringify({ generatedBy: 'Qt Project Manager', schemaVersion: manifest.schemaVersion, project: manifest.name, target: manifest.targetName, ...identity, metadata: manifest.packaging }, null, 2)}\n`);
+  writeIfChanged(paths.packageInfo, `${JSON.stringify({ generatedBy: 'Qt Project Manager', schemaVersion: manifest.schemaVersion, project: manifest.name, target: manifest.targetName, ...identity, metadata: manifest.packaging, branding: manifest.branding }, null, 2)}\n`);
+  return paths;
+}
+
+export function writeQtWindowsBuildResource(manifestPath: string, manifest: QtProjectManifest, includeVersionMetadata: boolean): QtPackagingMetadataPaths {
+  const projectRoot = path.dirname(manifestPath);
+  const configuredIcon = executableIconPath(manifest);
+  if (configuredIcon) {
+    const absoluteIcon = path.isAbsolute(configuredIcon) ? configuredIcon : path.resolve(projectRoot, configuredIcon);
+    if (!fs.existsSync(absoluteIcon)) throw new Error(`Executable icon was not found: ${absoluteIcon}`);
+    if (path.extname(absoluteIcon).toLowerCase() !== '.ico') {
+      throw new Error(`Windows executable icon must be an .ico file: ${configuredIcon}`);
+    }
+  }
+  const paths = packagingMetadataPaths(manifestPath);
+  fs.mkdirSync(path.dirname(paths.windowsManifest), { recursive: true });
+  writeIfChanged(paths.windowsManifest, renderWindowsApplicationManifest(manifest));
+  writeIfChanged(paths.windowsResource, renderWindowsResourceScript(manifestPath, manifest, paths.windowsManifest, includeVersionMetadata));
   return paths;
 }
 
@@ -65,14 +82,24 @@ export function renderWindowsApplicationManifest(manifest: QtProjectManifest): s
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">\n  <assemblyIdentity version="${xmlEscape(normalizeFourPartVersion(manifest.packaging.productVersion))}" processorArchitecture="*" name="${xmlEscape(manifest.packaging.identifier)}" type="win32"/>\n  <description>${xmlEscape(manifest.packaging.description)}</description>\n  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">\n    <security><requestedPrivileges><requestedExecutionLevel level="${level}" uiAccess="false"/></requestedPrivileges></security>\n  </trustInfo>\n  <application xmlns="urn:schemas-microsoft-com:asm.v3"><windowsSettings><dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">${dpiValue}</dpiAwareness><longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware></windowsSettings></application>\n  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1"><application><supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/></application></compatibility>\n</assembly>\n`;
 }
 
-export function renderWindowsResourceScript(manifestPath: string, manifest: QtProjectManifest, generatedManifestPath: string): string {
+export function renderWindowsResourceScript(manifestPath: string, manifest: QtProjectManifest, generatedManifestPath: string, includeVersionMetadata = true): string {
   const projectRoot = path.dirname(manifestPath);
-  const icon = manifest.packaging.icon ? path.resolve(projectRoot, manifest.packaging.icon) : '';
+  const configuredIcon = executableIconPath(manifest);
+  const icon = configuredIcon ? path.resolve(projectRoot, configuredIcon) : '';
   const customManifest = manifest.packaging.windows.manifestFile ? path.resolve(projectRoot, manifest.packaging.windows.manifestFile) : generatedManifestPath;
   const numericVersion = normalizeFourPartVersion(manifest.packaging.productVersion).replace(/\./g, ',');
   const stringVersion = manifest.packaging.productVersion;
   const p = manifest.packaging;
   const w = p.windows;
+  if (!includeVersionMetadata) {
+    const iconOnly = [
+      '#include <windows.h>',
+      '',
+      icon ? `IDI_QPM_APP ICON "${rcPath(icon)}"` : '',
+      ''
+    ].filter((line, index, values) => line !== '' || (index > 0 && values[index - 1] !== ''));
+    return `${iconOnly.join('\n')}\n`;
+  }
   const lines = [
     '#include <windows.h>',
     '',
@@ -117,7 +144,8 @@ export function renderWindowsResourceScript(manifestPath: string, manifest: QtPr
 
 export function renderLinuxDesktopEntry(manifestPath: string, manifest: QtProjectManifest): string {
   const projectRoot = path.dirname(manifestPath);
-  const icon = manifest.packaging.icon ? path.resolve(projectRoot, manifest.packaging.icon) : manifest.packaging.linux.appId;
+  const configuredIcon = packageIconPath(manifest);
+  const icon = configuredIcon ? path.resolve(projectRoot, configuredIcon) : manifest.packaging.linux.appId;
   return `[Desktop Entry]\nType=Application\nVersion=1.0\nName=${desktopEscape(manifest.packaging.productName)}\nComment=${desktopEscape(manifest.packaging.linux.comment || manifest.packaging.description)}\nExec=${desktopEscape(manifest.targetName)}\nIcon=${desktopEscape(icon)}\nTerminal=${manifest.kind === 'console-application' ? 'true' : 'false'}\nCategories=${manifest.packaging.linux.categories.map((entry) => entry.replace(/;/g, '')).join(';')};\nStartupWMClass=${desktopEscape(manifest.targetName)}\nX-QPM-AppId=${desktopEscape(manifest.packaging.linux.appId)}\n`;
 }
 

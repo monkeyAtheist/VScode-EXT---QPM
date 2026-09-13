@@ -1,3 +1,15 @@
+## QPM 0.34.2 — Reliable automatic standalone deployment
+
+QPM now runs standalone deployment from one centralized post-build stage shared by Direct, qmake and CMake. When **Run deployment tool after build** is enabled for the selected build profile, deleting `dist/` and rebuilding recreates the deployment tree automatically. The settings page also exposes the build profile associated with automatic deployment.
+
+The 0.34.2 test VSIX also restores the runtime dependencies required by the unbundled `out/` entry point, fixing the activation failure seen in 0.34.1.
+
+## QPM 0.34.1 — Application icon deployment fix
+
+QPM now treats the icon embedded in a Windows executable and the icon displayed by Qt windows as two independent application-branding resources. In **Project > Application icons**, `Executable icon` accepts a Windows `.ico` file and is linked into the executable resource, while `Qt window / application icon` is embedded in a generated QRC and applied as the default Qt window icon for native C++ GUI targets.
+
+The package/installer icon remains independently configurable under Distribution and acts as an override; if left empty, it reuses the executable icon. QPM-generated Direct, qmake and CMake projects integrate these resources automatically. Existing external/custom `.pro` or `CMakeLists.txt` files remain user-owned and are not rewritten silently.
+
 ### QPM 0.33.0 — Thematic project settings
 
 The Qt Project Settings editor is now organized by task instead of exposing every project option in one long page. Ten thematic pages — **Overview**, **Project**, **Build**, **Run & Deploy**, **Debug & Diagnostics**, **Qt & Languages**, **Platforms**, **Tests & Quality**, **Dependencies** and **Distribution** — are available from a persistent page bar. **Jump to a section** only lists sections from the active page, and filtering is scoped to that page.

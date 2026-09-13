@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 
 const templatesSource = read('src/services/qpmTemplateService.ts');
 assert(templatesSource.includes("label: 'Custom Painted Widget (QPainter)'"), 'Qt creation menu must expose custom painted widgets');

@@ -6,7 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'src', 'views', 'qtProjectSettingsPanel.ts'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 
 const expectedPages = ['overview','project','build','run','debug','qt','platforms','quality','dependencies','distribution'];
 for (const id of expectedPages) assert(source.includes(`{ id: '${id}'`), `missing settings page ${id}`);
@@ -18,8 +18,9 @@ assert(source.includes('Filter settings on this page…'), 'page-local filter la
 assert(!source.includes('<option value="section-control">Control center</option>'), 'legacy global section list must be removed');
 
 const sections = [...source.matchAll(/<section id="([^"]+)" data-settings-section data-settings-page="([^"]+)" data-settings-title="([^"]+)"/g)];
-assert.strictEqual(sections.length, 22, `expected 22 settings sections, got ${sections.length}`);
+assert.strictEqual(sections.length, 23, `expected 23 settings sections, got ${sections.length}`);
 for (const [, sectionId, page] of sections) assert(expectedPages.includes(page), `${sectionId} uses unknown page ${page}`);
+assert(sections.some(([, sectionId, page]) => sectionId === 'section-branding' && page === 'project'), 'Application icons section must live on Project page');
 
 assert(source.includes("'Debug'} compiler & linker settings"), 'debug compiler/linker title missing');
 assert(source.includes('<h3>Linkage</h3>'), 'linkage subsection missing');
@@ -98,4 +99,4 @@ const scriptMatch = renderedHtml.match(/<script nonce="[^"]+">([\s\S]*?)<\/scrip
 assert(scriptMatch, 'rendered settings script missing');
 assert.doesNotThrow(() => new Function(scriptMatch[1]), 'rendered settings webview script must be syntactically valid');
 
-console.log('QPM 0.33.0 thematic settings pages and settings audit: PASS');
+console.log('QPM 0.34.0 thematic settings pages and settings audit: PASS');

@@ -203,7 +203,7 @@ class QpmQtPackagingService {
             issues.push({ severity: 'error', message: 'Product version must use semantic form such as 1.2.3.' });
         if (!manifest.packaging.identifier.includes('.'))
             issues.push({ severity: 'warning', message: 'Application identifier should use reverse-DNS form, for example com.company.product.' });
-        for (const [label, entry] of [['icon', manifest.packaging.icon], ['license', manifest.packaging.licenseFile], ['readme', manifest.packaging.readmeFile]]) {
+        for (const [label, entry] of [['icon', (0, qtProjectManifest_1.packageIconPath)(manifest)], ['license', manifest.packaging.licenseFile], ['readme', manifest.packaging.readmeFile]]) {
             if (entry && !fs.existsSync(path.resolve(root, entry)))
                 issues.push({ severity: 'warning', message: `${label} file not found: ${entry}` });
         }

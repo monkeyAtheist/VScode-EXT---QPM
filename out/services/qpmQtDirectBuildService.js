@@ -50,6 +50,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
+const qpmQtBrandingService_1 = require("./qpmQtBrandingService");
 const qpmQtModuleInference_1 = require("./qpmQtModuleInference");
 const qpmQtDependencyModel_1 = require("./qpmQtDependencyModel");
 const qpmQtLinkage_1 = require("./qpmQtLinkage");
@@ -172,8 +173,21 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
             generatedSourceFiles.push(outputPath);
         }
     }
-    if (process.platform === 'win32' && manifest.packaging.enabled && manifest.packaging.windows.embedVersionResource && manifest.kind !== 'static-library') {
-        const metadata = (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(manifestPath, manifest, mode);
+    const brandingArtifacts = (0, qpmQtBrandingService_1.writeQtBrandingArtifacts)(manifestPath, manifest);
+    if (brandingArtifacts.windowStartupSource && brandingArtifacts.windowResource) {
+        generatedSourceFiles.push(brandingArtifacts.windowStartupSource);
+        const outputPath = reserveGeneratedPath(generatedDirectory, 'qrc_qpm_branding.cpp', brandingArtifacts.windowResource, usedGeneratedNames, true);
+        generationSteps.push({
+            kind: 'rcc', inputPath: brandingArtifacts.windowResource, outputPath, toolPath: installation.rccPath,
+            arguments: ['-name', 'qpm_branding', brandingArtifacts.windowResource, '-o', outputPath], compileOutput: true,
+            dependencies: brandingArtifacts.windowIconCopy ? [brandingArtifacts.windowIconCopy] : []
+        });
+        generatedSourceFiles.push(outputPath);
+    }
+    const includeWindowsMetadata = manifest.packaging.enabled && manifest.packaging.windows.embedVersionResource;
+    const needsWindowsResource = process.platform === 'win32' && manifest.kind !== 'static-library' && (includeWindowsMetadata || !!(0, qtProjectManifest_1.executableIconPath)(manifest));
+    if (needsWindowsResource) {
+        const metadata = (0, qpmQtPackagingModel_1.writeQtWindowsBuildResource)(manifestPath, manifest, includeWindowsMetadata);
         const configuredWindres = manifest.packaging.windows.resourceCompilerPath
             ? path.resolve(projectDirectory, manifest.packaging.windows.resourceCompilerPath)
             : undefined;
@@ -183,8 +197,9 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         if (windresPath) {
             const outputPath = path.join(objectDirectory, 'qpm_product_metadata.o');
             const dependencies = [metadata.windowsManifest];
-            if (manifest.packaging.icon)
-                dependencies.push(path.resolve(projectDirectory, manifest.packaging.icon));
+            const configuredExecutableIcon = (0, qtProjectManifest_1.executableIconPath)(manifest);
+            if (configuredExecutableIcon)
+                dependencies.push(path.resolve(projectDirectory, configuredExecutableIcon));
             if (manifest.packaging.windows.manifestFile)
                 dependencies.push(path.resolve(projectDirectory, manifest.packaging.windows.manifestFile));
             generationSteps.push({
@@ -194,7 +209,7 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
             additionalObjectFiles.push(outputPath);
         }
         else {
-            warnings.push('Windows product metadata is enabled, but windres was not found beside the selected MinGW compiler. The package metadata files were generated, but they will not be embedded in the executable.');
+            warnings.push('Windows executable resources are enabled, but windres was not found beside the selected MinGW compiler. The generated icon/version resources will not be embedded in the executable.');
         }
     }
     if (buildProfile.autoMoc) {

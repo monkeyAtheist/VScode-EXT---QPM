@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Qt Project Manager native project (schema v18)",
+  "title": "Qt Project Manager native project (schema v19)",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -17,6 +17,7 @@
     "dependencies",
     "python",
     "qml",
+    "branding",
     "packaging",
     "publication"
   ],
@@ -24,7 +25,7 @@
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 18
+      "const": 19
     },
     "name": {
       "type": "string",
@@ -503,6 +504,30 @@
         "coverageBuildProfileId": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executableIcon",
+        "windowIcon",
+        "autoApplyWindowIcon"
+      ],
+      "properties": {
+        "executableIcon": {
+          "type": "string",
+          "description": "Project-relative icon embedded in the native executable. Use .ico on Windows."
+        },
+        "windowIcon": {
+          "type": "string",
+          "description": "Project-relative image embedded as the default Qt window/application icon."
+        },
+        "autoApplyWindowIcon": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generate QPM branding resources that call QGuiApplication::setWindowIcon for supported native GUI applications."
         }
       }
     },

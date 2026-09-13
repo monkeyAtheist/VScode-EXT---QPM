@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 
 const commandIds = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const command of [
@@ -31,7 +31,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-dependency-managers-0170
 try {
   const manifestPath = path.join(temp, 'DependencyApp.qtproject.json');
   const manifest = model.createDefaultQtProjectManifest('DependencyApp', 'widgets-application');
-  assert.strictEqual(manifest.schemaVersion, 18);
+  assert.strictEqual(manifest.schemaVersion, 19);
   assert.strictEqual(manifest.dependencies.enabled, false);
   assert.strictEqual(manifest.dependencies.autoInstallBeforeBuild, false);
   assert.strictEqual(manifest.dependencies.outputDirectory, '.qpm/dependencies');
@@ -67,12 +67,12 @@ try {
   fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
   assert.strictEqual(model.migrateQtProjectManifestFile(legacyPath), true);
   const migrated = model.readQtProjectManifest(legacyPath);
-  assert.strictEqual(migrated.schemaVersion, 18);
+  assert.strictEqual(migrated.schemaVersion, 19);
   assert.strictEqual(migrated.dependencies.enabled, false);
   assert(fs.existsSync(`${legacyPath}.schema-v16.backup`));
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 18);
+  assert.strictEqual(schema.properties.schemaVersion.const, 19);
   assert(schema.required.includes('dependencies'));
   assert(schema.properties.dependencies.properties.vcpkg);
   assert(schema.properties.dependencies.properties.conan);

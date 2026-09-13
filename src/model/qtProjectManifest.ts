@@ -3,7 +3,7 @@ import * as path from 'path';
 import { QpmBuildMode, QpmProject, QpmProjectFile, QpmWorkspace } from './types';
 
 export const QT_PROJECT_SUFFIX = '.qtproject.json';
-export const QT_PROJECT_SCHEMA_VERSION = 18;
+export const QT_PROJECT_SCHEMA_VERSION = 19;
 
 export type QtProjectKind = 'widgets-application' | 'console-application' | 'quick-application' | 'test-application' | 'quick-test-application' | 'shared-library' | 'static-library' | 'python-widgets-application' | 'python-quick-application';
 export type QtProjectLanguage = 'cpp' | 'python';
@@ -259,6 +259,12 @@ export type QtInnoArchitecture = 'x86' | 'x64' | 'x86-x64';
 export type QtNsisExecutionLevel = 'user' | 'highest' | 'admin';
 export type QtNsisCompressor = 'lzma' | 'zlib' | 'bzip2';
 export type QtSigningDigest = 'sha256' | 'sha384' | 'sha512';
+
+export interface QtBrandingConfiguration {
+  executableIcon: string;
+  windowIcon: string;
+  autoApplyWindowIcon: boolean;
+}
 
 export interface QtPackagingConfiguration {
   enabled: boolean;
@@ -662,6 +668,7 @@ export interface QtProjectManifest {
   qml: QtQmlConfiguration;
   python: QtPythonConfiguration;
   dependencies: QtDependenciesConfiguration;
+  branding: QtBrandingConfiguration;
   packaging: QtPackagingConfiguration;
   publication: QtPublicationConfiguration;
   files: QtProjectFiles;
@@ -719,6 +726,7 @@ export function createDefaultQtProjectManifest(name: string, kind: QtProjectKind
     qml: defaultQmlConfiguration(name, kind),
     python: defaultPythonConfiguration(kind),
     dependencies: defaultDependenciesConfiguration(),
+    branding: defaultBrandingConfiguration(),
     packaging: defaultPackagingConfiguration(name),
     publication: defaultPublicationConfiguration(name),
     files: {
@@ -800,6 +808,14 @@ export function validateAndNormalizeManifest(raw: unknown, manifestPath = '<memo
       linkerFlags: normalizeStringArray(releaseValue.linkerFlags)
     }
   };
+  const normalizedPackaging = normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name);
+  const hasBrandingObject = !!value.branding && typeof value.branding === 'object' && !Array.isArray(value.branding);
+  const legacyProductIcon = normalizedPackaging.icon;
+  const normalizedBranding = normalizeBrandingConfiguration(value.branding, legacyProductIcon);
+  // Schema <=18 used packaging.icon for both the executable and package identity.
+  // Move that value to branding.executableIcon so packaging can fall back to it without
+  // keeping two independently editable copies of the same legacy setting.
+  if (!hasBrandingObject && legacyProductIcon) normalizedPackaging.icon = '';
   const normalized: QtProjectManifest = {
     schemaVersion: QT_PROJECT_SCHEMA_VERSION,
     name,
@@ -814,8 +830,9 @@ export function validateAndNormalizeManifest(raw: unknown, manifestPath = '<memo
     qml: normalizeQmlConfiguration(value.qml, name, kind),
     python: normalizePythonConfiguration(value.python, kind),
     dependencies: normalizeDependenciesConfiguration(value.dependencies),
-    packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name),
-    publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name)),
+    branding: normalizedBranding,
+    packaging: normalizedPackaging,
+    publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizedPackaging),
     files,
     includeDirectories: normalizeStringArray(value.includeDirectories),
     libraryDirectories: normalizeStringArray(value.libraryDirectories),
@@ -1981,6 +1998,37 @@ function normalizeQmlModuleVersion(value: string): string {
 function normalizeQmlResourcePrefix(value: string): string {
   const normalized = value.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
   return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
+}
+
+function defaultBrandingConfiguration(): QtBrandingConfiguration {
+  return {
+    executableIcon: '',
+    windowIcon: '',
+    autoApplyWindowIcon: true
+  };
+}
+
+function normalizeBrandingConfiguration(raw: unknown, legacyPackagingIcon = ''): QtBrandingConfiguration {
+  const fallback = defaultBrandingConfiguration();
+  const value = objectValue(raw);
+  return {
+    executableIcon: optionalString(value.executableIcon) || legacyPackagingIcon,
+    windowIcon: optionalString(value.windowIcon),
+    autoApplyWindowIcon: booleanValue(value.autoApplyWindowIcon, fallback.autoApplyWindowIcon)
+  };
+}
+
+export function executableIconPath(manifest: QtProjectManifest): string {
+  return manifest.branding.executableIcon || manifest.packaging.icon;
+}
+
+export function packageIconPath(manifest: QtProjectManifest): string {
+  return manifest.packaging.icon || manifest.branding.executableIcon;
+}
+
+export function hasManagedWindowIcon(manifest: QtProjectManifest): boolean {
+  if (!manifest.branding.autoApplyWindowIcon || !manifest.branding.windowIcon) return false;
+  return manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
 }
 
 function defaultPackagingConfiguration(name: string): QtPackagingConfiguration {

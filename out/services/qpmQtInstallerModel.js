@@ -43,6 +43,7 @@ exports.renderNsisScript = renderNsisScript;
 exports.sanitizeComponentId = sanitizeComponentId;
 exports.normalizeNsisVersion = normalizeNsisVersion;
 const path = __importStar(require("path"));
+const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtPackagingModel_1 = require("./qpmQtPackagingModel");
 function installerGeneratedPaths(manifestPath, componentId) {
     const root = path.join(path.dirname(manifestPath), '.qpm', 'installer', 'generated');
@@ -111,7 +112,8 @@ function renderInnoSetupScript(manifest, identity, projectRoot, stageDirectory, 
     const installer = manifest.packaging.installer;
     const inno = installer.inno;
     const targetExe = windowsExecutableName(manifest.targetName, manifest.kind);
-    const iconPath = manifest.packaging.icon ? path.resolve(projectRoot, manifest.packaging.icon) : '';
+    const configuredIcon = (0, qtProjectManifest_1.packageIconPath)(manifest);
+    const iconPath = configuredIcon ? path.resolve(projectRoot, configuredIcon) : '';
     const icon = iconPath ? `\nSetupIconFile=${innoEscape(iconPath)}` : '';
     const architecture = inno.architecture === 'x64'
         ? 'ArchitecturesAllowed=x64compatible\nArchitecturesInstallIn64BitMode=x64compatible'

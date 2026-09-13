@@ -20,7 +20,7 @@ try {
   assert.strictEqual(model.migrateQtProjectManifestFile(manifestPath), true);
   assert(fs.existsSync(`${manifestPath}.schema-v1.backup`));
   const migrated = model.readQtProjectManifest(manifestPath);
-  assert.strictEqual(migrated.schemaVersion, 18);
+  assert.strictEqual(migrated.schemaVersion, 19);
   assert.strictEqual(migrated.profiles.kits.length, 1);
   assert.strictEqual(migrated.profiles.builds.length, 2);
   assert.strictEqual(model.getQtInstallationPreference(migrated), 'C:/Qt/6.11/mingw_64');

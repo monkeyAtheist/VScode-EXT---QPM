@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 
 const commands = new Set(pkg.contributes.commands.map((entry) => entry.command));
 const pythonCommands = [
@@ -37,7 +37,7 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-python-0160-'));
 try {
   const widgetsPath = path.join(temp, 'PySideWidgetsApp.qtproject.json');
   const widgets = model.createDefaultQtProjectManifest('PySideWidgetsApp', 'python-widgets-application');
-  assert.strictEqual(widgets.schemaVersion, 18);
+  assert.strictEqual(widgets.schemaVersion, 19);
   assert.strictEqual(widgets.kind, 'python-widgets-application');
   assert.strictEqual(model.isQtPythonProject(widgets), true);
   assert.strictEqual(model.qtProjectLanguage(widgets), 'python');
@@ -56,7 +56,7 @@ try {
   assert.strictEqual(model.readQtProjectManifest(widgetsPath).python.binding, 'pyside6');
 
   const quick = model.createDefaultQtProjectManifest('PySideQuickApp', 'python-quick-application');
-  assert.strictEqual(quick.schemaVersion, 18);
+  assert.strictEqual(quick.schemaVersion, 19);
   assert.strictEqual(quick.kind, 'python-quick-application');
   assert.strictEqual(quick.python.enabled, true);
   assert.strictEqual(quick.qml.languageServer.enabled, true);
@@ -71,14 +71,14 @@ try {
   fs.writeFileSync(legacyPath, JSON.stringify(legacy, null, 2));
   assert.strictEqual(model.migrateQtProjectManifestFile(legacyPath), true);
   const migrated = model.readQtProjectManifest(legacyPath);
-  assert.strictEqual(migrated.schemaVersion, 18);
+  assert.strictEqual(migrated.schemaVersion, 19);
   assert.strictEqual(migrated.python.enabled, false);
   assert.strictEqual(migrated.python.binding, 'pyside6');
   assert(Array.isArray(migrated.files.python));
   assert(fs.existsSync(`${legacyPath}.schema-v15.backup`));
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 18);
+  assert.strictEqual(schema.properties.schemaVersion.const, 19);
   assert(schema.required.includes('python'));
   assert(schema.properties.kind.enum.includes('python-widgets-application'));
   assert(schema.properties.kind.enum.includes('python-quick-application'));

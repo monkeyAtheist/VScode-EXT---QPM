@@ -7,7 +7,7 @@ const Module = require('module');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 const commandIds = new Set(pkg.contributes.commands.map((entry) => entry.command));
 for (const id of [
   'qpm.configureAndroidEnvironment','qpm.refreshAndroidDevices','qpm.selectAndroidDevice','qpm.selectAndroidAvd',
@@ -51,7 +51,7 @@ try {
   const model = require('../out/model/qtProjectManifest');
   const android = require('../out/services/qpmQtAndroidService');
   const manifest = model.createDefaultQtProjectManifest('AndroidApp', 'quick-application');
-  assert.strictEqual(manifest.schemaVersion, 18);
+  assert.strictEqual(manifest.schemaVersion, 19);
   const base = JSON.parse(JSON.stringify(manifest.profiles.platforms[0]));
   Object.assign(base, {
     id: 'android-platform', name: 'Android', type: 'android', buildLocation: 'local',
@@ -139,7 +139,7 @@ try {
   service.dispose();
 
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'schemas', 'qtproject.schema.json'), 'utf8'));
-  assert.strictEqual(schema.properties.schemaVersion.const, 18);
+  assert.strictEqual(schema.properties.schemaVersion.const, 19);
   assert(schema.$defs.platformProfile.properties.type.enum.includes('android'));
   for (const key of ['androidSdkRoot','androidAbis','androidCompileSdk','androidPackageName','androidPackageFormat','androidDeviceSerial','androidKeystore']) {
     assert(schema.$defs.platformProfile.properties[key], `schema property ${key} missing`);

@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 
-assert.strictEqual(pkg.version, '0.33.0');
+assert.strictEqual(pkg.version, '0.34.2');
 
 const tree = read('src/providers/qpmTreeProvider.ts');
 assert(tree.includes("label: 'Generated Files'"), 'workspace tree must expose a Generated Files group');

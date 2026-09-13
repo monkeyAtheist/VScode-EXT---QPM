@@ -1,3 +1,32 @@
+## 0.34.2 — Deployment recreation and VSIX activation fix
+
+- Fixes the test VSIX packaging regression introduced in 0.34.1: runtime dependencies required by the unbundled `out/` build are included again, so the extension activates normally.
+- Centralizes automatic standalone deployment after a successful native Qt build and after post-build actions for Direct, qmake and CMake backends.
+- Ensures a deleted `dist/` tree is recreated on the next matching build when automatic deployment is enabled.
+- Adds an explicit **Automatic deployment build profile** selector in Project Settings so the profile association is no longer hidden.
+- Adds clear output diagnostics when automatic deployment is enabled but assigned to another build profile.
+- Keeps the 0.34.1 executable staging/hash verification behavior.
+
+## 0.34.1 — Reliable executable icon synchronization in `dist`
+
+- Fixes standalone deployments where the freshly linked executable displayed the configured Windows icon in `build/<configuration>` while Explorer could continue showing the previous icon for `dist/<configuration>`.
+- Replaces the deployed target file atomically instead of overwriting an existing executable in place, giving Windows a fresh file identity when PE resources such as the application icon change.
+- Verifies the staged executable byte-for-byte with SHA-256 before running `windeployqt`.
+- On Windows, verifies again after `windeployqt` that the tool did not replace or modify the application executable, then refreshes its modification timestamp to help Explorer invalidate stale icon metadata.
+- Stops a running deployed target before replacement even when full deployment-directory cleaning is disabled.
+- Adds regression coverage in `scripts/test-qt-deployment-binary-sync-0341.js`.
+
+## 0.34.0 — Independent executable and Qt window icons
+
+- Added **Project > Application icons** with separate file browsers for the native executable icon and the Qt window/application icon.
+- Added `branding.executableIcon` for the Windows PE executable icon. QPM generates/links the Windows `.rc` resource independently from package metadata for Direct, generated qmake and generated CMake backends.
+- Added `branding.windowIcon` and `branding.autoApplyWindowIcon`. Native C++ GUI projects embed the selected image in a generated QRC and QPM applies it as the default `QGuiApplication` window icon without modifying the user's `main.cpp`.
+- Explicit per-window icons remain authoritative: generated branding only fills windows that do not already define their own icon.
+- The package/installer icon is now an optional override. When empty, packaging and installer workflows reuse the executable icon.
+- Added schema **v19** migration: the legacy `packaging.icon` value is migrated to `branding.executableIcon` for older projects while preserving effective packaging behavior.
+- Added icon validation to Project Health, including missing files, invalid Windows executable-icon formats and SVG/QtSvg guidance.
+- Added `scripts/test-qt-application-icons-0340.js` and extended the settings audit to 23 sections.
+
 ## 0.33.0 — Thematic project-settings pages and complete settings UX audit
 
 - Replaces the single 22-section scrolling settings form with ten thematic pages: Overview, Project, Build, Run & Deploy, Debug & Diagnostics, Qt & Languages, Platforms, Tests & Quality, Dependencies and Distribution.

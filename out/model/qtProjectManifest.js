@@ -72,10 +72,13 @@ exports.isReleaseBuildMode = isReleaseBuildMode;
 exports.defaultModulesForKind = defaultModulesForKind;
 exports.isQtPythonProject = isQtPythonProject;
 exports.qtProjectLanguage = qtProjectLanguage;
+exports.executableIconPath = executableIconPath;
+exports.packageIconPath = packageIconPath;
+exports.hasManagedWindowIcon = hasManagedWindowIcon;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 exports.QT_PROJECT_SUFFIX = '.qtproject.json';
-exports.QT_PROJECT_SCHEMA_VERSION = 18;
+exports.QT_PROJECT_SCHEMA_VERSION = 19;
 const FILE_KEYS = ['sources', 'headers', 'forms', 'resources', 'qml', 'python', 'translations', 'other'];
 function isQtProjectManifestPath(filePath) {
     return filePath.toLowerCase().endsWith(exports.QT_PROJECT_SUFFIX);
@@ -111,6 +114,7 @@ function createDefaultQtProjectManifest(name, kind, modules) {
         qml: defaultQmlConfiguration(name, kind),
         python: defaultPythonConfiguration(kind),
         dependencies: defaultDependenciesConfiguration(),
+        branding: defaultBrandingConfiguration(),
         packaging: defaultPackagingConfiguration(name),
         publication: defaultPublicationConfiguration(name),
         files: {
@@ -189,6 +193,15 @@ function validateAndNormalizeManifest(raw, manifestPath = '<memory>') {
             linkerFlags: normalizeStringArray(releaseValue.linkerFlags)
         }
     };
+    const normalizedPackaging = normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name);
+    const hasBrandingObject = !!value.branding && typeof value.branding === 'object' && !Array.isArray(value.branding);
+    const legacyProductIcon = normalizedPackaging.icon;
+    const normalizedBranding = normalizeBrandingConfiguration(value.branding, legacyProductIcon);
+    // Schema <=18 used packaging.icon for both the executable and package identity.
+    // Move that value to branding.executableIcon so packaging can fall back to it without
+    // keeping two independently editable copies of the same legacy setting.
+    if (!hasBrandingObject && legacyProductIcon)
+        normalizedPackaging.icon = '';
     const normalized = {
         schemaVersion: exports.QT_PROJECT_SCHEMA_VERSION,
         name,
@@ -203,8 +216,9 @@ function validateAndNormalizeManifest(raw, manifestPath = '<memory>') {
         qml: normalizeQmlConfiguration(value.qml, name, kind),
         python: normalizePythonConfiguration(value.python, kind),
         dependencies: normalizeDependenciesConfiguration(value.dependencies),
-        packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name),
-        publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === 'string' ? value.targetName : name)),
+        branding: normalizedBranding,
+        packaging: normalizedPackaging,
+        publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === 'string' ? value.targetName : name, normalizedPackaging),
         files,
         includeDirectories: normalizeStringArray(value.includeDirectories),
         libraryDirectories: normalizeStringArray(value.libraryDirectories),
@@ -1345,6 +1359,33 @@ function normalizeQmlModuleVersion(value) {
 function normalizeQmlResourcePrefix(value) {
     const normalized = value.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
     return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
+}
+function defaultBrandingConfiguration() {
+    return {
+        executableIcon: '',
+        windowIcon: '',
+        autoApplyWindowIcon: true
+    };
+}
+function normalizeBrandingConfiguration(raw, legacyPackagingIcon = '') {
+    const fallback = defaultBrandingConfiguration();
+    const value = objectValue(raw);
+    return {
+        executableIcon: optionalString(value.executableIcon) || legacyPackagingIcon,
+        windowIcon: optionalString(value.windowIcon),
+        autoApplyWindowIcon: booleanValue(value.autoApplyWindowIcon, fallback.autoApplyWindowIcon)
+    };
+}
+function executableIconPath(manifest) {
+    return manifest.branding.executableIcon || manifest.packaging.icon;
+}
+function packageIconPath(manifest) {
+    return manifest.packaging.icon || manifest.branding.executableIcon;
+}
+function hasManagedWindowIcon(manifest) {
+    if (!manifest.branding.autoApplyWindowIcon || !manifest.branding.windowIcon)
+        return false;
+    return manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
 }
 function defaultPackagingConfiguration(name) {
     return {

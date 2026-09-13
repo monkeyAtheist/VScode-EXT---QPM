@@ -131,4 +131,4 @@ for (const [fileName, expectedRoot] of Object.entries(canonicalDataRoots)) {
   }
 }
 
-console.log('QPM 0.33.0 curated embedded JC Lib hierarchy tests: PASS');
+console.log('QPM 0.34.0 curated embedded JC Lib hierarchy tests: PASS');

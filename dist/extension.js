@@ -1887,10 +1887,13 @@ var require_qtProjectManifest = __commonJS({
     exports2.defaultModulesForKind = defaultModulesForKind;
     exports2.isQtPythonProject = isQtPythonProject;
     exports2.qtProjectLanguage = qtProjectLanguage;
+    exports2.executableIconPath = executableIconPath;
+    exports2.packageIconPath = packageIconPath;
+    exports2.hasManagedWindowIcon = hasManagedWindowIcon;
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
     exports2.QT_PROJECT_SUFFIX = ".qtproject.json";
-    exports2.QT_PROJECT_SCHEMA_VERSION = 18;
+    exports2.QT_PROJECT_SCHEMA_VERSION = 19;
     var FILE_KEYS = ["sources", "headers", "forms", "resources", "qml", "python", "translations", "other"];
     function isQtProjectManifestPath(filePath) {
       return filePath.toLowerCase().endsWith(exports2.QT_PROJECT_SUFFIX);
@@ -1926,6 +1929,7 @@ var require_qtProjectManifest = __commonJS({
         qml: defaultQmlConfiguration(name, kind),
         python: defaultPythonConfiguration(kind),
         dependencies: defaultDependenciesConfiguration(),
+        branding: defaultBrandingConfiguration(),
         packaging: defaultPackagingConfiguration(name),
         publication: defaultPublicationConfiguration(name),
         files: {
@@ -2012,6 +2016,12 @@ var require_qtProjectManifest = __commonJS({
           linkerFlags: normalizeStringArray(releaseValue.linkerFlags)
         }
       };
+      const normalizedPackaging = normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === "string" ? value.targetName : name);
+      const hasBrandingObject = !!value.branding && typeof value.branding === "object" && !Array.isArray(value.branding);
+      const legacyProductIcon = normalizedPackaging.icon;
+      const normalizedBranding = normalizeBrandingConfiguration(value.branding, legacyProductIcon);
+      if (!hasBrandingObject && legacyProductIcon)
+        normalizedPackaging.icon = "";
       const normalized = {
         schemaVersion: exports2.QT_PROJECT_SCHEMA_VERSION,
         name,
@@ -2026,8 +2036,9 @@ var require_qtProjectManifest = __commonJS({
         qml: normalizeQmlConfiguration(value.qml, name, kind),
         python: normalizePythonConfiguration(value.python, kind),
         dependencies: normalizeDependenciesConfiguration(value.dependencies),
-        packaging: normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === "string" ? value.targetName : name),
-        publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === "string" ? value.targetName : name, normalizePackagingConfiguration(value.packaging, name, typeof value.targetName === "string" ? value.targetName : name)),
+        branding: normalizedBranding,
+        packaging: normalizedPackaging,
+        publication: normalizePublicationConfiguration(value.publication, name, typeof value.targetName === "string" ? value.targetName : name, normalizedPackaging),
         files,
         includeDirectories: normalizeStringArray(value.includeDirectories),
         libraryDirectories: normalizeStringArray(value.libraryDirectories),
@@ -3199,6 +3210,33 @@ var require_qtProjectManifest = __commonJS({
     function normalizeQmlResourcePrefix(value) {
       const normalized = value.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
       return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
+    }
+    function defaultBrandingConfiguration() {
+      return {
+        executableIcon: "",
+        windowIcon: "",
+        autoApplyWindowIcon: true
+      };
+    }
+    function normalizeBrandingConfiguration(raw, legacyPackagingIcon = "") {
+      const fallback = defaultBrandingConfiguration();
+      const value = objectValue(raw);
+      return {
+        executableIcon: optionalString(value.executableIcon) || legacyPackagingIcon,
+        windowIcon: optionalString(value.windowIcon),
+        autoApplyWindowIcon: booleanValue(value.autoApplyWindowIcon, fallback.autoApplyWindowIcon)
+      };
+    }
+    function executableIconPath(manifest) {
+      return manifest.branding.executableIcon || manifest.packaging.icon;
+    }
+    function packageIconPath(manifest) {
+      return manifest.packaging.icon || manifest.branding.executableIcon;
+    }
+    function hasManagedWindowIcon(manifest) {
+      if (!manifest.branding.autoApplyWindowIcon || !manifest.branding.windowIcon)
+        return false;
+      return manifest.kind === "widgets-application" || manifest.kind === "quick-application" || manifest.kind === "quick-test-application";
     }
     function defaultPackagingConfiguration(name) {
       return {
@@ -4774,6 +4812,7 @@ var require_qpmQtPackagingModel = __commonJS({
     exports2.packagingMetadataPaths = packagingMetadataPaths;
     exports2.resolveQtPackageIdentity = resolveQtPackageIdentity;
     exports2.writeQtPackagingMetadata = writeQtPackagingMetadata;
+    exports2.writeQtWindowsBuildResource = writeQtWindowsBuildResource;
     exports2.renderWindowsApplicationManifest = renderWindowsApplicationManifest;
     exports2.renderWindowsResourceScript = renderWindowsResourceScript;
     exports2.renderLinuxDesktopEntry = renderLinuxDesktopEntry;
@@ -4814,8 +4853,25 @@ var require_qpmQtPackagingModel = __commonJS({
       writeIfChanged(paths.windowsResource, renderWindowsResourceScript(manifestPath, manifest, paths.windowsManifest));
       writeIfChanged(paths.linuxDesktopEntry, renderLinuxDesktopEntry(manifestPath, manifest));
       const identity = resolveQtPackageIdentity(manifest, mode);
-      writeIfChanged(paths.packageInfo, `${JSON.stringify({ generatedBy: "Qt Project Manager", schemaVersion: manifest.schemaVersion, project: manifest.name, target: manifest.targetName, ...identity, metadata: manifest.packaging }, null, 2)}
+      writeIfChanged(paths.packageInfo, `${JSON.stringify({ generatedBy: "Qt Project Manager", schemaVersion: manifest.schemaVersion, project: manifest.name, target: manifest.targetName, ...identity, metadata: manifest.packaging, branding: manifest.branding }, null, 2)}
 `);
+      return paths;
+    }
+    function writeQtWindowsBuildResource(manifestPath, manifest, includeVersionMetadata) {
+      const projectRoot = path2.dirname(manifestPath);
+      const configuredIcon = (0, qtProjectManifest_12.executableIconPath)(manifest);
+      if (configuredIcon) {
+        const absoluteIcon = path2.isAbsolute(configuredIcon) ? configuredIcon : path2.resolve(projectRoot, configuredIcon);
+        if (!fs.existsSync(absoluteIcon))
+          throw new Error(`Executable icon was not found: ${absoluteIcon}`);
+        if (path2.extname(absoluteIcon).toLowerCase() !== ".ico") {
+          throw new Error(`Windows executable icon must be an .ico file: ${configuredIcon}`);
+        }
+      }
+      const paths = packagingMetadataPaths(manifestPath);
+      fs.mkdirSync(path2.dirname(paths.windowsManifest), { recursive: true });
+      writeIfChanged(paths.windowsManifest, renderWindowsApplicationManifest(manifest));
+      writeIfChanged(paths.windowsResource, renderWindowsResourceScript(manifestPath, manifest, paths.windowsManifest, includeVersionMetadata));
       return paths;
     }
     function renderWindowsApplicationManifest(manifest) {
@@ -4834,14 +4890,25 @@ var require_qpmQtPackagingModel = __commonJS({
 </assembly>
 `;
     }
-    function renderWindowsResourceScript(manifestPath, manifest, generatedManifestPath) {
+    function renderWindowsResourceScript(manifestPath, manifest, generatedManifestPath, includeVersionMetadata = true) {
       const projectRoot = path2.dirname(manifestPath);
-      const icon = manifest.packaging.icon ? path2.resolve(projectRoot, manifest.packaging.icon) : "";
+      const configuredIcon = (0, qtProjectManifest_12.executableIconPath)(manifest);
+      const icon = configuredIcon ? path2.resolve(projectRoot, configuredIcon) : "";
       const customManifest = manifest.packaging.windows.manifestFile ? path2.resolve(projectRoot, manifest.packaging.windows.manifestFile) : generatedManifestPath;
       const numericVersion = normalizeFourPartVersion(manifest.packaging.productVersion).replace(/\./g, ",");
       const stringVersion = manifest.packaging.productVersion;
       const p = manifest.packaging;
       const w = p.windows;
+      if (!includeVersionMetadata) {
+        const iconOnly = [
+          "#include <windows.h>",
+          "",
+          icon ? `IDI_QPM_APP ICON "${rcPath(icon)}"` : "",
+          ""
+        ].filter((line, index, values) => line !== "" || index > 0 && values[index - 1] !== "");
+        return `${iconOnly.join("\n")}
+`;
+      }
       const lines = [
         "#include <windows.h>",
         "",
@@ -4886,7 +4953,8 @@ var require_qpmQtPackagingModel = __commonJS({
     }
     function renderLinuxDesktopEntry(manifestPath, manifest) {
       const projectRoot = path2.dirname(manifestPath);
-      const icon = manifest.packaging.icon ? path2.resolve(projectRoot, manifest.packaging.icon) : manifest.packaging.linux.appId;
+      const configuredIcon = (0, qtProjectManifest_12.packageIconPath)(manifest);
+      const icon = configuredIcon ? path2.resolve(projectRoot, configuredIcon) : manifest.packaging.linux.appId;
       return `[Desktop Entry]
 Type=Application
 Version=1.0
@@ -4925,6 +4993,184 @@ X-QPM-AppId=${desktopEscape(manifest.packaging.linux.appId)}
     }
     function desktopEscape(value) {
       return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/;/g, "\\;");
+    }
+  }
+});
+
+// out/services/qpmQtBrandingService.js
+var require_qpmQtBrandingService = __commonJS({
+  "out/services/qpmQtBrandingService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.brandingArtifactsRoot = brandingArtifactsRoot;
+    exports2.validateQtBranding = validateQtBranding;
+    exports2.writeQtBrandingArtifacts = writeQtBrandingArtifacts;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
+    var WINDOWS_EXECUTABLE_ICON_EXTENSIONS = /* @__PURE__ */ new Set([".ico"]);
+    var WINDOW_ICON_EXTENSIONS = /* @__PURE__ */ new Set([".png", ".ico", ".bmp", ".jpg", ".jpeg", ".svg", ".webp", ".xpm"]);
+    function brandingArtifactsRoot(manifestPath) {
+      return path2.join(path2.dirname(manifestPath), ".qpm", "branding", "generated");
+    }
+    function validateQtBranding(manifestPath, manifest) {
+      const root = path2.dirname(manifestPath);
+      const errors = [];
+      const warnings = [];
+      if (manifest.branding.executableIcon) {
+        const icon = resolveProjectPath(root, manifest.branding.executableIcon);
+        if (!fs.existsSync(icon))
+          errors.push(`Executable icon was not found: ${manifest.branding.executableIcon}`);
+        if (process.platform === "win32" && !WINDOWS_EXECUTABLE_ICON_EXTENSIONS.has(path2.extname(icon).toLowerCase())) {
+          errors.push("The Windows executable icon must use the .ico format. The Qt window icon can use PNG, ICO or another Qt-supported image format.");
+        }
+      }
+      if (manifest.branding.executableIcon || manifest.branding.windowIcon && manifest.branding.autoApplyWindowIcon) {
+        const externalBackends = manifest.profiles.builds.filter((profile) => (profile.system === "qmake" || profile.system === "cmake") && (!!profile.projectFile || !profile.generateProjectFiles));
+        if (externalBackends.length) {
+          warnings.push(`Application icon resources are integrated automatically by the Direct backend and QPM-generated qmake/CMake projects. External project files are not rewritten automatically (${externalBackends.map((profile) => profile.name).join(", ")}).`);
+        }
+      }
+      if (manifest.branding.windowIcon) {
+        const icon = resolveProjectPath(root, manifest.branding.windowIcon);
+        if (!fs.existsSync(icon))
+          errors.push(`Qt window icon was not found: ${manifest.branding.windowIcon}`);
+        const extension = path2.extname(icon).toLowerCase();
+        if (extension && !WINDOW_ICON_EXTENSIONS.has(extension)) {
+          warnings.push(`Qt window icon format ${extension} is unusual. Prefer PNG or ICO; SVG requires Qt SVG image support at runtime.`);
+        }
+        if (extension === ".svg" && !manifest.qt.modules.some((entry) => entry.toLowerCase() === "svg")) {
+          warnings.push("The Qt window icon is SVG, but the Svg module is not selected. Add Qt Svg or use PNG/ICO to avoid image-plugin dependency issues.");
+        }
+        if (manifest.python.enabled || manifest.kind === "python-widgets-application" || manifest.kind === "python-quick-application") {
+          warnings.push("Automatic window-icon injection is currently provided for native C++ GUI targets. PySide6 projects should set QGuiApplication.setWindowIcon() in Python code.");
+        } else if (!(0, qtProjectManifest_12.hasManagedWindowIcon)(manifest) && manifest.branding.autoApplyWindowIcon) {
+          warnings.push(`Automatic window-icon injection is not applicable to project kind ${manifest.kind}.`);
+        }
+      }
+      return { errors, warnings };
+    }
+    function writeQtBrandingArtifacts(manifestPath, manifest) {
+      const root = brandingArtifactsRoot(manifestPath);
+      const result = { root };
+      if (!(0, qtProjectManifest_12.hasManagedWindowIcon)(manifest))
+        return result;
+      const projectRoot = path2.dirname(manifestPath);
+      const sourceIcon = resolveProjectPath(projectRoot, manifest.branding.windowIcon);
+      if (!fs.existsSync(sourceIcon))
+        throw new Error(`Qt window icon was not found: ${sourceIcon}`);
+      const extension = path2.extname(sourceIcon).toLowerCase() || ".png";
+      fs.mkdirSync(root, { recursive: true });
+      const iconCopy = path2.join(root, `qpm_window_icon${extension}`);
+      copyIfChanged(sourceIcon, iconCopy);
+      const resourcePath = path2.join(root, "qpm_window_icon.qrc");
+      const startupSource = path2.join(root, "qpm_window_icon.cpp");
+      const resourceAlias = `window-icon${extension}`;
+      writeTextIfChanged(resourcePath, renderWindowIconResource(path2.basename(iconCopy), resourceAlias));
+      writeTextIfChanged(startupSource, renderWindowIconStartupSource(resourceAlias));
+      result.windowIconSource = sourceIcon;
+      result.windowIconCopy = iconCopy;
+      result.windowResource = resourcePath;
+      result.windowStartupSource = startupSource;
+      return result;
+    }
+    function renderWindowIconResource(iconFileName, alias) {
+      return `<RCC>
+  <qresource prefix="/qpm/branding">
+    <file alias="${xmlEscape(alias)}">${xmlEscape(iconFileName)}</file>
+  </qresource>
+</RCC>
+`;
+    }
+    function renderWindowIconStartupSource(resourceAlias) {
+      const resourceUrl = `:/qpm/branding/${resourceAlias}`;
+      return `// Generated by Qt Project Manager. Do not edit.
+#include <QCoreApplication>
+#include <QGuiApplication>
+#include <QIcon>
+#include <QTimer>
+#include <QWindow>
+
+namespace {
+void qpmApplyManagedWindowIcon()
+{
+    // Q_COREAPP_STARTUP_FUNCTION runs before GUI initialization is complete.
+    // Queue the GUI-specific icon update for the first event-loop turn.
+    QTimer::singleShot(0, QCoreApplication::instance(), []() {
+        const QIcon icon(QStringLiteral("${cppEscape(resourceUrl)}"));
+        QGuiApplication::setWindowIcon(icon);
+        // A top-level window may already have been shown before the event loop starts.
+        // Update only windows that did not explicitly choose their own icon.
+        for (QWindow *window : QGuiApplication::topLevelWindows()) {
+            if (window && window->icon().isNull()) window->setIcon(icon);
+        }
+    });
+}
+}
+
+Q_COREAPP_STARTUP_FUNCTION(qpmApplyManagedWindowIcon)
+`;
+    }
+    function resolveProjectPath(projectRoot, configured) {
+      return path2.isAbsolute(configured) ? configured : path2.resolve(projectRoot, configured);
+    }
+    function copyIfChanged(source, target) {
+      if (fs.existsSync(target)) {
+        const a = fs.statSync(source);
+        const b = fs.statSync(target);
+        if (a.size === b.size && fs.readFileSync(source).equals(fs.readFileSync(target)))
+          return;
+      }
+      fs.copyFileSync(source, target);
+    }
+    function writeTextIfChanged(filePath, content) {
+      if (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8") === content)
+        return;
+      fs.mkdirSync(path2.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+    }
+    function cppEscape(value) {
+      return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    }
+    function xmlEscape(value) {
+      return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
     }
   }
 });
@@ -5412,6 +5658,7 @@ var require_qpmQtDirectBuildService = __commonJS({
     var path2 = __importStar2(require("path"));
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
+    var qpmQtBrandingService_1 = require_qpmQtBrandingService();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
     var qpmQtLinkage_1 = require_qpmQtLinkage();
@@ -5535,8 +5782,25 @@ var require_qpmQtDirectBuildService = __commonJS({
           generatedSourceFiles.push(outputPath);
         }
       }
-      if (process.platform === "win32" && manifest.packaging.enabled && manifest.packaging.windows.embedVersionResource && manifest.kind !== "static-library") {
-        const metadata = (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(manifestPath, manifest, mode);
+      const brandingArtifacts = (0, qpmQtBrandingService_1.writeQtBrandingArtifacts)(manifestPath, manifest);
+      if (brandingArtifacts.windowStartupSource && brandingArtifacts.windowResource) {
+        generatedSourceFiles.push(brandingArtifacts.windowStartupSource);
+        const outputPath = reserveGeneratedPath(generatedDirectory, "qrc_qpm_branding.cpp", brandingArtifacts.windowResource, usedGeneratedNames, true);
+        generationSteps.push({
+          kind: "rcc",
+          inputPath: brandingArtifacts.windowResource,
+          outputPath,
+          toolPath: installation.rccPath,
+          arguments: ["-name", "qpm_branding", brandingArtifacts.windowResource, "-o", outputPath],
+          compileOutput: true,
+          dependencies: brandingArtifacts.windowIconCopy ? [brandingArtifacts.windowIconCopy] : []
+        });
+        generatedSourceFiles.push(outputPath);
+      }
+      const includeWindowsMetadata = manifest.packaging.enabled && manifest.packaging.windows.embedVersionResource;
+      const needsWindowsResource = process.platform === "win32" && manifest.kind !== "static-library" && (includeWindowsMetadata || !!(0, qtProjectManifest_12.executableIconPath)(manifest));
+      if (needsWindowsResource) {
+        const metadata = (0, qpmQtPackagingModel_1.writeQtWindowsBuildResource)(manifestPath, manifest, includeWindowsMetadata);
         const configuredWindres = manifest.packaging.windows.resourceCompilerPath ? path2.resolve(projectDirectory, manifest.packaging.windows.resourceCompilerPath) : void 0;
         const compilerBin = installation.toolchain.binDir || path2.dirname(installation.toolchain.cppCompilerPath);
         const windresCandidates = [configuredWindres, path2.join(compilerBin, "windres.exe"), path2.join(compilerBin, "windres")].filter((entry) => !!entry);
@@ -5544,8 +5808,9 @@ var require_qpmQtDirectBuildService = __commonJS({
         if (windresPath) {
           const outputPath = path2.join(objectDirectory, "qpm_product_metadata.o");
           const dependencies = [metadata.windowsManifest];
-          if (manifest.packaging.icon)
-            dependencies.push(path2.resolve(projectDirectory, manifest.packaging.icon));
+          const configuredExecutableIcon = (0, qtProjectManifest_12.executableIconPath)(manifest);
+          if (configuredExecutableIcon)
+            dependencies.push(path2.resolve(projectDirectory, configuredExecutableIcon));
           if (manifest.packaging.windows.manifestFile)
             dependencies.push(path2.resolve(projectDirectory, manifest.packaging.windows.manifestFile));
           generationSteps.push({
@@ -5559,7 +5824,7 @@ var require_qpmQtDirectBuildService = __commonJS({
           });
           additionalObjectFiles.push(outputPath);
         } else {
-          warnings.push("Windows product metadata is enabled, but windres was not found beside the selected MinGW compiler. The package metadata files were generated, but they will not be embedded in the executable.");
+          warnings.push("Windows executable resources are enabled, but windres was not found beside the selected MinGW compiler. The generated icon/version resources will not be embedded in the executable.");
         }
       }
       if (buildProfile.autoMoc) {
@@ -6420,6 +6685,7 @@ var require_qpmQtProjectHealthProvider = __commonJS({
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtDirectBuildService_1 = require_qpmQtDirectBuildService();
+    var qpmQtBrandingService_1 = require_qpmQtBrandingService();
     var qtResourceEditorPanel_1 = require_qtResourceEditorPanel();
     var QpmQtProjectHealthProvider = class {
       workspaces;
@@ -6638,6 +6904,15 @@ Preview runtime: ${installation?.qmlRuntimePath ?? installation?.qmlScenePath ??
             if (!qmlPreviewReady)
               items.push(health("qml-preview", "QML preview", "Runtime not resolved", "info", "Select a Qt kit that provides qml or qmlscene.", "qpm.qmlPreviewFile"));
           }
+          const brandingValidation = (0, qpmQtBrandingService_1.validateQtBranding)(ref.absolutePath, manifest);
+          const brandingSeverity = brandingValidation.errors.length > 0 ? "error" : brandingValidation.warnings.length > 0 ? "warning" : "ok";
+          items.push(health("branding", "Application icons", manifest.branding.executableIcon || manifest.branding.windowIcon ? `Executable ${manifest.branding.executableIcon ? "configured" : "default"} \xB7 Window ${manifest.branding.windowIcon ? "configured" : "default"}` : "Platform defaults", brandingSeverity, [
+            `Executable icon: ${manifest.branding.executableIcon || "not configured"}`,
+            `Qt window icon: ${manifest.branding.windowIcon || "not configured"}`,
+            `Automatic Qt window icon: ${manifest.branding.autoApplyWindowIcon ? "enabled" : "disabled"}`,
+            ...brandingValidation.errors.map((entry) => `Error: ${entry}`),
+            ...brandingValidation.warnings.map((entry) => `Warning: ${entry}`)
+          ].join("\n"), "qpm.editBuildSettings"));
           const packaging = manifest.packaging;
           const packagingFiles = [
             ["Icon", packaging.icon],
@@ -7944,6 +8219,7 @@ var require_qpmQtBuildBackendService = __commonJS({
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
+    var qpmQtBrandingService_1 = require_qpmQtBrandingService();
     var qpmQtModuleInference_1 = require_qpmQtModuleInference();
     var qpmQtDependencyModel_1 = require_qpmQtDependencyModel();
     var qpmQtLinkage_1 = require_qpmQtLinkage();
@@ -8250,7 +8526,12 @@ var require_qpmQtBuildBackendService = __commonJS({
       if (context.profile.precompiledHeader)
         config.push("precompile_header");
       const targetDirectory = path2.dirname(context.targetPath);
-      const packagingMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource ? (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(context.manifestPath, context.manifest, context.mode) : void 0;
+      const includeWindowsMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource;
+      const needsWindowsResource = process.platform === "win32" && context.manifest.kind !== "static-library" && (includeWindowsMetadata || !!(0, qtProjectManifest_12.executableIconPath)(context.manifest));
+      const windowsBuildResource = needsWindowsResource ? (0, qpmQtPackagingModel_1.writeQtWindowsBuildResource)(context.manifestPath, context.manifest, includeWindowsMetadata) : void 0;
+      const brandingArtifacts = (0, qpmQtBrandingService_1.writeQtBrandingArtifacts)(context.manifestPath, context.manifest);
+      const qmakeSources = [...files.sources, ...brandingArtifacts.windowStartupSource ? [brandingArtifacts.windowStartupSource] : []];
+      const qmakeResources = [...files.resources, ...brandingArtifacts.windowResource ? [brandingArtifacts.windowResource] : []];
       const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
       const lines = [
         "# Generated by Qt Project Manager",
@@ -8265,10 +8546,10 @@ var require_qpmQtBuildBackendService = __commonJS({
         "MOC_DIR = moc",
         "UI_DIR = ui",
         "RCC_DIR = rcc",
-        qmakeList("SOURCES", files.sources),
+        qmakeList("SOURCES", qmakeSources),
         qmakeList("HEADERS", files.headers),
         qmakeList("FORMS", files.forms),
-        qmakeList("RESOURCES", files.resources),
+        qmakeList("RESOURCES", qmakeResources),
         qmakeList("TRANSLATIONS", files.translations),
         qmakeList("QML_FILES", files.qml),
         qmakeList("INCLUDEPATH", [...context.manifest.includeDirectories.map((entry) => path2.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories]),
@@ -8278,7 +8559,7 @@ var require_qpmQtBuildBackendService = __commonJS({
         [...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].length ? `QMAKE_CXXFLAGS += ${[...backendCompilerFlags(context), ...context.dependencyIntegration.compilerFlags].join(" ")}` : "",
         [...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].length ? `QMAKE_LFLAGS += ${[...backendLinkerFlags(context), ...context.dependencyIntegration.linkerFlags].join(" ")}` : "",
         context.profile.precompiledHeader ? `PRECOMPILED_HEADER = ${qmakeQuote(path2.resolve(context.root, context.profile.precompiledHeader))}` : "",
-        packagingMetadata && process.platform === "win32" ? `RC_FILE = ${qmakeQuote(packagingMetadata.windowsResource)}` : ""
+        windowsBuildResource ? `RC_FILE = ${qmakeQuote(windowsBuildResource.windowsResource)}` : ""
       ].filter(Boolean);
       return `${lines.join("\n")}
 `;
@@ -8287,8 +8568,20 @@ var require_qpmQtBuildBackendService = __commonJS({
       const files = (0, qtProjectManifest_12.resolveQtProjectFiles)(context.manifestPath, context.manifest);
       const major = context.installation.majorVersion || 6;
       const target = cmakeQuote(context.manifest.targetName);
-      const packagingMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource ? (0, qpmQtPackagingModel_1.writeQtPackagingMetadata)(context.manifestPath, context.manifest, context.mode) : void 0;
-      const sourceEntries = [...files.sources, ...files.headers, ...files.forms, ...files.resources, ...files.qml, ...packagingMetadata && process.platform === "win32" ? [packagingMetadata.windowsResource] : []];
+      const includeWindowsMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource;
+      const needsWindowsResource = process.platform === "win32" && context.manifest.kind !== "static-library" && (includeWindowsMetadata || !!(0, qtProjectManifest_12.executableIconPath)(context.manifest));
+      const windowsBuildResource = needsWindowsResource ? (0, qpmQtPackagingModel_1.writeQtWindowsBuildResource)(context.manifestPath, context.manifest, includeWindowsMetadata) : void 0;
+      const brandingArtifacts = (0, qpmQtBrandingService_1.writeQtBrandingArtifacts)(context.manifestPath, context.manifest);
+      const sourceEntries = [
+        ...files.sources,
+        ...files.headers,
+        ...files.forms,
+        ...files.resources,
+        ...files.qml,
+        ...brandingArtifacts.windowStartupSource ? [brandingArtifacts.windowStartupSource] : [],
+        ...brandingArtifacts.windowResource ? [brandingArtifacts.windowResource] : [],
+        ...windowsBuildResource ? [windowsBuildResource.windowsResource] : []
+      ];
       const sourceList = sourceEntries.map(cmakeQuote).join("\n  ");
       const effectiveModules = (0, qpmQtModuleInference_1.effectiveQtModules)(context.manifestPath, context.manifest).modules;
       const modules = effectiveModules.join(" ");
@@ -8305,12 +8598,12 @@ var require_qpmQtBuildBackendService = __commonJS({
       const lines = [
         "# Generated by Qt Project Manager",
         "cmake_minimum_required(VERSION 3.21)",
-        `project(${cmakeIdentifier(context.manifest.name)} LANGUAGES CXX${packagingMetadata && process.platform === "win32" ? " RC" : ""})`,
+        `project(${cmakeIdentifier(context.manifest.name)} LANGUAGES CXX${windowsBuildResource ? " RC" : ""})`,
         `set(CMAKE_CXX_STANDARD ${context.profile.cppStandard.replace(/\D/g, "") || "17"})`,
         "set(CMAKE_CXX_STANDARD_REQUIRED ON)",
         `set(CMAKE_AUTOMOC ${context.profile.autoMoc ? "ON" : "OFF"})`,
         `set(CMAKE_AUTOUIC ${context.profile.autoUic ? "ON" : "OFF"})`,
-        `set(CMAKE_AUTORCC ${context.profile.autoRcc ? "ON" : "OFF"})`,
+        `set(CMAKE_AUTORCC ${context.profile.autoRcc || !!brandingArtifacts.windowResource ? "ON" : "OFF"})`,
         `set(CMAKE_UNITY_BUILD ${context.profile.unityBuild ? "ON" : "OFF"})`,
         `find_package(Qt${major} REQUIRED COMPONENTS ${modules})`,
         ...context.dependencyIntegration.cmakeFindPackages.map((entry) => `find_package(${entry})`),
@@ -8956,6 +9249,106 @@ var require_qpmBuildDiagnostics = __commonJS({
   }
 });
 
+// out/services/qpmDeploymentFileSync.js
+var require_qpmDeploymentFileSync = __commonJS({
+  "out/services/qpmDeploymentFileSync.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.stageDeploymentTarget = stageDeploymentTarget;
+    exports2.sha256File = sha256File;
+    exports2.touchDeploymentTarget = touchDeploymentTarget;
+    var crypto = __importStar2(require("crypto"));
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    function stageDeploymentTarget(sourcePath, targetPath) {
+      const source = path2.resolve(sourcePath);
+      const target = path2.resolve(targetPath);
+      if (!fs.existsSync(source))
+        throw new Error(`Deployment source does not exist: ${source}`);
+      const sourceHash = sha256File(source);
+      const sourceSize = fs.statSync(source).size;
+      if (sameFilePath(source, target)) {
+        touchDeploymentTarget(target);
+        return { sourceHash, targetHash: sourceHash, size: sourceSize, replacedExistingTarget: false };
+      }
+      fs.mkdirSync(path2.dirname(target), { recursive: true });
+      const replacedExistingTarget = fs.existsSync(target);
+      const temporaryTarget = path2.join(path2.dirname(target), `.${path2.basename(target)}.qpm-stage-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      try {
+        fs.copyFileSync(source, temporaryTarget);
+        const temporaryHash = sha256File(temporaryTarget);
+        if (temporaryHash !== sourceHash || fs.statSync(temporaryTarget).size !== sourceSize) {
+          throw new Error("The staged deployment binary does not match the build output.");
+        }
+        if (fs.existsSync(target))
+          fs.rmSync(target, { force: true });
+        fs.renameSync(temporaryTarget, target);
+        touchDeploymentTarget(target);
+        const targetHash = sha256File(target);
+        if (targetHash !== sourceHash || fs.statSync(target).size !== sourceSize) {
+          throw new Error("The deployed target differs from the build output after staging.");
+        }
+        return { sourceHash, targetHash, size: sourceSize, replacedExistingTarget };
+      } finally {
+        try {
+          if (fs.existsSync(temporaryTarget))
+            fs.rmSync(temporaryTarget, { force: true });
+        } catch {
+        }
+      }
+    }
+    function sha256File(filePath) {
+      return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+    }
+    function touchDeploymentTarget(filePath) {
+      if (!fs.existsSync(filePath))
+        return;
+      const now = /* @__PURE__ */ new Date();
+      fs.utimesSync(filePath, now, now);
+    }
+    function sameFilePath(left, right) {
+      return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+    }
+  }
+});
+
 // out/services/qpmBuildService.js
 var require_qpmBuildService = __commonJS({
   "out/services/qpmBuildService.js"(exports2) {
@@ -9017,6 +9410,7 @@ var require_qpmBuildService = __commonJS({
     var qpmBuildCleanup_1 = require_qpmBuildCleanup();
     var qpmBuildDiagnostics_1 = require_qpmBuildDiagnostics();
     var qpmQtLinkage_1 = require_qpmQtLinkage();
+    var qpmDeploymentFileSync_1 = require_qpmDeploymentFileSync();
     var QpmBuildService = class {
       parser;
       workspaces;
@@ -9168,6 +9562,14 @@ var require_qpmBuildService = __commonJS({
             this.failedPhase = "Post-build actions";
             this.finishBuild(false);
             return false;
+          }
+          if ((0, qtProjectManifest_12.isQtProjectManifestPath)(item.absolutePath)) {
+            const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(item.absolutePath);
+            if (!(0, qtProjectManifest_12.isQtPythonProject)(manifest) && !await this.deployNativeQtAfterSuccessfulBuild(item, manifest)) {
+              this.failedPhase = "Standalone deployment";
+              this.finishBuild(false);
+              return false;
+            }
           }
         }
         try {
@@ -9592,6 +9994,26 @@ var require_qpmBuildService = __commonJS({
           throw new Error("No valid Qt installation is selected for this project.");
         await this.qtBackends.openGeneratedProject(ref.absolutePath, this.buildMode, installation);
       }
+      async deployNativeQtAfterSuccessfulBuild(ref, manifest) {
+        const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
+        if (!deployProfile.enabled)
+          return true;
+        const buildProfile = (0, qtProjectManifest_12.getActiveQtBuildProfile)(manifest, this.buildMode);
+        if (deployProfile.buildProfileId !== buildProfile.id) {
+          const assigned = manifest.profiles.builds.find((entry) => entry.id === deployProfile.buildProfileId);
+          this.output.appendLine(`[Qt/C++] Automatic standalone deployment skipped for ${buildProfile.name}: deploy profile "${deployProfile.name}" is assigned to ${assigned?.name ?? deployProfile.buildProfileId}.`);
+          this.output.appendLine("[Qt/C++] Open Project Settings > Run & Deploy > Standalone deployment to change the automatic deployment build profile.");
+          return true;
+        }
+        const installation = this.resolveQtInstallation(manifest);
+        if (!installation) {
+          vscode2.window.showErrorMessage("Automatic standalone deployment cannot run because no valid Qt installation is selected.");
+          return false;
+        }
+        this.logSection("DEPLOYMENT");
+        this.output.appendLine(`  Automatic standalone deployment: ${buildProfile.name} -> ${(0, qtProjectManifest_12.qtDeploymentDirectory)(ref.absolutePath, this.buildMode, manifest)}`);
+        return await this.deployNativeQtTarget(ref, manifest, installation, false);
+      }
       async deployQtRuntime(projectRef) {
         const ref = projectRef ?? this.workspaces.activeProjectRef;
         if (!ref?.exists || !(0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath)) {
@@ -9627,8 +10049,12 @@ var require_qpmBuildService = __commonJS({
             }
           }
           fs.mkdirSync(deployDirectory, { recursive: true });
-          fs.copyFileSync(buildTargetPath, deployedTargetPath);
+          if (fs.existsSync(deployedTargetPath)) {
+            await this.stopApplicationsForTarget(deployedTargetPath, "rebuild");
+          }
+          const stagedTarget = (0, qpmDeploymentFileSync_1.stageDeploymentTarget)(buildTargetPath, deployedTargetPath);
           this.output.appendLine(`[Qt/C++] Deployment target: ${deployedTargetPath}`);
+          this.output.appendLine(`[Qt/C++] Deployment binary synchronized: ${stagedTarget.size} bytes, SHA-256 ${stagedTarget.targetHash.slice(0, 16)}...${stagedTarget.replacedExistingTarget ? " (replaced previous target)" : ""}`);
         } catch (error) {
           vscode2.window.showErrorMessage(`Unable to prepare the deployment directory: ${error instanceof Error ? error.message : String(error)}`);
           return false;
@@ -9679,9 +10105,20 @@ var require_qpmBuildService = __commonJS({
           }
         }
         args.push(deployedTargetPath);
+        const buildTargetHashBeforeDeploy = process.platform === "win32" ? (0, qpmDeploymentFileSync_1.sha256File)(buildTargetPath) : void 0;
         const deployed = await this.spawnTool(installation.deployToolPath, args, path2.dirname(ref.absolutePath), `Deploy ${path2.basename(deployedTargetPath)}`, deploymentEnvironment);
         if (!deployed)
           return false;
+        if (process.platform === "win32" && buildTargetHashBeforeDeploy) {
+          const deployedHashAfterTool = (0, qpmDeploymentFileSync_1.sha256File)(deployedTargetPath);
+          if (deployedHashAfterTool !== buildTargetHashBeforeDeploy) {
+            this.output.appendLine("[Qt/C++] Standalone deployment check FAILED: windeployqt changed or replaced the application executable.");
+            vscode2.window.showErrorMessage("The deployed executable no longer matches the freshly built executable after windeployqt. Open the QPM output for details.");
+            return false;
+          }
+          (0, qpmDeploymentFileSync_1.touchDeploymentTarget)(deployedTargetPath);
+          this.output.appendLine("[Qt/C++] Deployed executable identity verified after windeployqt; Windows icon timestamp refreshed.");
+        }
         const verified = !deployProfile.verifyStandalone || this.verifyStandaloneDeployment(manifest, installation, deployedTargetPath, false);
         if (verified && announce)
           vscode2.window.showInformationMessage(`Standalone Qt deployment ready: ${deployDirectory}`);
@@ -9858,11 +10295,6 @@ var require_qpmBuildService = __commonJS({
           this.output.appendLine(`[Qt ${profile.system === "qmake" ? "qmake" : "CMake"}] Project: ${manifest.name}`);
           this.output.appendLine(`[Qt ${profile.system === "qmake" ? "qmake" : "CMake"}] Qt kit: ${installation.label}`);
           const result = await this.qtBackends.build(ref.absolutePath, this.buildMode, installation, rebuild);
-          const deployProfile2 = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
-          if (result.success && deployProfile2.enabled && deployProfile2.buildProfileId === profile.id) {
-            if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
-              return false;
-          }
           return result.success;
         }
         const plan = (0, qpmQtDirectBuildService_1.createQtDirectBuildPlan)(ref.absolutePath, this.buildMode, installation);
@@ -10004,13 +10436,6 @@ var require_qpmBuildService = __commonJS({
           return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, "import library output"))
           return false;
-        const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
-        if (deployProfile.enabled && deployProfile.buildProfileId === plan.buildProfile.id) {
-          this.logSection("DEPLOYMENT");
-          this.output.appendLine("  Automatic standalone deployment enabled for this build profile.");
-          if (!await this.deployNativeQtTarget(ref, manifest, installation, false))
-            return false;
-        }
         return true;
       }
       async linkArtifacts(ref, targetType, artifacts, files, config) {
@@ -50512,7 +50937,9 @@ var require_qtProjectSettingsPanel = __commonJS({
       debugCoreDumpPath: { kind: "file" },
       debugSshExecutable: { kind: "file" },
       debugSymbolSearchPath: { kind: "folder" },
-      packagingIcon: { kind: "file", relative: true },
+      executableIcon: { kind: "file", relative: true, filters: { "Windows icon": ["ico"] } },
+      windowIcon: { kind: "file", relative: true, filters: { "Image files": ["png", "ico", "bmp", "jpg", "jpeg", "svg", "webp", "xpm"] } },
+      packagingIcon: { kind: "file", relative: true, filters: { "Application icons": ["ico", "png", "svg", "icns"] } },
       packagingLicenseFile: { kind: "file", relative: true },
       packagingReadmeFile: { kind: "file", relative: true },
       packagingOutputDirectory: { kind: "folder", relative: true },
@@ -50896,13 +51323,16 @@ var require_qtProjectSettingsPanel = __commonJS({
       profilingTraceFollowForks: "Makes strace follow child processes.",
       profilingTraceTimestamps: "Adds timestamps to system-call trace lines.",
       profilingTraceOutputFile: "Output file for the system trace.",
+      executableIcon: "Native executable icon. On Windows use an .ico file; QPM embeds it in the PE executable independently from the Qt window icon.",
+      windowIcon: "Default icon shown by Qt top-level windows and normally the running application/taskbar. QPM embeds this image in a generated Qt resource.",
+      autoApplyWindowIcon: "Automatically injects QGuiApplication::setWindowIcon() through QPM-generated C++ branding code. Individual windows can still override the icon in application code.",
       packagingProductName: "Human-readable product name used by Windows version resources, Linux desktop entries and package names.",
       packagingProductVersion: "Semantic product version such as 1.2.3. Windows resources use the numeric part as a four-component version.",
       packagingCompanyName: "Company or publisher displayed in executable metadata and package information.",
       packagingDescription: "Short product description embedded in platform metadata.",
       packagingCopyright: "Legal copyright string embedded in Windows version information.",
       packagingIdentifier: "Reverse-DNS application identifier such as com.company.product.",
-      packagingIcon: "Product icon. Use .ico for Windows executable embedding; PNG or SVG can be used for Linux package metadata.",
+      packagingIcon: "Optional package/installer icon override. Leave empty to reuse the executable icon configured under Project > Application icons.",
       packagingLicenseFile: "Optional license copied to the portable package root.",
       packagingReadmeFile: "Optional README copied to the portable package root.",
       packagingOutputDirectory: "Project-relative directory receiving staged folders and archives.",
@@ -50931,6 +51361,7 @@ var require_qtProjectSettingsPanel = __commonJS({
     var SECTION_HELP = {
       control: "Direct access to the principal commands that are also available from QPM views and context menus.",
       project: "Identity, target type, language standard, architecture and output directories.",
+      branding: "Executable and runtime Qt window icons are separate resources. QPM can manage both without modifying your main.cpp.",
       kit: "Qt SDK, compiler, debugger and code-generation tool configuration.",
       modules: "Qt modules linked to the target. Required dependencies are added automatically.",
       backend: "Backend-specific qmake, CMake and direct-build configuration.",
@@ -51125,7 +51556,7 @@ var require_qtProjectSettingsPanel = __commonJS({
           return;
         }
         if (message?.type === "browsePath" && typeof message.id === "string") {
-          await this.browsePath(ref, message.id, message.kind === "file" ? "file" : "folder", message.relative === true, String(message.currentValue ?? ""));
+          await this.browsePath(ref, message.id, message.kind === "file" ? "file" : "folder", message.relative === true, String(message.currentValue ?? ""), PATH_BROWSE_FIELDS[message.id]?.filters);
           return;
         }
         if (message?.type === "runCommand" && typeof message.command === "string") {
@@ -51311,6 +51742,9 @@ var require_qtProjectSettingsPanel = __commonJS({
         manifest.qml.module.version = String(payload.qmlModuleVersion ?? manifest.qml.module.version).trim() || manifest.qml.module.version;
         manifest.qml.module.importRoot = String(payload.qmlModuleImportRoot ?? manifest.qml.module.importRoot).trim() || manifest.qml.module.importRoot;
         manifest.qml.module.resourcePrefix = String(payload.qmlModuleResourcePrefix ?? manifest.qml.module.resourcePrefix).trim() || manifest.qml.module.resourcePrefix;
+        manifest.branding.executableIcon = String(payload.executableIcon ?? "").trim();
+        manifest.branding.windowIcon = String(payload.windowIcon ?? "").trim();
+        manifest.branding.autoApplyWindowIcon = payload.autoApplyWindowIcon === true;
         manifest.packaging.enabled = payload.packagingEnabled === true;
         manifest.packaging.productName = String(payload.packagingProductName ?? manifest.name).trim() || manifest.name;
         manifest.packaging.productVersion = normalizePackagingVersion(payload.packagingProductVersion);
@@ -51502,6 +51936,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         runProfile.environment = parseEnvironmentProfile(String(payload.environmentOptions ?? ""));
         const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
         deployProfile.enabled = payload.autoDeploy === true;
+        deployProfile.buildProfileId = String(payload.deployBuildProfileId ?? deployProfile.buildProfileId).trim() || buildProfile.id;
         deployProfile.translations = payload.deployTranslations === true;
         deployProfile.outputDirectory = String(payload.deployOutputDirectory ?? "dist").trim() || "dist";
         deployProfile.cleanOutput = payload.deployCleanOutput === true;
@@ -51662,7 +52097,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(manifestPath));
         await vscode2.window.showTextDocument(document, { preview: false });
       }
-      async browsePath(ref, targetId, kind, relative, currentValue) {
+      async browsePath(ref, targetId, kind, relative, currentValue, filters) {
         const projectRoot = path2.dirname(ref.absolutePath);
         const currentPath = currentValue.trim() ? path2.isAbsolute(currentValue.trim()) ? currentValue.trim() : path2.resolve(projectRoot, currentValue.trim()) : projectRoot;
         const defaultPath = fs.existsSync(currentPath) ? currentPath : fs.existsSync(path2.dirname(currentPath)) ? path2.dirname(currentPath) : projectRoot;
@@ -51672,7 +52107,8 @@ var require_qtProjectSettingsPanel = __commonJS({
           canSelectFiles: kind === "file",
           canSelectFolders: kind === "folder",
           canSelectMany: false,
-          openLabel: "Select"
+          openLabel: "Select",
+          ...filters ? { filters } : {}
         });
         const selectedPath = selected?.[0]?.fsPath;
         if (!selectedPath || !this.panel)
@@ -51807,6 +52243,11 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field("Build working directory", "outputDirectory", buildProfile.outputDirectory)}
   ${field("Generated Qt files directory", "generatedDirectory", buildProfile.generatedDirectory)}
 </div><div class="actions"><button class="secondary" id="manageProfiles">Manage build/run profiles</button><button class="secondary" id="openManifestProject">Open manifest JSON</button></div></section>
+<section id="section-branding" data-settings-section data-settings-page="project" data-settings-title="Application icons" class="card"><h2>${sectionHeading("branding", "Application icons")}</h2><div class="fields">
+  ${field("Executable icon (Windows .ico)", "executableIcon", manifest.branding.executableIcon)}
+  ${field("Qt window / application icon", "windowIcon", manifest.branding.windowIcon)}
+</div><div class="checks">${check("autoApplyWindowIcon", "Apply Qt window icon automatically", manifest.branding.autoApplyWindowIcon)}</div>
+<p class="muted">The executable icon is the file icon embedded in the Windows binary. The Qt window icon is the runtime default for top-level windows and the running application. They may use different files. For native C++ GUI projects, QPM injects the window icon through generated resources without editing main.cpp. A window can still override it explicitly with QWidget::setWindowIcon() or QWindow::setIcon().</p></section>
 <section id="section-kit" data-settings-section data-settings-page="build" data-settings-title="Qt kit and generators" class="card"><h2>${sectionHeading("kit", "Qt kit and generators")}</h2>
   <div class="kit ${toolchainState}">${installation || kitProfile.qtInstallation ? `${escapeHtml(kitProfile.name)}<br>Qt: ${escapeHtml(installation?.label || kitProfile.qtInstallation || "not resolved")}<br>Root: ${escapeHtml(installation?.root || kitProfile.qtInstallation || "not resolved")}<br>Compiler: ${escapeHtml(compilerDetails)}<br>Source: ${escapeHtml(compilerSource)} \xB7 Compatibility: ${escapeHtml(kitCompatibility)}${toolchainDiagnostic}<br>Debugger: ${escapeHtml(debuggerDetails)}<br>qmake: ${escapeHtml(qmakeDetails)}<br>CMake: ${escapeHtml(cmakeDetails)}<br>Build tool: ${escapeHtml(buildToolDetails)} \xB7 Generator: ${escapeHtml(generatorDetails)}<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}` : `No valid Qt kit is resolved.<br>Configured path: ${escapeHtml((0, qtProjectManifest_12.getQtInstallationPreference)(manifest, mode) || "project/workspace active kit")}<br>Use \u201CManage named kits\u201D to create or assign a reusable kit.<br>Qt Widgets Designer: ${escapeHtml(designerDetails)}<br>${escapeHtml(linguistDetails)}<br>${escapeHtml(qmlToolDetails)}`}</div>
   <div class="fields" style="margin-top:12px">${selectField("Required Qt major version", "majorVersion", `<option value="auto" ${manifest.qt.majorVersion === "auto" ? "selected" : ""}>Auto</option><option value="5" ${manifest.qt.majorVersion === 5 ? "selected" : ""}>Qt 5</option><option value="6" ${manifest.qt.majorVersion === 6 ? "selected" : ""}>Qt 6</option>`)}${selectField("Build backend", "buildSystem", buildSystemOptions(buildProfile.system))}<div class="field"><label for="parallelJobs" class="field-label">Parallel jobs (0 = automatic)${helpIcon("parallelJobs")}</label><input id="parallelJobs" type="number" min="0" value="${buildProfile.parallelJobs}"></div>${readOnlyField("Kit generator", "kitGenerator", kitProfile.generator || (installation?.ninjaPath ? "Ninja" : installation?.compilerFamily === "msvc" ? "NMake Makefiles" : "Auto"))}</div>
@@ -51850,9 +52291,12 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field("External executable for shared-library debugging", "externalProcessPath", projectSettings.run.externalProcessPath)}
 </div></section>
 <section id="section-deployment" data-settings-section data-settings-page="run" data-settings-title="Standalone deployment" class="card wide"><h2>${sectionHeading("run", "Standalone deployment")}</h2>
-  <div class="fields">${field("Deployment output directory", "deployOutputDirectory", deployProfile.outputDirectory)}</div>
+  <div class="fields">
+    ${selectField("Automatic deployment build profile", "deployBuildProfileId", profileOptions(manifest.profiles.builds, deployProfile.buildProfileId))}
+    ${field("Deployment output directory", "deployOutputDirectory", deployProfile.outputDirectory)}
+  </div>
   <div class="checks">${check("autoDeploy", "Run deployment tool after build", deployProfile.enabled)}${check("deployCleanOutput", "Clean deployment directory first", deployProfile.cleanOutput)}${check("deployCompilerRuntime", "Deploy compiler runtime", deployProfile.compilerRuntime)}${check("deployVerifyStandalone", "Verify standalone runtime", deployProfile.verifyStandalone)}${check("deployTranslations", "Release and deploy application translations", deployProfile.translations)}</div>
-  <p class="muted">Build intermediates stay in the build tree. The deployment directory is a clean runtime image intended for double-click execution, packaging or copying to another PC.</p>
+  <p class="muted">Automatic deployment runs after the selected build profile and after post-build actions. If the dist directory was deleted, QPM recreates it from the freshly built target before running windeployqt. Build intermediates remain in the build tree.</p>
 </section>
 <section id="section-platforms" data-settings-section data-settings-page="platforms" data-settings-title="Platform profile and target" class="card wide"><h2>${sectionHeading("platforms", "Platforms")}</h2><div class="fields">
   ${field("Platform profile name", "platformName", platformProfile.name)}
@@ -52155,7 +52599,7 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field("Application identifier", "packagingIdentifier", manifest.packaging.identifier)}
   ${field("Description", "packagingDescription", manifest.packaging.description, true)}
   ${field("Copyright", "packagingCopyright", manifest.packaging.copyright, true)}
-  ${field("Product icon", "packagingIcon", manifest.packaging.icon)}
+  ${field("Package / installer icon override", "packagingIcon", manifest.packaging.icon)}
   ${field("License file", "packagingLicenseFile", manifest.packaging.licenseFile)}
   ${field("README file", "packagingReadmeFile", manifest.packaging.readmeFile)}
   ${field("Packaging output directory", "packagingOutputDirectory", manifest.packaging.outputDirectory)}
@@ -52478,6 +52922,7 @@ on('save', 'click', () => {
     pythonEnabled:checked('pythonEnabled'), pythonInterpreter:value('pythonInterpreter'), pythonVirtualEnvironment:value('pythonVirtualEnvironment'), pythonAutoCreateVirtualEnvironment:checked('pythonAutoCreateVirtualEnvironment'), pythonAutoInstallPySide6:checked('pythonAutoInstallPySide6'), pythonPySideVersion:value('pythonPySideVersion'), pythonProjectFile:value('pythonProjectFile'), pythonEntryPoint:value('pythonEntryPoint'), pythonUiMode:value('pythonUiMode'), pythonBuildBeforeRun:checked('pythonBuildBeforeRun'), pythonDeployEnabled:checked('pythonDeployEnabled'), pythonDeploySpecFile:value('pythonDeploySpecFile'), pythonAndroidDeployEnabled:checked('pythonAndroidDeployEnabled'), pythonToolProject:value('pythonToolProject'), pythonToolDesigner:value('pythonToolDesigner'), pythonToolUic:value('pythonToolUic'), pythonToolRcc:value('pythonToolRcc'), pythonToolDeploy:value('pythonToolDeploy'), pythonToolAndroidDeploy:value('pythonToolAndroidDeploy'), pythonToolLinguist:value('pythonToolLinguist'), pythonToolLupdate:value('pythonToolLupdate'), pythonToolLrelease:value('pythonToolLrelease'), pythonToolQmllint:value('pythonToolQmllint'), pythonProjectArguments:value('pythonProjectArguments'), pythonDeployArguments:value('pythonDeployArguments'), pythonEnvironment:value('pythonEnvironment'),
     qmlLanguageServerEnabled:checked('qmlLanguageServerEnabled'), qmlLanguageServerAutoStart:checked('qmlLanguageServerAutoStart'), qmlLanguageServerExecutable:value('qmlLanguageServerExecutable'), qmlLanguageServerBuildDirectories:value('qmlLanguageServerBuildDirectories'), qmlLanguageServerImportPaths:value('qmlLanguageServerImportPaths'), qmlLanguageServerUseEnvironment:checked('qmlLanguageServerUseEnvironment'), qmlLanguageServerNoCmakeCalls:checked('qmlLanguageServerNoCmakeCalls'), qmlLanguageServerCmakeJobs:value('qmlLanguageServerCmakeJobs'), qmlLanguageServerMaxFiles:value('qmlLanguageServerMaxFiles'), qmlLanguageServerTrace:value('qmlLanguageServerTrace'), qmlLanguageServerVerbose:checked('qmlLanguageServerVerbose'), qmlLanguageServerConflictPolicy:value('qmlLanguageServerConflictPolicy'), qmlLanguageServerGenerateConfig:checked('qmlLanguageServerGenerateConfig'), qmlLanguageServerArguments:value('qmlLanguageServerArguments'), qmlModuleUri:value('qmlModuleUri'), qmlModuleVersion:value('qmlModuleVersion'), qmlModuleImportRoot:value('qmlModuleImportRoot'), qmlModuleResourcePrefix:value('qmlModuleResourcePrefix'),
 
+    executableIcon:value('executableIcon'), windowIcon:value('windowIcon'), autoApplyWindowIcon:checked('autoApplyWindowIcon'),
     packagingEnabled:checked('packagingEnabled'), packagingProductName:value('packagingProductName'), packagingProductVersion:value('packagingProductVersion'), packagingCompanyName:value('packagingCompanyName'), packagingDescription:value('packagingDescription'), packagingCopyright:value('packagingCopyright'), packagingIdentifier:value('packagingIdentifier'), packagingIcon:value('packagingIcon'), packagingLicenseFile:value('packagingLicenseFile'), packagingReadmeFile:value('packagingReadmeFile'), packagingOutputDirectory:value('packagingOutputDirectory'), packagingNamePattern:value('packagingNamePattern'), packagingArchiveFormat:value('packagingArchiveFormat'), packagingExtraFiles:value('packagingExtraFiles'), packagingCleanOutput:checked('packagingCleanOutput'), packagingBuildBefore:checked('packagingBuildBefore'), packagingQtRuntime:checked('packagingQtRuntime'), packagingTranslations:checked('packagingTranslations'), packagingDebugSymbols:checked('packagingDebugSymbols'), packagingEmbedVersion:checked('packagingEmbedVersion'), packagingFileDescription:value('packagingFileDescription'), packagingInternalName:value('packagingInternalName'), packagingOriginalFilename:value('packagingOriginalFilename'), packagingExecutionLevel:value('packagingExecutionLevel'), packagingDpiAwareness:value('packagingDpiAwareness'), packagingWindowsManifestFile:value('packagingWindowsManifestFile'), packagingResourceCompilerPath:value('packagingResourceCompilerPath'), packagingLinuxDesktop:checked('packagingLinuxDesktop'), packagingLinuxAppId:value('packagingLinuxAppId'), packagingCategories:value('packagingCategories'), packagingLinuxComment:value('packagingLinuxComment'), packagingInstallPrefix:value('packagingInstallPrefix'),
     installerEnabled:checked('installerEnabled'), installerBackend:value('installerBackend'), installerBuildPortablePackage:checked('installerBuildPortablePackage'), installerOutputDirectory:value('installerOutputDirectory'), installerFileNamePattern:value('installerFileNamePattern'), installerInstallDirectoryName:value('installerInstallDirectoryName'), installerDesktopShortcut:checked('installerDesktopShortcut'), installerStartMenuShortcut:checked('installerStartMenuShortcut'), installerRunAfterInstall:checked('installerRunAfterInstall'), installerQtIfwMode:value('installerQtIfwMode'), installerQtIfwBinaryCreatorPath:value('installerQtIfwBinaryCreatorPath'), installerQtIfwRepogenPath:value('installerQtIfwRepogenPath'), installerQtIfwInstallerBasePath:value('installerQtIfwInstallerBasePath'), installerQtIfwComponentId:value('installerQtIfwComponentId'), installerQtIfwComponentDisplayName:value('installerQtIfwComponentDisplayName'), installerQtIfwComponentDescription:value('installerQtIfwComponentDescription'), installerQtIfwReleaseDate:value('installerQtIfwReleaseDate'), installerQtIfwRepositoryUrl:value('installerQtIfwRepositoryUrl'), installerQtIfwRepositoryOutputDirectory:value('installerQtIfwRepositoryOutputDirectory'), installerQtIfwMaintenanceToolName:value('installerQtIfwMaintenanceToolName'), installerQtIfwWizardStyle:value('installerQtIfwWizardStyle'), installerQtIfwControlScript:value('installerQtIfwControlScript'), installerQtIfwComponentScript:value('installerQtIfwComponentScript'), installerQtIfwArchiveFormat:value('installerQtIfwArchiveFormat'), installerQtIfwCompression:value('installerQtIfwCompression'), installerQtIfwArguments:value('installerQtIfwArguments'), installerInnoIsccPath:value('installerInnoIsccPath'), installerInnoScriptFile:value('installerInnoScriptFile'), installerInnoLanguages:value('installerInnoLanguages'), installerInnoPrivileges:value('installerInnoPrivileges'), installerInnoArchitecture:value('installerInnoArchitecture'), installerInnoCompression:value('installerInnoCompression'), installerInnoSolidCompression:checked('installerInnoSolidCompression'), installerInnoDirectives:value('installerInnoDirectives'), installerNsisMakensisPath:value('installerNsisMakensisPath'), installerNsisScriptFile:value('installerNsisScriptFile'), installerNsisExecutionLevel:value('installerNsisExecutionLevel'), installerNsisCompressor:value('installerNsisCompressor'), installerNsisDefines:value('installerNsisDefines'), installerSigningEnabled:checked('installerSigningEnabled'), installerSignToolPath:value('installerSignToolPath'), installerCertificateFile:value('installerCertificateFile'), installerCertificateThumbprint:value('installerCertificateThumbprint'), installerCertificateSubject:value('installerCertificateSubject'), installerCertificatePasswordEnvironment:value('installerCertificatePasswordEnvironment'), installerTimestampUrl:value('installerTimestampUrl'), installerFileDigest:value('installerFileDigest'), installerTimestampDigest:value('installerTimestampDigest'), installerSignTargetBinary:checked('installerSignTargetBinary'), installerSignInstaller:checked('installerSignInstaller'), installerVerifyAfterSigning:checked('installerVerifyAfterSigning'), installerSigningArguments:value('installerSigningArguments'),
     publicationEnabled:checked('publicationEnabled'), publicationOutputDirectory:value('publicationOutputDirectory'), publicationChannel:value('publicationChannel'), publicationBaseUrl:value('publicationBaseUrl'), publicationReleaseNotesFile:value('publicationReleaseNotesFile'), publicationIncludePortablePackage:checked('publicationIncludePortablePackage'), publicationIncludeInstaller:checked('publicationIncludeInstaller'), publicationIncludeQtIfwRepository:checked('publicationIncludeQtIfwRepository'), publicationGenerateChecksums:checked('publicationGenerateChecksums'), publicationGenerateLatestManifest:checked('publicationGenerateLatestManifest'),
@@ -63584,7 +64029,7 @@ var require_qpmQtPackagingService = __commonJS({
           issues.push({ severity: "error", message: "Product version must use semantic form such as 1.2.3." });
         if (!manifest.packaging.identifier.includes("."))
           issues.push({ severity: "warning", message: "Application identifier should use reverse-DNS form, for example com.company.product." });
-        for (const [label, entry] of [["icon", manifest.packaging.icon], ["license", manifest.packaging.licenseFile], ["readme", manifest.packaging.readmeFile]]) {
+        for (const [label, entry] of [["icon", (0, qtProjectManifest_12.packageIconPath)(manifest)], ["license", manifest.packaging.licenseFile], ["readme", manifest.packaging.readmeFile]]) {
           if (entry && !fs.existsSync(path2.resolve(root, entry)))
             issues.push({ severity: "warning", message: `${label} file not found: ${entry}` });
         }
@@ -63864,6 +64309,7 @@ var require_qpmQtInstallerModel = __commonJS({
     exports2.sanitizeComponentId = sanitizeComponentId;
     exports2.normalizeNsisVersion = normalizeNsisVersion;
     var path2 = __importStar2(require("path"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
     var qpmQtPackagingModel_1 = require_qpmQtPackagingModel();
     function installerGeneratedPaths(manifestPath, componentId) {
       const root = path2.join(path2.dirname(manifestPath), ".qpm", "installer", "generated");
@@ -63960,7 +64406,8 @@ Component.prototype.createOperations = function() {
       const installer = manifest.packaging.installer;
       const inno = installer.inno;
       const targetExe = windowsExecutableName(manifest.targetName, manifest.kind);
-      const iconPath = manifest.packaging.icon ? path2.resolve(projectRoot, manifest.packaging.icon) : "";
+      const configuredIcon = (0, qtProjectManifest_12.packageIconPath)(manifest);
+      const iconPath = configuredIcon ? path2.resolve(projectRoot, configuredIcon) : "";
       const icon = iconPath ? `
 SetupIconFile=${innoEscape(iconPath)}` : "";
       const architecture = inno.architecture === "x64" ? "ArchitecturesAllowed=x64compatible\nArchitecturesInstallIn64BitMode=x64compatible" : inno.architecture === "x86-x64" ? "ArchitecturesAllowed=x86compatible x64compatible\nArchitecturesInstallIn64BitMode=x64compatible" : "ArchitecturesAllowed=x86compatible";
@@ -64493,8 +64940,9 @@ var require_qpmQtInstallerService = __commonJS({
         copyDirectoryContents(report.stageDirectory, dataDirectory);
         const targetName = path2.basename((0, qtProjectManifest_12.qtTargetPath)(ref.absolutePath, this.builds.buildMode, manifest));
         let iconBase = "";
-        if (manifest.packaging.icon) {
-          const source = resolveProjectPath(path2.dirname(ref.absolutePath), manifest.packaging.icon);
+        const configuredPackageIcon = (0, qtProjectManifest_12.packageIconPath)(manifest);
+        if (configuredPackageIcon) {
+          const source = resolveProjectPath(path2.dirname(ref.absolutePath), configuredPackageIcon);
           if (fs.existsSync(source)) {
             const destination = path2.join(path2.dirname(paths.qtIfwConfig), path2.basename(source));
             fs.mkdirSync(path2.dirname(destination), { recursive: true });

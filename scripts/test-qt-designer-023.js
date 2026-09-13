@@ -71,7 +71,7 @@ try {
   assert(projectSource.includes('QT_QPA_PLATFORM_PLUGIN_PATH'), 'Designer launch must receive the selected Qt plugin path');
 
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
-  assert.strictEqual(pkg.version, '0.33.0');
+  assert.strictEqual(pkg.version, '0.34.2');
   assert(pkg.contributes.commands.some((entry) => entry.command === 'qpm.selectQtDesigner'));
   assert(pkg.contributes.menus['explorer/context'].some((entry) => entry.submenu === 'qpm.explorerRoot' && /\.ui/.test(entry.when)));
   assert(pkg.contributes.menus['qpm.explorerRoot'].some((entry) => entry.command === 'qpm.openQtDesigner' && /\.ui/.test(entry.when)));

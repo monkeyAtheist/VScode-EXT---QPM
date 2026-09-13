@@ -39,6 +39,7 @@ const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmQtDirectBuildService_1 = require("../services/qpmQtDirectBuildService");
+const qpmQtBrandingService_1 = require("../services/qpmQtBrandingService");
 const qtResourceEditorPanel_1 = require("../views/qtResourceEditorPanel");
 class QpmQtProjectHealthProvider {
     workspaces;
@@ -254,6 +255,17 @@ Preview runtime: ${installation?.qmlRuntimePath ?? installation?.qmlScenePath ??
                 if (!qmlPreviewReady)
                     items.push(health('qml-preview', 'QML preview', 'Runtime not resolved', 'info', 'Select a Qt kit that provides qml or qmlscene.', 'qpm.qmlPreviewFile'));
             }
+            const brandingValidation = (0, qpmQtBrandingService_1.validateQtBranding)(ref.absolutePath, manifest);
+            const brandingSeverity = brandingValidation.errors.length > 0 ? 'error' : brandingValidation.warnings.length > 0 ? 'warning' : 'ok';
+            items.push(health('branding', 'Application icons', manifest.branding.executableIcon || manifest.branding.windowIcon
+                ? `Executable ${manifest.branding.executableIcon ? 'configured' : 'default'} · Window ${manifest.branding.windowIcon ? 'configured' : 'default'}`
+                : 'Platform defaults', brandingSeverity, [
+                `Executable icon: ${manifest.branding.executableIcon || 'not configured'}`,
+                `Qt window icon: ${manifest.branding.windowIcon || 'not configured'}`,
+                `Automatic Qt window icon: ${manifest.branding.autoApplyWindowIcon ? 'enabled' : 'disabled'}`,
+                ...brandingValidation.errors.map((entry) => `Error: ${entry}`),
+                ...brandingValidation.warnings.map((entry) => `Warning: ${entry}`)
+            ].join('\n'), 'qpm.editBuildSettings'));
             const packaging = manifest.packaging;
             const packagingFiles = [
                 ['Icon', packaging.icon],
