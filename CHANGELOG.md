@@ -1,3 +1,19 @@
+## 0.34.4 - Activation and VSIX entry-point reliability
+
+- Fixed the test VSIX entry point mismatch that could leave `package.json` pointing to `./dist/extension.js` while only `out/extension.js` was packaged, preventing extension activation and making contributed commands such as `qpm.openHome` appear as not found.
+- Added a prepublish entry-point validator: packaging now fails if the manifest `main` target is missing instead of producing an installable-looking but non-activating VSIX.
+- Added validation that `qpm.openHome` remains both contributed and registered in the runtime.
+- No project schema or Qt build behavior changes in this patch.
+
+## 0.34.3 - Embedded JC Lib 0.8.36 synchronization
+
+- Synchronized only the curated embedded JC Lib families that changed upstream: C 2.0.0, C++ 3.2.0, Scripting / System 1.12.0 and Qt C++ 2.0.0.
+- Kept QPM-only and unchanged curated packs untouched; intentionally removed JC Lib packs are not reintroduced.
+- Ported `insertValueMap` multi-pass expansion required by the modern C/C++ allocation generators.
+- Ported optional empty multi-select behavior required by updated Git/CMD/System command pickers.
+- Added Qt sub-pack routes for Qt Language, QML / Qt Quick, Multimedia and SQL & Test.
+- Embedded JC Lib compatibility level is now 0.8.36.
+
 ## 0.34.2 — Deployment recreation and VSIX activation fix
 
 - Fixes the test VSIX packaging regression introduced in 0.34.1: runtime dependencies required by the unbundled `out/` build are included again, so the extension activates normally.

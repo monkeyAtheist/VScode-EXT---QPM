@@ -41,7 +41,7 @@ try {
 }
 
 assert(api, 'embedded JC Lib internal test API must load');
-assert.strictEqual(api.EMBEDDED_JCLIB_VERSION, '0.8.27');
+assert.strictEqual(api.EMBEDDED_JCLIB_VERSION, '0.8.36');
 assert.deepStrictEqual(api.createPackTemplate('Empty', 'cpp', false).environments, [], 'new packs must start empty');
 assert.deepStrictEqual(api.normalizeEnvironments([], undefined), [], 'explicitly empty environments must stay empty');
 assert.deepStrictEqual(api.normalizeEnvironments(undefined, []), [], 'missing environments without legacy libraries must stay empty');
@@ -131,4 +131,4 @@ for (const [fileName, expectedRoot] of Object.entries(canonicalDataRoots)) {
   }
 }
 
-console.log('QPM 0.34.0 curated embedded JC Lib hierarchy tests: PASS');
+console.log('QPM 0.34.3 curated embedded JC Lib hierarchy tests: PASS');

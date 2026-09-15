@@ -23821,6 +23821,14 @@ class Sensor extends Device
           return bundledPackLibrarySelection("dbops_core", "Database operations backup and replication pack", "database_pack.json", "Databases", ["Database Operations, Backup & Replication"]);
         case "database_all":
           return combinePreservingLibraries("database_all", "All database pack", ["database_core", "sqlite_core", "postgres_core", "mysql_core", "sqlserver_core", "duckdb_core", "mongodb_core", "redis_core", "sqlite_c_core", "libpq_core", "mysql_capi_core", "odbc_core", "sqlalchemy_core", "hiredis_core", "dbops_core"]);
+        case "qt_cpp_core":
+          return bundledPackLibrarySelection("qt_cpp_core", "Qt Language", "qt_pack.json", "QT", ["Qt Language"]);
+        case "qml_core":
+          return bundledPackLibrarySelection("qml_core", "Qt QML / Qt Quick", "qt_pack.json", "QT", ["Qt QML"]);
+        case "qt_multimedia_core":
+          return bundledPackLibrarySelection("qt_multimedia_core", "Qt Multimedia", "qt_pack.json", "QT", ["Qt Multimedia"]);
+        case "qt_sql_test_core":
+          return bundledPackLibrarySelection("qt_sql_test_core", "Qt SQL & Test", "qt_pack.json", "QT", ["Qt SQL & Test"]);
         case "qt_full":
           return bundledPackLibrarySelection("qt_full", "Qt C++ complete structured pack", "qt_pack.json", "QT", ["Qt Language", "Qt QML", "Qt Multimedia", "Qt SQL & Test"]);
         case "qt_pyside_core":
@@ -23984,10 +23992,13 @@ class Sensor extends Device
           { label: "C/C++ preprocessor pack", description: "Macros, variadic macros, conditional compilation, pragmas, #, ##, and X-macros", value: "preprocessor_core" }
         ],
         qt: [
-          { label: "Add all Qt pack", description: "Add Qt C++ libraries and the complete Qt for Python / PySide6 library together", value: "qt_all" },
-          { label: "Qt C++ pack", description: "Structured Qt C++ pack loaded from qt_pack.json: QObject, signals, timers, Widgets dialogs, declarative QML templates, multimedia, SQL, tests, plugins, CMake, networking, serial, and threading", value: "qt_full" },
-          { label: "Qt for Python / PySide6 pack", description: "Structured PySide6 pack: QObject, Signal, Slot, event loop, processEvents, QTimer, widgets, Designer, models, files, settings, processes, serial, networking, QThread, thread pool, painting, QLibrary, plugins, QML, and deployment tools", value: "qt_pyside_core" },
-          { label: "Qt QML pack", description: "Qt Quick, bindings, loaders, Connections, and C++ backend integration", value: "qml_core" }
+          { label: "Add all Qt pack", description: "Add the complete modern Qt C++ pack plus Qt for Python / PySide6", value: "qt_all" },
+          { label: "Qt complete C++ pack", description: "Qt 6 Core, Widgets, QML/Quick, Multimedia, SQL/Test, networking, concurrency, graphics, tooling and deployment", value: "qt_full" },
+          { label: "Qt Language", description: "Modern Qt 6 C++ APIs: Core, meta-object, Widgets, models/views, I/O, networking, concurrency, graphics, services and tooling", value: "qt_cpp_core" },
+          { label: "Qt QML / Qt Quick", description: "QML language, bindings, Qt Quick visuals, layouts, models, input, animations, dialogs, services and C++ integration", value: "qml_core" },
+          { label: "Qt Multimedia", description: "Playback, capture, audio streams/devices, video frames, formats, metadata and spatial audio", value: "qt_multimedia_core" },
+          { label: "Qt SQL & Test", description: "Qt SQL connections/models/transactions and Qt Test, benchmarks, signal spies and model testing", value: "qt_sql_test_core" },
+          { label: "Qt for Python / PySide6", description: "Structured PySide6 pack: QObject, signals, timers, widgets, Designer, models, files, settings, processes, serial, networking, QThread, thread pool, painting, QLibrary, plugins, QML, and deployment tools", value: "qt_pyside_core" }
         ],
         opencv: [
           { label: "Add all OpenCV pack", description: "Add OpenCV language content and the camera/robotics example pack together", value: "opencv_all" },
@@ -27873,12 +27884,22 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
     function applyParameterizedInsertTemplate(fn, values) {
       const resolved = (fn.parameters ?? []).map(resolveParameter);
       let output = String(fn.insertText || fn.signature || fn.name || "");
-      resolved.forEach((param, index) => {
-        const explicit = values?.[index]?.trim();
-        const replacement = explicit && explicit.length > 0 ? explicit : param.defaultValue;
-        output = output.replace(new RegExp("\\{\\{" + escapeRegexLiteral(param.name) + "\\}\\}", "g"), replacement);
+      const replacements = resolved.map((param, index) => {
+        const hasExplicitValue = Array.isArray(values) && index < values.length && values[index] !== void 0 && values[index] !== null;
+        const rawReplacement = hasExplicitValue ? String(values[index] ?? "").trim() : param.defaultValue;
+        const valueMap = param && typeof param.insertValueMap === "object" && param.insertValueMap !== null ? param.insertValueMap : void 0;
+        return valueMap && Object.prototype.hasOwnProperty.call(valueMap, rawReplacement) ? String(valueMap[rawReplacement] ?? "") : rawReplacement;
       });
-      return output;
+      const maxPasses = Math.max(2, Math.min(12, resolved.length + 2));
+      for (let pass = 0; pass < maxPasses; pass += 1) {
+        const before = output;
+        resolved.forEach((param, index) => {
+          output = output.replace(new RegExp("\\{\\{" + escapeRegexLiteral(param.name) + "\\}\\}", "g"), replacements[index]);
+        });
+        if (output === before)
+          break;
+      }
+      return usesCmdBatchStatementStyle(fn) || usesGitCommandStyle(fn) ? normalizeCmdBatchTemplateWhitespace(output) : output;
     }
     function extractDefaultArguments(fn) {
       const params = (fn.parameters ?? []).map(resolveParameter);
@@ -27917,12 +27938,46 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       const haystack = `${fn.environment ?? ""} ${fn.library ?? ""}`.toLowerCase();
       return haystack.includes("python");
     }
+    function usesCmdBatchStatementStyle(fn) {
+      const library = String(fn.library ?? "").trim().toLowerCase();
+      return library === "windows cmd & batch";
+    }
+    function usesGitCommandStyle(fn) {
+      const library = String(fn.library ?? "").trim().toLowerCase();
+      return library === "git version control";
+    }
+    function normalizeCmdBatchTemplateWhitespace(text) {
+      const input = String(text || "").trim();
+      let output = "";
+      let inQuotes = false;
+      let pendingSpace = false;
+      for (let index = 0; index < input.length; index += 1) {
+        const ch = input[index];
+        if (ch === '"') {
+          if (pendingSpace && output && !output.endsWith(" "))
+            output += " ";
+          pendingSpace = false;
+          output += ch;
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (!inQuotes && /\s/.test(ch)) {
+          pendingSpace = output.length > 0;
+          continue;
+        }
+        if (pendingSpace && output && !output.endsWith(" "))
+          output += " ";
+        pendingSpace = false;
+        output += ch;
+      }
+      return output.trim();
+    }
     function ensureStatementTerminator(text, fn) {
       const trimmed = String(text || "").trim();
       if (!trimmed) {
         return trimmed;
       }
-      if (fn && usesPythonStatementStyle(fn)) {
+      if (fn && (usesPythonStatementStyle(fn) || usesCmdBatchStatementStyle(fn))) {
         return trimmed.replace(/;+$/, "");
       }
       if (/[;}]$/.test(trimmed)) {
@@ -28342,7 +28397,8 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
         applyDefaultIfEmpty: raw?.applyDefaultIfEmpty !== false,
         multiSelect: raw?.multiSelect === true,
         valueSeparator: typeof raw?.valueSeparator === "string" && raw.valueSeparator.length > 0 ? raw.valueSeparator : " | ",
-        emptyValue: typeof raw?.emptyValue === "string" ? raw.emptyValue : ""
+        emptyValue: typeof raw?.emptyValue === "string" ? raw.emptyValue : "",
+        allowEmptySelection: raw?.allowEmptySelection === true
       };
     }
     function buildAutoStructuredPickerConfig(param) {
@@ -28436,6 +28492,9 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       }
       if (typeof overrideRaw?.emptyValue === "string") {
         result.emptyValue = overrideRaw.emptyValue;
+      }
+      if (typeof overrideRaw?.allowEmptySelection === "boolean") {
+        result.allowEmptySelection = overrideRaw.allowEmptySelection;
       }
       if (overrideConfig && Array.isArray(overrideConfig.sections) && overrideConfig.sections.length) {
         result.sections = overrideConfig.sections;
@@ -29426,6 +29485,7 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       const multiSelect = normalizedConfig?.multiSelect === true;
       const valueSeparator = typeof normalizedConfig?.valueSeparator === "string" && normalizedConfig.valueSeparator.length > 0 ? normalizedConfig.valueSeparator : " | ";
       const emptyValue = typeof normalizedConfig?.emptyValue === "string" ? normalizedConfig.emptyValue : "";
+      const allowEmptySelection = normalizedConfig?.allowEmptySelection === true;
       const splitSelectedValues = (value) => {
         const text = String(value || "").trim();
         if (!text || emptyValue && text === emptyValue)
@@ -29711,6 +29771,7 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       multiSelect: ${JSON.stringify(multiSelect)},
       valueSeparator: ${JSON.stringify(valueSeparator)},
       emptyValue: ${JSON.stringify(emptyValue)},
+      allowEmptySelection: ${JSON.stringify(allowEmptySelection)},
       sourceSidebarWidth: typeof persistedState.sourceSidebarWidth === 'number' ? persistedState.sourceSidebarWidth : 220
     };
     const shellRoot = document.getElementById('shellRoot');
@@ -29948,8 +30009,10 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       const combinedValue = selectedItems.length
         ? selectedItems.map((entry) => String(entry.value || entry.constant || entry.label || '')).filter(Boolean).join(state.valueSeparator)
         : state.emptyValue;
-      selectedConstant.textContent = combinedValue || 'No selection';
-      selectedDescription.textContent = String(item.description || item.detail || 'No description available.');
+      selectedConstant.textContent = combinedValue || (state.multiSelect ? '(none)' : 'No selection');
+      selectedDescription.textContent = state.multiSelect && selectedItems.length === 0
+        ? (state.allowEmptySelection ? 'No option selected. Apply will clear the optional multi-select field.' : 'Select at least one option before applying.')
+        : String(item.description || item.detail || 'No description available.');
       const sourceTypes = Array.isArray(item.sourceTypes) ? item.sourceTypes.filter(Boolean).join(', ') : '';
       const bits = [];
       if (state.multiSelect) bits.push(String(selectedItems.length) + ' selected flag' + (selectedItems.length === 1 ? '' : 's'));
@@ -29959,7 +30022,7 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
       if (item.defaultValue) bits.push('Suggested value: ' + item.defaultValue);
       if (item.valueKind) bits.push('Value type: ' + item.valueKind);
       selectedMeta.textContent = bits.join(' \xB7 ');
-      applyBtn.disabled = state.multiSelect ? (!combinedValue && !state.emptyValue) : false;
+      applyBtn.disabled = state.multiSelect ? (!state.allowEmptySelection && !combinedValue && !state.emptyValue) : false;
     }
 
     function render() {
@@ -34551,13 +34614,15 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
               return;
             }
             const item = message.item;
+            const appliedValue = typeof message.value === "string" ? message.value : String(item.value || item.constant || item.label || "");
+            const clearingOptionalMultiSelect = currentChoicePickerRequest.multiSelect && appliedValue.length === 0;
             await detailsPanel.webview.postMessage({
               type: "setFieldValue",
               index: currentChoicePickerRequest.targetIndex,
-              value: typeof message.value === "string" ? message.value : String(item.value || item.constant || item.label || "")
+              value: appliedValue
             });
             const currentValueText = currentChoicePickerRequest.defaultTargetIndex >= 0 ? String(currentChoicePickerRequest.values?.[currentChoicePickerRequest.defaultTargetIndex] || "").trim() : "";
-            if (currentChoicePickerRequest.defaultTargetIndex >= 0 && currentChoicePickerRequest.applyDefaultIfEmpty && !currentValueText && item.defaultValue) {
+            if (currentChoicePickerRequest.defaultTargetIndex >= 0 && currentChoicePickerRequest.applyDefaultIfEmpty && !clearingOptionalMultiSelect && !currentValueText && item.defaultValue) {
               await detailsPanel.webview.postMessage({
                 type: "setFieldValue",
                 index: currentChoicePickerRequest.defaultTargetIndex,

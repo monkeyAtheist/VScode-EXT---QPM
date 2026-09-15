@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.2",
+  "version": "0.34.4",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -317,7 +317,7 @@
   ],
   "main": "./dist/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && node ./scripts/validate-extension-entrypoint.js",
     "compile": "npm run clean:legacy-cvi && npm run clean:generated && tsc -p ./ && npm run bundle",
     "watch": "npm run clean:legacy-cvi && npm run clean:generated && tsc -watch -p ./",
     "package": "vsce package",
@@ -370,7 +370,8 @@
     "test:build-diagnostics": "npm run compile && node scripts/test-build-diagnostics-0300.js && node scripts/test-qt-standalone-deployment-0320.js",
     "test:settings-pages": "npm run compile && node scripts/test-qt-settings-pages-0330.js",
     "test:application-icons": "npm run compile && node scripts/test-qt-application-icons-0340.js",
-    "test:auto-deployment": "npm run compile && node scripts/test-qt-auto-deployment-0342.js"
+    "test:auto-deployment": "npm run compile && node scripts/test-qt-auto-deployment-0342.js",
+    "test:entrypoint": "node ./scripts/validate-extension-entrypoint.js"
   },
   "contributes": {
     "viewsContainers": {

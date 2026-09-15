@@ -1,3 +1,5 @@
+> QPM 0.34.4 fixes VSIX activation/entry-point validation; the embedded JC Lib content remains aligned with 0.8.36.
+
 ## QPM 0.34.2 — Reliable automatic standalone deployment
 
 QPM now runs standalone deployment from one centralized post-build stage shared by Direct, qmake and CMake. When **Run deployment tool after build** is enabled for the selected build profile, deleting `dist/` and rebuilding recreates the deployment tree automatically. The settings page also exposes the build profile associated with automatic deployment.
@@ -76,7 +78,9 @@ Typical failure output is now similar to:
 
 QPM now generates `qpm_signal_plot_bridge.h` with the complete `SignalPlot` type before declaring `QPointer<SignalPlot>`. This fixes Qt 6.11 builds where MOC instantiates the inline `QPointer::data()` getter. The header also explicitly includes `<limits>`.
 
-# Qt Project Manager and Build
+# Qt Project Manager
+
+> QPM 0.34.3 embeds the curated JC Lib 0.8.36-compatible library set. and Build
 
 ## QPM 0.29.0 — Complete Acquisition Dashboard and one-step Designer preparation
 

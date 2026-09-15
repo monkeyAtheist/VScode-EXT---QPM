@@ -9,7 +9,7 @@ const model = require('../out/model/qtProjectManifest.js');
 const branding = require('../out/services/qpmQtBrandingService.js');
 const packaging = require('../out/services/qpmQtPackagingModel.js');
 
-assert.strictEqual(pkg.version, '0.34.2');
+assert.strictEqual(pkg.version, '0.34.3');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qpm-icons-0340-'));
 try {
   const manifestPath = path.join(root, 'IconApp.qtproject.json');
