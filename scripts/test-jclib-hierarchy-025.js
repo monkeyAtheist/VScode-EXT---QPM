@@ -41,7 +41,7 @@ try {
 }
 
 assert(api, 'embedded JC Lib internal test API must load');
-assert.strictEqual(api.EMBEDDED_JCLIB_VERSION, '0.8.36');
+assert.strictEqual(api.EMBEDDED_JCLIB_VERSION, '0.8.38');
 assert.deepStrictEqual(api.createPackTemplate('Empty', 'cpp', false).environments, [], 'new packs must start empty');
 assert.deepStrictEqual(api.normalizeEnvironments([], undefined), [], 'explicitly empty environments must stay empty');
 assert.deepStrictEqual(api.normalizeEnvironments(undefined, []), [], 'missing environments without legacy libraries must stay empty');

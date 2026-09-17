@@ -1,3 +1,11 @@
+## QPM 0.34.5 — SSH device-management boundary
+
+The SSH Device Manager is a VS Code-side administration surface, independent from a project-specific Qt platform profile. It reads the current user's OpenSSH client configuration, local resolver aliases and the OS neighbour cache; writes are limited to simple single-host blocks in `~/.ssh/config`. Private keys are never copied into QPM global storage. Key enrollment transfers only a user-selected `.pub` file after an explicit confirmation.
+
+The Platforms service remains responsible for project-specific build/deploy/run profiles. The device manager is therefore useful before a `remote-linux` profile exists (for example, while provisioning a Raspberry Pi), while `qpm.openRemoteTerminal` continues to use the active project platform profile.
+
+Global Qt Libraries migration runs before the embedded library explorer is activated. Retired integrated catalog files are removed, mixed pack files are rewritten only to remove retired environment/library nodes, and unrelated user content is preserved.
+
 ## QPM 0.30.0 — Build logging architecture
 
 The build pipeline now uses two complementary output surfaces. `Qt Project Manager` is the structured report intended for day-to-day debugging; `Qt Project Manager - Build Trace` is the lossless raw trace. Tool processes are captured into per-process stdout/stderr buffers and only emitted after completion, so parallel jobs cannot interleave diagnostic text. `qpmBuildDiagnostics.ts` parses common compiler/linker diagnostics and feeds both structured log blocks and a `vscode.DiagnosticCollection` named `qpm-build`.

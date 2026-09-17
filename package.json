@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.4",
+  "version": "0.34.6",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -197,6 +197,7 @@
     "onCommand:qpm.deployToPlatform",
     "onCommand:qpm.runOnPlatform",
     "onCommand:qpm.buildDeployRunPlatform",
+    "onCommand:qpm.openSshDeviceManager",
     "onCommand:qpm.openRemoteTerminal",
     "onCommand:qpm.openDockerShell",
     "onCommand:qpm.serveWebAssembly",
@@ -371,7 +372,8 @@
     "test:settings-pages": "npm run compile && node scripts/test-qt-settings-pages-0330.js",
     "test:application-icons": "npm run compile && node scripts/test-qt-application-icons-0340.js",
     "test:auto-deployment": "npm run compile && node scripts/test-qt-auto-deployment-0342.js",
-    "test:entrypoint": "node ./scripts/validate-extension-entrypoint.js"
+    "test:entrypoint": "node ./scripts/validate-extension-entrypoint.js",
+    "test:qpm-0345": "node scripts/test-qpm-cleanup-ssh-0345.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -1491,6 +1493,13 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "qpm.openSshDeviceManager",
+        "title": "Qt Project Manager: OpenSSH Device Manager",
+        "icon": "$(remote)",
+        "shortTitle": "OpenSSH Device Manager",
+        "category": "Qt Project Manager"
+      },
+      {
         "command": "qpm.openRemoteTerminal",
         "title": "Qt Project Manager: Open Remote Linux Terminal",
         "icon": "$(terminal)"
@@ -2339,6 +2348,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "qpm.openSshDeviceManager",
+          "when": "view == qpm.platforms",
+          "group": "navigation@3"
+        },
+        {
           "command": "qpm.createPortablePackage",
           "when": "view == qpm.packaging",
           "group": "navigation@1"
@@ -2814,6 +2828,21 @@
           "command": "qpm.moveFileToFolder",
           "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\./",
           "group": "modification@2"
+        },
+        {
+          "command": "qpm.openSshDeviceManager",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmWorkspace",
+          "group": "qtPlatforms@0.5"
+        },
+        {
+          "command": "qpm.openSshDeviceManager",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmProject/",
+          "group": "qtPlatforms@0.5"
+        },
+        {
+          "command": "qpm.openSshDeviceManager",
+          "when": "view == qpm.workspaceExplorer && viewItem == qpmFolder",
+          "group": "qtPlatforms@0.5"
         }
       ],
       "commandPalette": [
@@ -3181,6 +3210,10 @@
           "submenu": "qpm.editorDependencies",
           "group": "2_dependencies@1",
           "when": "qpm.qtCppProjectActive"
+        },
+        {
+          "command": "qpm.openSshDeviceManager",
+          "group": "2_remote@1"
         }
       ],
       "qpm.editorDocumentation": [
@@ -3811,6 +3844,10 @@
           "command": "qpm.openInstrumentProfileEditor",
           "when": "resourceExtname == .json && resourceDirname =~ /instrument_profiles/",
           "group": "1_qt@5"
+        },
+        {
+          "command": "qpm.openSshDeviceManager",
+          "group": "2_remote@1"
         }
       ],
       "qpm.editorPackaging": [

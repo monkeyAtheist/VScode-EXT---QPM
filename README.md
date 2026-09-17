@@ -1,4 +1,10 @@
-> QPM 0.34.4 fixes VSIX activation/entry-point validation; the embedded JC Lib content remains aligned with 0.8.36.
+> QPM 0.34.6 keeps the curated JC Lib 0.8.38-compatible library set and exposes the native OpenSSH Device Manager directly from QPM context menus for remote Linux / Raspberry Pi workflows.
+
+## QPM 0.34.6 — OpenSSH Device Manager in QPM context menus
+
+QPM now exposes **OpenSSH Device Manager** from the Command Palette, the Platforms view, the editor right-click **QPM** menu, the VS Code Explorer right-click **QPM** menu, and the QPM workspace/project/folder context menu. The manager lists explicit aliases from `~/.ssh/config`, non-localhost aliases from the system hosts file, and devices currently visible in the ARP/neighbour cache. It can create and edit simple `Host` blocks, connect or inspect a target, test key-only authentication, generate an Ed25519 key pair and append a selected public key to a remote account after confirmation. Wildcard and multi-host blocks remain read-only in the visual editor.
+
+The embedded library engine is aligned with JC Lib 0.8.38 while preserving QPM's reduced pack perimeter. QPM also performs a one-way activation cleanup of retired integrated catalog content from its global pack storage: dedicated obsolete files/backups are removed and mixed user packs keep unrelated environments/libraries.
 
 ## QPM 0.34.2 — Reliable automatic standalone deployment
 
@@ -80,7 +86,7 @@ QPM now generates `qpm_signal_plot_bridge.h` with the complete `SignalPlot` type
 
 # Qt Project Manager
 
-> QPM 0.34.3 embeds the curated JC Lib 0.8.36-compatible library set. and Build
+> The embedded Qt Libraries catalog uses the curated QPM subset of JC Lib 0.8.38.
 
 ## QPM 0.29.0 — Complete Acquisition Dashboard and one-step Designer preparation
 

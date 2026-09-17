@@ -35,6 +35,7 @@ import { QpmQtKitsProvider } from './providers/qpmQtKitsProvider';
 import { QpmQtDebugService } from './services/qpmQtDebugService';
 import { QpmQtDebugProvider } from './providers/qpmQtDebugProvider';
 import { QpmQtPlatformService } from './services/qpmQtPlatformService';
+import { openSshDeviceManager } from './services/qpmSshDeviceManager';
 import { QpmQtPlatformProvider } from './providers/qpmQtPlatformProvider';
 import { QpmQtPackagingService } from './services/qpmQtPackagingService';
 import { QpmQtPackagingProvider } from './providers/qpmQtPackagingProvider';
@@ -552,6 +553,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.deployToPlatform', () => platforms.deployActive()),
     register('qpm.runOnPlatform', () => platforms.runActive()),
     register('qpm.buildDeployRunPlatform', () => platforms.buildDeployRun()),
+    register('qpm.openSshDeviceManager', () => openSshDeviceManager(context)),
     register('qpm.openRemoteTerminal', () => platforms.openRemoteTerminal()),
     register('qpm.openDockerShell', () => platforms.openDockerShell()),
     register('qpm.serveWebAssembly', () => platforms.serveWebAssembly()),

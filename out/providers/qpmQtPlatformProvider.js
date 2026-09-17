@@ -79,6 +79,7 @@ class QpmQtPlatformProvider {
                 { id: 'deploy', label: 'Deploy to active platform', description: profile.type, icon: 'cloud-upload', command: 'qpm.deployToPlatform' },
                 { id: 'run', label: 'Run on active platform', description: profile.type, icon: 'play', command: 'qpm.runOnPlatform' },
                 { id: 'all', label: 'Build, deploy and run', description: 'Complete platform workflow', icon: 'rocket', command: 'qpm.buildDeployRunPlatform' },
+                { id: 'ssh-manager', label: 'OpenSSH Device Manager', description: 'Manage OpenSSH aliases, keys and nearby devices', icon: 'remote', command: 'qpm.openSshDeviceManager' },
                 { id: 'manage', label: 'Manage platform profiles', description: `${manifest.profiles.platforms.length} profile(s)`, icon: 'settings-gear', command: 'qpm.manageQtPlatforms' },
                 { id: 'report', label: 'Open platform report', description: 'Tools and readiness', icon: 'pulse', command: 'qpm.openPlatformReport' }
             ];

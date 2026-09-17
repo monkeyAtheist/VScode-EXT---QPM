@@ -40,7 +40,7 @@ exports.deactivate = deactivate;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
-const EMBEDDED_JCLIB_VERSION = '0.8.36';
+const EMBEDDED_JCLIB_VERSION = '0.8.38';
 const SYMBOL_CATEGORY_LABELS = {
     function: 'Functions',
     struct: 'Structs',
@@ -8000,8 +8000,6 @@ function buildStarterPackSelection(id) {
             return bundledPackLibraryEnvironmentSelection('lua_standard', 'Lua standard 5.4 pack', 'lua_pack.json', 'Lua', ['Lua standard 5.4']);
         case 'lua_industrial':
             return bundledPackLibraryEnvironmentSelection('lua_industrial', 'Lua industriel / banc de test pack', 'lua_pack.json', 'Lua', ['Lua industriel / banc de test']);
-        case 'lua_mpt':
-            return bundledPackLibraryEnvironmentSelection('lua_mpt', 'MPT Studio / MPTLua pack', 'lua_pack.json', 'Lua', ['MPT Studio / MPTLua (Lua 5.2.4)']);
         case 'lua_stormworks':
             return bundledPackLibraryEnvironmentSelection('lua_stormworks', 'Stormworks Lua microcontroller pack', 'lua_pack.json', 'Lua', ['Stormworks Lua microcontroller']);
         case 'examples_all':
@@ -8133,10 +8131,9 @@ async function chooseGroupedStarterPack(packName) {
             { label: 'Database operations, backup and replication', description: 'PostgreSQL, MySQL, SQLite, MongoDB and Redis operational backup, health-check and replication helpers', value: 'dbops_core' }
         ],
         lua: [
-            { label: 'Add all Lua pack', description: 'Add one Lua environment containing Lua standard 5.4, industrial/test-bench Lua, MPTLua, and Stormworks libraries', value: 'lua_all' },
+            { label: 'Add all Lua pack', description: 'Add one Lua environment containing Lua standard 5.4, industrial/test-bench Lua, and Stormworks libraries', value: 'lua_all' },
             { label: 'Lua standard 5.4', description: 'Syntax, tables, functions, modules, errors, strings, patterns, math, IO, coroutines, versions, and pitfalls', value: 'lua_standard' },
             { label: 'Lua industriel / banc de test', description: 'External communication references and test-sequence/logging patterns', value: 'lua_industrial' },
-            { label: 'MPT Studio / MPTLua', description: 'MPTLua Lua 5.2.4 environment, operator prompts, reporting, persistence, switching, measurements, and advanced MPT patterns', value: 'lua_mpt' },
             { label: 'Stormworks Lua microcontroller', description: 'onTick/onDraw lifecycle, composite I/O, screen drawing, map conversion, properties, async HTTP, and practical Stormworks snippets', value: 'lua_stormworks' }
         ],
         assembly: [

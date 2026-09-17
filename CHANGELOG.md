@@ -1,3 +1,19 @@
+# 0.34.6
+
+- Added **OpenSSH Device Manager** directly to the QPM right-click menu in both the editor and VS Code Explorer.
+- Added **OpenSSH Device Manager** to project/workspace/folder context menus inside the QPM workspace tree.
+- Kept the existing Platforms view and command-palette entry, so the SSH manager is reachable from all primary QPM navigation surfaces.
+
+## 0.34.5 - Catalog retirement cleanup and SSH Device Manager
+
+- Removed the last dormant starter routes for retired proprietary/internal Lua catalog content from the embedded library engine.
+- Added activation-time cleanup of the QPM global library-pack storage. Dedicated retired packs and stale backups are deleted; mixed packs keep unrelated user libraries while retired environments/libraries are removed.
+- Re-audited source, generated runtime, bundled data, README, changelog and docs so retired internal catalog identifiers are no longer present as semantic references.
+- Updated the embedded JC Lib compatibility level to 0.8.38 and synchronized the C pack to 2.2.0; the curated QPM pack perimeter remains unchanged.
+- Added **Qt Project Manager: Open SSH Device Manager**, ported from JC Lib. The manager reads `~/.ssh/config`, local hosts aliases and the local ARP/neighbour cache.
+- Added guarded visual workflows to create/edit/delete OpenSSH aliases, connect, inspect effective SSH configuration, test key authentication, generate Ed25519 keys and enroll public keys on a selected host.
+- Added an SSH Device Manager shortcut to the Platforms view and a dedicated Platforms tree action for Raspberry Pi / remote-Linux workflows.
+
 ## 0.34.4 - Activation and VSIX entry-point reliability
 
 - Fixed the test VSIX entry point mismatch that could leave `package.json` pointing to `./dist/extension.js` while only `out/extension.js` was packaged, preventing extension activation and making contributed commands such as `qpm.openHome` appear as not found.

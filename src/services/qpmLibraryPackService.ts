@@ -72,6 +72,127 @@ function backupAndRemove(filePath: string, targetDirectory: string, output: vsco
   output.appendLine(`[Qt Libraries] ${reason}. Backup: ${backup}`);
 }
 
+
+interface RetiredPackCleanupStats {
+  scannedFiles: number;
+  deletedFiles: number;
+  updatedFiles: number;
+  removedEnvironments: number;
+  removedLibraries: number;
+}
+
+function retiredCatalogMarkerParts(): { tokenPrefixes: string[]; compactSequences: string[] } {
+  // Deliberately encode retired internal identifiers as character codes so the
+  // old names are not reintroduced into QPM source, documentation or changelog.
+  const decode = (codes: number[]): string => String.fromCharCode(...codes);
+  return {
+    tokenPrefixes: [decode([77, 80, 84]), decode([72, 78, 70])],
+    compactSequences: [decode([84, 78, 84, 69, 88, 69, 67])]
+  };
+}
+
+function isRetiredCatalogIdentifier(value: unknown): boolean {
+  const text = String(value ?? '').trim().toUpperCase();
+  if (!text) return false;
+  const { tokenPrefixes, compactSequences } = retiredCatalogMarkerParts();
+  const tokens = text.split(/[^A-Z0-9]+/).filter(Boolean);
+  const compact = tokens.join('');
+  if (tokenPrefixes.some((prefix) => tokens.some((token) => token === prefix || token.startsWith(prefix)))) return true;
+  return compactSequences.some((sequence) => compact.includes(sequence));
+}
+
+function documentContainsRetiredCatalog(raw: any): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  if ([raw.id, raw.name].some(isRetiredCatalogIdentifier)) return true;
+  const inspectLibraries = (libraries: any[]): boolean => (Array.isArray(libraries) ? libraries : []).some((library) =>
+    isRetiredCatalogIdentifier(library?.id) || isRetiredCatalogIdentifier(library?.name)
+  );
+  if (inspectLibraries(raw.libraries)) return true;
+  return (Array.isArray(raw.environments) ? raw.environments : []).some((environment: any) =>
+    isRetiredCatalogIdentifier(environment?.id)
+    || isRetiredCatalogIdentifier(environment?.name)
+    || inspectLibraries(environment?.libraries)
+  );
+}
+
+function purgeRetiredGlobalPackStorage(targetDirectory: string, output: vscode.OutputChannel): RetiredPackCleanupStats {
+  const stats: RetiredPackCleanupStats = { scannedFiles: 0, deletedFiles: 0, updatedFiles: 0, removedEnvironments: 0, removedLibraries: 0 };
+  if (!fs.existsSync(targetDirectory)) return stats;
+
+  const backupDirectory = path.join(targetDirectory, 'backups');
+  if (fs.existsSync(backupDirectory)) {
+    for (const entry of fs.readdirSync(backupDirectory).filter((name) => name.toLowerCase().endsWith('.json'))) {
+      const filePath = path.join(backupDirectory, entry);
+      stats.scannedFiles += 1;
+      let raw: any;
+      try { raw = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { raw = undefined; }
+      const stem = path.basename(entry, path.extname(entry));
+      if (isRetiredCatalogIdentifier(stem) || documentContainsRetiredCatalog(raw)) {
+        try { fs.unlinkSync(filePath); stats.deletedFiles += 1; } catch { /* ignore locked backup */ }
+      }
+    }
+  }
+
+  for (const fileName of fs.readdirSync(targetDirectory).filter((name) => name.toLowerCase().endsWith('.json')).sort()) {
+    const filePath = path.join(targetDirectory, fileName);
+    stats.scannedFiles += 1;
+    let raw: any;
+    try { raw = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { continue; }
+
+    if ([raw?.id, raw?.name, path.basename(fileName, path.extname(fileName))].some(isRetiredCatalogIdentifier)) {
+      try { fs.unlinkSync(filePath); stats.deletedFiles += 1; } catch { /* keep activation resilient */ }
+      continue;
+    }
+
+    let changed = false;
+    const cleanLibraries = (libraries: any[]): any[] => {
+      const source = Array.isArray(libraries) ? libraries : [];
+      const kept = source.filter((library) => {
+        const remove = isRetiredCatalogIdentifier(library?.name) || isRetiredCatalogIdentifier(library?.id);
+        if (remove) stats.removedLibraries += 1;
+        return !remove;
+      });
+      if (kept.length !== source.length) changed = true;
+      return kept;
+    };
+
+    if (Array.isArray(raw?.environments)) {
+      const environments: any[] = [];
+      for (const environment of raw.environments) {
+        if (isRetiredCatalogIdentifier(environment?.name) || isRetiredCatalogIdentifier(environment?.id)) {
+          stats.removedEnvironments += 1;
+          changed = true;
+          continue;
+        }
+        const clone = { ...environment, libraries: cleanLibraries(environment?.libraries) };
+        environments.push(clone);
+      }
+      raw.environments = environments;
+    }
+    if (Array.isArray(raw?.libraries)) raw.libraries = cleanLibraries(raw.libraries);
+
+    const environmentLibraryCount = Array.isArray(raw?.environments)
+      ? raw.environments.reduce((sum: number, environment: any) => sum + (Array.isArray(environment?.libraries) ? environment.libraries.length : 0), 0)
+      : 0;
+    const legacyLibraryCount = Array.isArray(raw?.libraries) ? raw.libraries.length : 0;
+    if (changed && environmentLibraryCount + legacyLibraryCount === 0) {
+      try { fs.unlinkSync(filePath); stats.deletedFiles += 1; } catch { /* keep activation resilient */ }
+      continue;
+    }
+    if (changed) {
+      try {
+        fs.writeFileSync(filePath, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+        stats.updatedFiles += 1;
+      } catch { /* keep activation resilient */ }
+    }
+  }
+
+  if (stats.deletedFiles || stats.updatedFiles || stats.removedEnvironments || stats.removedLibraries) {
+    output.appendLine(`[Qt Libraries] Retired integrated catalog cleanup: ${stats.deletedFiles} file(s) deleted, ${stats.updatedFiles} file(s) updated, ${stats.removedEnvironments} environment(s) removed, ${stats.removedLibraries} library/libraries removed.`);
+  }
+  return stats;
+}
+
 function migrateLegacySingleCorePack(targetDirectory: string, output: vscode.OutputChannel): void {
   const legacyCandidates = ['qpm_core_pack.json', 'qpm_pack.json'];
   for (const fileName of legacyCandidates) {
@@ -155,12 +276,13 @@ function installOrUpgradePack(
  *
  * The old combined qpm_core_pack.json is backed up and removed to prevent
  * duplicated C/C++/preprocessor nodes. User-created global and workspace packs
- * are not touched.
+ * are preserved except for one-way removal of retired integrated catalog nodes from global storage.
  */
 export function ensureBundledCppLibraryPack(context: vscode.ExtensionContext, output: vscode.OutputChannel): void {
   const targetDirectory = path.join(context.globalStorageUri.fsPath, 'packs');
   fs.mkdirSync(targetDirectory, { recursive: true });
 
+  purgeRetiredGlobalPackStorage(targetDirectory, output);
   migrateLegacySingleCorePack(targetDirectory, output);
   migrateDeprecatedIntegratedPacks(targetDirectory, output);
 

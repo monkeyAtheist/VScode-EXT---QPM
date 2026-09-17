@@ -2,7 +2,7 @@
   "id": "c_language_pack",
   "name": "C Structured Language Pack",
   "language": "C",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "readOnly": true,
   "environments": [
     {
@@ -39127,5 +39127,6 @@
         }
       ]
     }
-  ]
+  ],
+  "description": "Modern C language, DLL helpers, and the complete LabWindows/CVI API family under one C environment."
 }

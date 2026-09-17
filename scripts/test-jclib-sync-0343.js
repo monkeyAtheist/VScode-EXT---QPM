@@ -5,7 +5,7 @@ const assert = require('assert');
 
 const root = path.resolve(__dirname, '..');
 const expected = {
-  'c_language_pack.json': ['c_language_pack', '2.0.0'],
+  'c_language_pack.json': ['c_language_pack', '2.2.0'],
   'cpp_language_pack.json': ['jclib.cpp.language', '3.2.0'],
   'system_scripting_pack.json': ['scripting-system-pack', '1.12.0'],
   'qt_pack.json': ['qt-cpp-complete-pack', '2.0.0']
@@ -89,13 +89,13 @@ const normalized = normalizePicker(gitFlags.pickerConfig, 'Git flags');
 assert.strictEqual(normalized.allowEmptySelection, true);
 
 const sourceText = fs.readFileSync(path.join(root, 'src', 'jcLibEmbedded.ts'), 'utf8');
-assert(sourceText.includes("const EMBEDDED_JCLIB_VERSION = '0.8.36';"));
+assert(sourceText.includes("const EMBEDDED_JCLIB_VERSION = '0.8.38';"));
 assert(sourceText.includes("case 'qt_cpp_core':"));
 assert(sourceText.includes("case 'qt_multimedia_core':"));
 assert(sourceText.includes("case 'qt_sql_test_core':"));
 assert.strictEqual((sourceText.match(/case 'qt_all':/g) || []).length, 1, 'qt_all duplicate case');
 
-console.log('QPM 0.34.3 JC Lib 0.8.36 synchronization: OK');
+console.log('QPM embedded JC Lib 0.8.38 synchronization: OK');
 console.log('C allocation:', cGenerated);
 console.log('C++ allocation:', cppGenerated);
 console.log('Git push -u + empty multiselect: OK');
