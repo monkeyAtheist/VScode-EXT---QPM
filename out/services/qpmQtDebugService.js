@@ -476,6 +476,7 @@ function buildQtCppDebugConfiguration(context) {
         cwd,
         stopAtEntry: profile.stopAtEntry,
         externalConsole: profile.externalConsole,
+        internalConsoleOptions: 'neverOpen',
         environment
     };
     if (useVisualStudio) {
@@ -498,6 +499,7 @@ function buildQtCppDebugConfiguration(context) {
     const config = {
         ...common,
         type: 'cppdbg',
+        avoidWindowsConsoleRedirection: false,
         MIMode: miMode,
         miDebuggerPath: kit.debuggerPath || installation?.toolchain.debuggerPath || (miMode === 'lldb' ? 'lldb-mi' : 'gdb'),
         setupCommands,

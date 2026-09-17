@@ -43,7 +43,8 @@ const EMPTY_RUN_SETTINGS = {
     arguments: '',
     workingDirectory: '',
     environmentOptions: '',
-    externalProcessPath: ''
+    externalProcessPath: '',
+    outputMode: 'integrated-terminal'
 };
 class QpmProjectSettingsService {
     workspaces;
@@ -250,10 +251,14 @@ function normalizeSettings(value, fallbackRun, nativeActions, nativeBuildActions
             arguments: String(fallbackRun?.arguments ?? value?.run?.arguments ?? EMPTY_RUN_SETTINGS.arguments),
             workingDirectory: String(fallbackRun?.workingDirectory ?? value?.run?.workingDirectory ?? EMPTY_RUN_SETTINGS.workingDirectory),
             environmentOptions: String(fallbackRun?.environmentOptions ?? value?.run?.environmentOptions ?? EMPTY_RUN_SETTINGS.environmentOptions),
-            externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath)
+            externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath),
+            outputMode: normalizeProgramOutputMode(value?.run?.outputMode ?? fallbackRun?.outputMode)
         },
         nativeBuildActions: nativeBuildActions || value?.nativeBuildActions === true
     };
+}
+function normalizeProgramOutputMode(value) {
+    return value === 'output-channel' || value === 'detached' || value === 'integrated-terminal' ? value : 'integrated-terminal';
 }
 function normalizeActions(value) {
     return Array.isArray(value) ? value.map(String).map((entry) => entry.trim()).filter(Boolean) : [];

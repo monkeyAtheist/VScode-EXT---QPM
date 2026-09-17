@@ -2484,6 +2484,16 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "outputMode": {
+          "type": "string",
+          "enum": [
+            "integrated-terminal",
+            "output-channel",
+            "detached"
+          ],
+          "default": "integrated-terminal",
+          "description": "Controls how QPM launches the program and routes stdin/stdout/stderr."
         }
       }
     },

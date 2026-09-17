@@ -95,6 +95,7 @@ const qpmQtDependencyProvider_1 = require("./providers/qpmQtDependencyProvider")
 const qtProjectManifest_1 = require("./model/qtProjectManifest");
 async function activate(context) {
     const output = vscode.window.createOutputChannel('Qt Project Manager');
+    const programOutput = vscode.window.createOutputChannel('Qt Project Manager - Program Output');
     const buildTrace = vscode.window.createOutputChannel('Qt Project Manager - Build Trace');
     await migrateLegacyConfiguration(output);
     const parser = new qpmParser_1.QpmParser();
@@ -110,10 +111,10 @@ async function activate(context) {
     const projectSettings = new qpmProjectSettingsService_1.QpmProjectSettingsService(workspaces, parser, output);
     const qtTools = new qpmQtToolsService_1.QpmQtToolsService(workspaces, qtInstallations, output);
     const qmlLanguage = new qpmQmlLanguageService_1.QpmQmlLanguageService(workspaces, qtInstallations, output);
-    const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output);
+    const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output, programOutput);
     const qtDependencies = new qpmQtDependencyService_1.QpmQtDependencyService(workspaces, output);
     const instrumentProfiles = new qpmInstrumentProfileService_1.QpmInstrumentProfileService(context.extensionPath, workspaces, output);
-    const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, qtPython, qtDependencies, buildTrace);
+    const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, programOutput, qtPython, qtDependencies, buildTrace);
     const debugging = new qpmQtDebugService_1.QpmQtDebugService(workspaces, builds, qtInstallations, output);
     const android = new qpmQtAndroidService_1.QpmQtAndroidService(workspaces, qtInstallations, output);
     const apple = new qpmQtAppleService_1.QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -287,7 +288,7 @@ async function activate(context) {
         }
     };
     const runGdbDebug = async () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
-    context.subscriptions.push(output, buildTrace, builds, workspaces, home, buildSettings, qtProjectSettings, sdl, quickActions, quickActionsRegistration, cppTools, qtTools, qtKits, qtKitsProvider, qtKitsView, debugging, qtDebugProvider, qtDebugView, platforms, qtPlatformProvider, qtPlatformView, packaging, qtPackagingView, installers, qtInstallerProvider, qtInstallerView, publication, qtPublicationProvider, qtPublicationView, profiling, qtProfilingProvider, qtProfilingView, android, apple, qmlLanguage, qmlLanguageProvider, qmlLanguageView, qtPython, qtPythonProvider, qtPythonView, qtDependencies, instrumentProfiles, qtDependencyProvider, qtDependencyView, qtAndroidProvider, qtAndroidView, qtAppleProvider, qtAppleView, vscode.debug.registerDebugConfigurationProvider('cppdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('cppvsdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppvsdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('qml', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('qml') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), qtToolsProvider, qtToolsView, quality, testing, qtQualityProvider, qtQualityView, treeProvider, treeView, fileSymbolsView, projectHealthProvider, projectHealthView, completionRegistration, ...statusBarItems, treeView.onDidChangeSelection((event) => {
+    context.subscriptions.push(output, programOutput, buildTrace, builds, workspaces, home, buildSettings, qtProjectSettings, sdl, quickActions, quickActionsRegistration, cppTools, qtTools, qtKits, qtKitsProvider, qtKitsView, debugging, qtDebugProvider, qtDebugView, platforms, qtPlatformProvider, qtPlatformView, packaging, qtPackagingView, installers, qtInstallerProvider, qtInstallerView, publication, qtPublicationProvider, qtPublicationView, profiling, qtProfilingProvider, qtProfilingView, android, apple, qmlLanguage, qmlLanguageProvider, qmlLanguageView, qtPython, qtPythonProvider, qtPythonView, qtDependencies, instrumentProfiles, qtDependencyProvider, qtDependencyView, qtAndroidProvider, qtAndroidView, qtAppleProvider, qtAppleView, vscode.debug.registerDebugConfigurationProvider('cppdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('cppvsdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppvsdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('qml', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('qml') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), qtToolsProvider, qtToolsView, quality, testing, qtQualityProvider, qtQualityView, treeProvider, treeView, fileSymbolsView, projectHealthProvider, projectHealthView, completionRegistration, ...statusBarItems, treeView.onDidChangeSelection((event) => {
         const selected = event.selection[0];
         if (selected?.kind === 'file' && (0, qpmSymbolService_1.isSourceOrHeader)(selected.file.absolutePath)) {
             fileSymbolsProvider.setSelectedFile(selected.file.absolutePath);

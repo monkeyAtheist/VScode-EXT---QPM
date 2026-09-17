@@ -337,9 +337,9 @@ function generateQmakeProject(context) {
         config.push('staticlib');
     if (kind === 'shared-library')
         config.push('dll');
-    if (kind === 'console-application' || kind === 'test-application')
+    if ((0, qtProjectManifest_1.qtBuildUsesConsoleSubsystem)(context.manifest, context.profile))
         config.push('console');
-    else
+    else if (kind !== 'static-library' && kind !== 'shared-library')
         config.push('windows');
     if (context.profile.precompiledHeader)
         config.push('precompile_header');
@@ -404,7 +404,8 @@ function generateCMakeProject(context) {
     const modules = effectiveModules.join(' ');
     const qtTargets = effectiveModules.map((module) => `Qt${major}::${module}`).join(' ');
     const kind = context.manifest.kind;
-    const addTarget = kind === 'static-library' ? `add_library(${target} STATIC` : kind === 'shared-library' ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === 'win32' ? ' WIN32' : ''}`;
+    const consoleSubsystem = (0, qtProjectManifest_1.qtBuildUsesConsoleSubsystem)(context.manifest, context.profile);
+    const addTarget = kind === 'static-library' ? `add_library(${target} STATIC` : kind === 'shared-library' ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === 'win32' && !consoleSubsystem ? ' WIN32' : ''}`;
     const closeTarget = `  ${sourceList}\n)`;
     const outputDir = cmakeQuote(path.dirname(context.targetPath));
     const includeDirs = [...context.manifest.includeDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories].map(cmakeQuote).join('\n  ');

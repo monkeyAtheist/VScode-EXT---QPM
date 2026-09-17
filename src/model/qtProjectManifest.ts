@@ -15,6 +15,7 @@ export type QtBuildSystem = 'direct' | 'qmake' | 'cmake';
 export type QtProfileArchitecture = 'auto' | 'x86' | 'x64';
 export type QtBuildVariantName = 'debug' | 'release';
 export type QtLinkageMode = 'dynamic' | 'static-runtime' | 'static-qt';
+export type QtProgramOutputMode = 'integrated-terminal' | 'output-channel' | 'detached';
 export type QtDebuggerType = 'auto' | 'gdb' | 'lldb' | 'cdb' | 'cppvsdbg';
 export type QtDeviceType = 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android' | 'macos' | 'ios-simulator' | 'ios-device';
 export type QtPlatformType = QtDeviceType;
@@ -91,6 +92,7 @@ export interface QtRunProfile {
   arguments: string;
   workingDirectory: string;
   environment: Record<string, string>;
+  outputMode: QtProgramOutputMode;
 }
 
 
@@ -900,6 +902,24 @@ export function getActiveQtRunProfile(manifest: QtProjectManifest): QtRunProfile
     ?? manifest.profiles.runs[0];
 }
 
+/**
+ * Windows GUI targets normally use the GUI subsystem. When the active run
+ * profile for this build is configured for the Integrated Terminal, QPM uses
+ * the console subsystem instead so the C/C++ CRT owns valid stdin/stdout/stderr.
+ */
+export type QtWindowsSubsystem = 'console' | 'windows' | undefined;
+
+export function qtWindowsSubsystemForBuild(manifest: QtProjectManifest, profile: QtBuildProfile): QtWindowsSubsystem {
+  if (manifest.kind === 'static-library' || manifest.kind === 'shared-library') return undefined;
+  if (manifest.kind === 'console-application' || manifest.kind === 'test-application') return 'console';
+  const run = getActiveQtRunProfile(manifest);
+  return run && run.buildProfileId === profile.id && run.outputMode === 'integrated-terminal' ? 'console' : 'windows';
+}
+
+export function qtBuildUsesConsoleSubsystem(manifest: QtProjectManifest, profile: QtBuildProfile): boolean {
+  return qtWindowsSubsystemForBuild(manifest, profile) === 'console';
+}
+
 export function getActiveQtDeployProfile(manifest: QtProjectManifest): QtDeployProfile {
   return manifest.profiles.deploys.find((entry) => entry.id === manifest.profiles.active.deployProfileId)
     ?? manifest.profiles.deploys[0];
@@ -967,7 +987,7 @@ function createDefaultProfiles(qtInstallation?: string): QtProjectProfiles {
       { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' },
       { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' }
     ],
-    runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {} }],
+    runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {}, outputMode: 'integrated-terminal' }],
     deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: 'dist', cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
     debugs: [createDefaultDebugProfile(debugId, 'default-run')],
     platforms: [createDefaultPlatformProfile(kitId, debugId, 'default-run', 'desktop-deploy', 'local-debug')],
@@ -1441,7 +1461,11 @@ function normalizeRunProfile(raw: unknown, fallbackId: string, buildProfileId: s
   const environment: Record<string, string> = {};
   for (const [key, entry] of Object.entries(environmentValue)) if (typeof entry === 'string' && key.trim()) environment[key.trim()] = entry;
   const id = normalizeProfileId(optionalString(value.id) || fallbackId);
-  return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment };
+  return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment, outputMode: normalizeQtProgramOutputMode(value.outputMode) };
+}
+
+function normalizeQtProgramOutputMode(value: unknown): QtProgramOutputMode {
+  return value === 'output-channel' || value === 'detached' || value === 'integrated-terminal' ? value : 'integrated-terminal';
 }
 
 function normalizeDeployProfile(raw: unknown, fallbackId: string, buildProfileId: string): QtDeployProfile | undefined {

@@ -364,6 +364,7 @@ class QpmQtTestingService {
             cwd,
             stopAtEntry: false,
             externalConsole: false,
+            internalConsoleOptions: 'neverOpen',
             environment: Object.entries(env).filter((entry) => typeof entry[1] === 'string').map(([name, value]) => ({ name, value }))
         };
         const debugConfig = visualStudio
@@ -371,6 +372,7 @@ class QpmQtTestingService {
             : {
                 ...common,
                 type: 'cppdbg',
+                avoidWindowsConsoleRedirection: false,
                 MIMode: kit.debuggerType === 'lldb' ? 'lldb' : 'gdb',
                 miDebuggerPath: kit.debuggerPath || installation.toolchain.debuggerPath || (kit.debuggerType === 'lldb' ? 'lldb-mi' : 'gdb'),
                 setupCommands: [{ description: 'Enable debugger pretty printing', text: '-enable-pretty-printing', ignoreFailures: true }]

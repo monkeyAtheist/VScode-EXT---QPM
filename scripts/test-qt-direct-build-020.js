@@ -91,17 +91,34 @@ try {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'platform', { value: 'win32' });
   try {
+    // Default run profile uses Integrated Terminal: GUI Qt apps must be linked
+    // with the console subsystem so stdin/stdout/stderr are real CRT streams.
     const windowsPlan = direct.createQtDirectBuildPlan(manifestPath, 'debug64', installation);
-    assert(windowsPlan.defines.includes('QT_NEEDS_QMAIN'));
+    assert(!windowsPlan.defines.includes('QT_NEEDS_QMAIN'));
     assert(windowsPlan.defines.includes('UNICODE'));
-    assert(windowsPlan.entryPointArguments.includes('-lmingw32'));
-    assert(windowsPlan.entryPointArguments.some(value => value.endsWith('libQt6EntryPoint.a')));
-    assert(windowsPlan.platformLibraries.includes('-lshell32'));
-    assert(windowsPlan.platformLibraries.includes('-luser32'));
+    assert.deepStrictEqual(windowsPlan.entryPointArguments, []);
     assert(windowsPlan.targetPath.endsWith('.exe'));
     const windowsLinkArgs = direct.qtLinkArguments(windowsPlan, ['main.o']);
-    assert(windowsLinkArgs.includes('-mwindows'));
-    assert(windowsLinkArgs.indexOf('-lmingw32') < windowsLinkArgs.indexOf('-lQt6Widgets'));
+    assert(windowsLinkArgs.includes('-mconsole'));
+    assert(!windowsLinkArgs.includes('-mwindows'));
+
+    // Detached mode keeps the traditional Windows GUI subsystem and Qt entry point.
+    const guiManifest = model.readQtProjectManifest(manifestPath);
+    model.getActiveQtRunProfile(guiManifest).outputMode = 'detached';
+    model.writeQtProjectManifest(manifestPath, guiManifest);
+    const guiPlan = direct.createQtDirectBuildPlan(manifestPath, 'debug64', installation);
+    assert(guiPlan.defines.includes('QT_NEEDS_QMAIN'));
+    assert(guiPlan.entryPointArguments.includes('-lmingw32'));
+    assert(guiPlan.entryPointArguments.some(value => value.endsWith('libQt6EntryPoint.a')));
+    assert(guiPlan.platformLibraries.includes('-lshell32'));
+    assert(guiPlan.platformLibraries.includes('-luser32'));
+    const guiLinkArgs = direct.qtLinkArguments(guiPlan, ['main.o']);
+    assert(guiLinkArgs.includes('-mwindows'));
+    assert(!guiLinkArgs.includes('-mconsole'));
+    assert(guiLinkArgs.indexOf('-lmingw32') < guiLinkArgs.indexOf('-lQt6Widgets'));
+
+    model.getActiveQtRunProfile(guiManifest).outputMode = 'integrated-terminal';
+    model.writeQtProjectManifest(manifestPath, guiManifest);
   } finally {
     Object.defineProperty(process, 'platform', platformDescriptor);
   }

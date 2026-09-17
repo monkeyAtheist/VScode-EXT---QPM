@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.6",
+  "version": "0.34.8",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -322,6 +322,7 @@
     "compile": "npm run clean:legacy-cvi && npm run clean:generated && tsc -p ./ && npm run bundle",
     "watch": "npm run clean:legacy-cvi && npm run clean:generated && tsc -watch -p ./",
     "package": "vsce package",
+    "test:program-io": "npm run compile && node scripts/test-qpm-program-io-0347.js",
     "clean:legacy-cvi": "node ./scripts/clean-legacy-cvi-sources.js",
     "clean:generated": "node ./scripts/clean-generated-artifacts.js",
     "test:qt-direct": "npm run compile && node scripts/test-qt-direct-build-020.js && node scripts/test-qt-direct-execution-020.js",

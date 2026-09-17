@@ -138,8 +138,10 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
     ]);
     const modeSettings = buildProfile;
     const guiApplication = manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
+    const consoleSubsystem = process.platform === 'win32' && (0, qtProjectManifest_1.qtBuildUsesConsoleSubsystem)(manifest, buildProfile);
+    const windowsGuiEntryPoint = guiApplication && !consoleSubsystem;
     const platformDefines = process.platform === 'win32'
-        ? ['WIN32', '_WIN32', 'UNICODE', '_UNICODE', ...(installation.architecture === 'x64' ? ['WIN64', '_WIN64'] : []), ...(guiApplication ? ['QT_NEEDS_QMAIN'] : [])]
+        ? ['WIN32', '_WIN32', 'UNICODE', '_UNICODE', ...(installation.architecture === 'x64' ? ['WIN64', '_WIN64'] : []), ...(windowsGuiEntryPoint ? ['QT_NEEDS_QMAIN'] : [])]
         : [];
     const defines = unique([
         ...manifest.defines,
@@ -147,7 +149,7 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         ...platformDefines,
         ...moduleOrder.map((module) => `QT_${moduleDefineName(module)}_LIB`)
     ]);
-    const windowsEntryPoint = resolveWindowsEntryPointArguments(installation, manifest, (0, qtProjectManifest_1.isReleaseBuildMode)(mode));
+    const windowsEntryPoint = resolveWindowsEntryPointArguments(installation, manifest, (0, qtProjectManifest_1.isReleaseBuildMode)(mode), windowsGuiEntryPoint);
     if (buildProfile.autoUic) {
         for (const formPath of files.forms) {
             assertFileExists(formPath, 'Qt Designer form');
@@ -329,8 +331,12 @@ function qtLinkArguments(plan, objectFiles) {
         args.push('-shared');
     if (plan.importLibraryPath)
         args.push(`-Wl,--out-implib,${plan.importLibraryPath}`);
-    if (process.platform === 'win32' && plan.manifest.kind !== 'console-application' && plan.manifest.kind !== 'test-application' && plan.manifest.kind !== 'static-library' && plan.manifest.kind !== 'shared-library')
-        args.push('-mwindows');
+    if (process.platform === 'win32' && plan.manifest.kind !== 'static-library' && plan.manifest.kind !== 'shared-library') {
+        if ((0, qtProjectManifest_1.qtBuildUsesConsoleSubsystem)(plan.manifest, plan.buildProfile))
+            args.push('-mconsole');
+        else if (plan.manifest.kind !== 'console-application' && plan.manifest.kind !== 'test-application')
+            args.push('-mwindows');
+    }
     args.push(...objectFiles, ...plan.libraryDirectories.flatMap((directory) => ['-L', directory]), ...plan.entryPointArguments, ...plan.qtLibraries.map((library) => library.startsWith('-l') || path.isAbsolute(library) ? library : `-l${library}`), ...plan.userLibraries.map(normalizeUserLibraryArgument), ...plan.platformLibraries, ...plan.linkerFlags, '-o', plan.targetPath);
     return args;
 }
@@ -469,9 +475,8 @@ function resolveQtModuleOrder(requestedModules) {
     visit('Core');
     return result;
 }
-function resolveWindowsEntryPointArguments(installation, manifest, release) {
-    const guiApplication = manifest.kind === 'widgets-application' || manifest.kind === 'quick-application' || manifest.kind === 'quick-test-application';
-    if (process.platform !== 'win32' || !guiApplication)
+function resolveWindowsEntryPointArguments(installation, manifest, release, useGuiEntryPoint) {
+    if (process.platform !== 'win32' || !useGuiEntryPoint)
         return { arguments: [], platformLibraries: [] };
     const major = installation.majorVersion || Number(installation.version.split('.')[0]) || 6;
     const entryPointNames = major >= 6

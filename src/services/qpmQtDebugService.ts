@@ -430,6 +430,7 @@ export function buildQtCppDebugConfiguration(context: QtDebugConfigurationContex
     cwd,
     stopAtEntry: profile.stopAtEntry,
     externalConsole: profile.externalConsole,
+    internalConsoleOptions: 'neverOpen',
     environment
   };
 
@@ -449,6 +450,7 @@ export function buildQtCppDebugConfiguration(context: QtDebugConfigurationContex
   const config: Record<string, unknown> = {
     ...common,
     type: 'cppdbg',
+    avoidWindowsConsoleRedirection: false,
     MIMode: miMode,
     miDebuggerPath: kit.debuggerPath || installation?.toolchain.debuggerPath || (miMode === 'lldb' ? 'lldb-mi' : 'gdb'),
     setupCommands,

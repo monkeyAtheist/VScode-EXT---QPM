@@ -1,4 +1,16 @@
-> QPM 0.34.6 keeps the curated JC Lib 0.8.38-compatible library set and exposes the native OpenSSH Device Manager directly from QPM context menus for remote Linux / Raspberry Pi workflows.
+> QPM 0.34.8 fixes Windows interactive C/C++ console I/O for Qt GUI applications. Selecting **Integrated Terminal** now makes QPM-generated Direct/qmake/CMake builds use the Windows console subsystem for the linked build profile, so `printf`, `std::cout`, `std::cerr`, `scanf`, `fgets(stdin)` and `std::cin` receive real terminal streams after a rebuild.
+
+## QPM 0.34.8 — Windows console I/O for Qt GUI targets
+
+Qt Widgets/Quick applications are normally linked as Windows GUI-subsystem executables (`-mwindows` / CMake `WIN32`). That suppresses the native console even if the process is started from a VS Code terminal. QPM now derives the Windows subsystem from the active run profile: **Integrated Terminal** selects the console subsystem for the matching build profile, while **Detached** and **QPM Program Output** retain the normal GUI subsystem. Rebuild the active profile after changing the output mode. Externally maintained qmake/CMake project files remain user-owned and must opt into `CONFIG += console` or `WIN32_EXECUTABLE FALSE` themselves.
+
+The active run profile still provides three **Program output** modes:
+
+- **Integrated Terminal**: interactive `stdin/stdout/stderr`. On Windows GUI targets this also selects the console subsystem for the matching QPM-generated build profile.
+- **QPM Program Output**: captures `stdout/stderr` into a dedicated Output channel and is intentionally non-interactive.
+- **Detached**: keeps normal GUI/background launch behavior.
+
+The same run-mode selection is honored by native Qt/C++ and Qt for Python. C++ `cppdbg` configurations keep Windows console redirection enabled while debugging.
 
 ## QPM 0.34.6 — OpenSSH Device Manager in QPM context menus
 

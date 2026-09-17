@@ -922,7 +922,7 @@ export class QpmParser {
 
   getWorkspaceRunOptions(workspacePath: string, projectIndex: number, mode: QpmBuildMode = 'debug'): QpmRunOptions {
     if (path.extname(workspacePath).toLowerCase() !== '.cws') {
-      return { arguments: '', workingDirectory: '', environmentOptions: '', externalProcessPath: '' };
+      return { arguments: '', workingDirectory: '', environmentOptions: '', externalProcessPath: '', outputMode: 'integrated-terminal' };
     }
     const document = IniDocument.parse(readText(workspacePath));
     const suffix = String(projectIndex).padStart(4, '0');
@@ -936,7 +936,8 @@ export class QpmParser {
       arguments: value('Command Line Args'),
       workingDirectory: value('Working Directory'),
       environmentOptions: value('Environment Options'),
-      externalProcessPath: value('External Process Path') || reconstructValue(dllSection ?? new IniSection('', []), 'External Process Path') || ''
+      externalProcessPath: value('External Process Path') || reconstructValue(dllSection ?? new IniSection('', []), 'External Process Path') || '',
+      outputMode: 'integrated-terminal'
     };
   }
 
@@ -1730,3 +1731,4 @@ export class QpmParser {
     return document.toString();
   }
 }
+

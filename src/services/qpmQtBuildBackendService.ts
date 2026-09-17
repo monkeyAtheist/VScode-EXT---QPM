@@ -12,6 +12,7 @@ import {
   getQtKitProfileForBuild,
   isReleaseBuildMode,
   qtTargetPath,
+  qtBuildUsesConsoleSubsystem,
   readQtProjectManifest,
   resolveQtProjectFiles
 } from '../model/qtProjectManifest';
@@ -328,7 +329,7 @@ function generateQmakeProject(context: BackendContext): string {
   const config: string[] = [context.profile.variant, cppStandardQmake(context.profile.cppStandard)];
   if (kind === 'static-library') config.push('staticlib');
   if (kind === 'shared-library') config.push('dll');
-  if (kind === 'console-application' || kind === 'test-application') config.push('console'); else config.push('windows');
+  if (qtBuildUsesConsoleSubsystem(context.manifest, context.profile)) config.push('console'); else if (kind !== 'static-library' && kind !== 'shared-library') config.push('windows');
   if (context.profile.precompiledHeader) config.push('precompile_header');
   const targetDirectory = path.dirname(context.targetPath);
   const includeWindowsMetadata = context.manifest.packaging.enabled && context.manifest.packaging.windows.embedVersionResource;
@@ -392,7 +393,8 @@ function generateCMakeProject(context: BackendContext): string {
   const modules = effectiveModules.join(' ');
   const qtTargets = effectiveModules.map((module) => `Qt${major}::${module}`).join(' ');
   const kind = context.manifest.kind;
-  const addTarget = kind === 'static-library' ? `add_library(${target} STATIC` : kind === 'shared-library' ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === 'win32' ? ' WIN32' : ''}`;
+  const consoleSubsystem = qtBuildUsesConsoleSubsystem(context.manifest, context.profile);
+  const addTarget = kind === 'static-library' ? `add_library(${target} STATIC` : kind === 'shared-library' ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === 'win32' && !consoleSubsystem ? ' WIN32' : ''}`;
   const closeTarget = `  ${sourceList}\n)`;
   const outputDir = cmakeQuote(path.dirname(context.targetPath));
   const includeDirs = [...context.manifest.includeDirectories.map((entry) => path.resolve(context.root, entry)), ...context.dependencyIntegration.includeDirectories].map(cmakeQuote).join('\n  ');

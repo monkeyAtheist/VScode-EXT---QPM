@@ -42,13 +42,15 @@ const qtProjectManifest_1 = require("../model/qtProjectManifest");
 class QpmQtPythonService {
     workspaces;
     output;
+    programOutput;
     changeEmitter = new vscode.EventEmitter();
     onDidChange = this.changeEmitter.event;
     launchedApplications = new Map();
     cachedStatus;
-    constructor(workspaces, output) {
+    constructor(workspaces, output, programOutput) {
         this.workspaces = workspaces;
         this.output = output;
+        this.programOutput = programOutput;
         this.workspaces.onDidChange(() => {
             this.cachedStatus = undefined;
             this.changeEmitter.fire();
@@ -335,11 +337,35 @@ class QpmQtPythonService {
             ? resolveProjectPath(path.dirname(manifestPath), runProfile.workingDirectory)
             : path.dirname(manifestPath);
         const env = { ...this.createEnvironment(manifestPath, manifest, interpreter), ...(runProfile?.environment ?? {}) };
-        const child = (0, child_process_1.spawn)(interpreter, [entryPoint, ...args], { cwd, env, detached: false, stdio: 'ignore', windowsHide: false });
+        const outputMode = runProfile?.outputMode ?? 'integrated-terminal';
+        const commandArgs = [entryPoint, ...args];
+        const rendered = [interpreter, ...commandArgs].map(renderPythonArgument).join(' ');
+        if (outputMode === 'integrated-terminal') {
+            const terminal = vscode.window.createTerminal({ name: `QPM Python — ${manifest.name}`, shellPath: interpreter, shellArgs: commandArgs, cwd, env });
+            terminal.show(false);
+            this.output.appendLine(`[Qt/Python] Started in Integrated Terminal: ${rendered}`);
+            return true;
+        }
+        if (outputMode === 'output-channel') {
+            this.programOutput.clear();
+            this.programOutput.appendLine(`=== ${manifest.name} ===`);
+            this.programOutput.appendLine(`> ${rendered}`);
+            this.programOutput.appendLine(`Working directory: ${cwd}`);
+            this.programOutput.appendLine('');
+            this.programOutput.show(true);
+            const child = (0, child_process_1.spawn)(interpreter, commandArgs, { cwd, env, detached: false, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+            this.trackApplication(manifestPath, child);
+            child.stdout?.on('data', (chunk) => this.programOutput.append(chunk.toString()));
+            child.stderr?.on('data', (chunk) => this.programOutput.append(chunk.toString()));
+            child.on('error', (error) => this.programOutput.appendLine(`\n[QPM] Unable to start process: ${error.message}`));
+            child.on('close', (code, signal) => this.programOutput.appendLine(`\n[QPM] Process finished (${signal ? `signal ${signal}` : `exit code ${code ?? 'unknown'}`}).`));
+            this.output.appendLine(`[Qt/Python] Started with captured output: ${rendered}${child.pid ? ` (PID ${child.pid})` : ''}`);
+            return true;
+        }
+        const child = (0, child_process_1.spawn)(interpreter, commandArgs, { cwd, env, detached: true, stdio: 'ignore', windowsHide: false });
         this.trackApplication(manifestPath, child);
         child.unref?.();
-        this.output.appendLine(`[Qt/Python] Started ${interpreter} ${entryPoint}${args.length ? ` ${args.join(' ')}` : ''}${child.pid ? ` (PID ${child.pid})` : ''}`);
-        vscode.window.showInformationMessage(`Started Qt for Python application ${manifest.name}.`);
+        this.output.appendLine(`[Qt/Python] Started detached: ${rendered}${child.pid ? ` (PID ${child.pid})` : ''}`);
         return true;
     }
     async debug(manifestPath = this.requireActiveManifest()) {
@@ -824,4 +850,7 @@ function pathFromCommandInput(input) {
             return value.resourceUri.fsPath;
     }
     return undefined;
+}
+function renderPythonArgument(value) {
+    return /[\s"']/u.test(value) ? JSON.stringify(value) : value;
 }

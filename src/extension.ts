@@ -60,6 +60,7 @@ import { getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('Qt Project Manager');
+  const programOutput = vscode.window.createOutputChannel('Qt Project Manager - Program Output');
   const buildTrace = vscode.window.createOutputChannel('Qt Project Manager - Build Trace');
   await migrateLegacyConfiguration(output);
   const parser = new QpmParser();
@@ -75,10 +76,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const projectSettings = new QpmProjectSettingsService(workspaces, parser, output);
   const qtTools = new QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new QpmQmlLanguageService(workspaces, qtInstallations, output);
-  const qtPython = new QpmQtPythonService(workspaces, output);
+  const qtPython = new QpmQtPythonService(workspaces, output, programOutput);
   const qtDependencies = new QpmQtDependencyService(workspaces, output);
   const instrumentProfiles = new QpmInstrumentProfileService(context.extensionPath, workspaces, output);
-  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, qtPython, qtDependencies, buildTrace);
+  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, programOutput, qtPython, qtDependencies, buildTrace);
   const debugging = new QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -247,6 +248,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     output,
+    programOutput,
     buildTrace,
     builds,
     workspaces,

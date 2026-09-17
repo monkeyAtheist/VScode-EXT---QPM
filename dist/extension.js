@@ -1085,7 +1085,7 @@ var require_qpmParser = __commonJS({
       }
       getWorkspaceRunOptions(workspacePath, projectIndex, mode = "debug") {
         if (path2.extname(workspacePath).toLowerCase() !== ".cws") {
-          return { arguments: "", workingDirectory: "", environmentOptions: "", externalProcessPath: "" };
+          return { arguments: "", workingDirectory: "", environmentOptions: "", externalProcessPath: "", outputMode: "integrated-terminal" };
         }
         const document = iniDocument_1.IniDocument.parse(readText(workspacePath));
         const suffix = String(projectIndex).padStart(4, "0");
@@ -1097,7 +1097,8 @@ var require_qpmParser = __commonJS({
           arguments: value("Command Line Args"),
           workingDirectory: value("Working Directory"),
           environmentOptions: value("Environment Options"),
-          externalProcessPath: value("External Process Path") || reconstructValue(dllSection ?? new iniDocument_1.IniSection("", []), "External Process Path") || ""
+          externalProcessPath: value("External Process Path") || reconstructValue(dllSection ?? new iniDocument_1.IniSection("", []), "External Process Path") || "",
+          outputMode: "integrated-terminal"
         };
       }
       setWorkspaceRunOptions(workspacePath, projectIndex, mode, options) {
@@ -1863,6 +1864,8 @@ var require_qtProjectManifest = __commonJS({
     exports2.getActiveQtBuildProfile = getActiveQtBuildProfile;
     exports2.getQtKitProfileForBuild = getQtKitProfileForBuild;
     exports2.getActiveQtRunProfile = getActiveQtRunProfile;
+    exports2.qtWindowsSubsystemForBuild = qtWindowsSubsystemForBuild;
+    exports2.qtBuildUsesConsoleSubsystem = qtBuildUsesConsoleSubsystem;
     exports2.getActiveQtDeployProfile = getActiveQtDeployProfile;
     exports2.getActiveQtDebugProfile = getActiveQtDebugProfile;
     exports2.getActiveQtPlatformProfile = getActiveQtPlatformProfile;
@@ -2094,6 +2097,17 @@ var require_qtProjectManifest = __commonJS({
     function getActiveQtRunProfile(manifest) {
       return manifest.profiles.runs.find((entry) => entry.id === manifest.profiles.active.runProfileId) ?? manifest.profiles.runs[0];
     }
+    function qtWindowsSubsystemForBuild(manifest, profile) {
+      if (manifest.kind === "static-library" || manifest.kind === "shared-library")
+        return void 0;
+      if (manifest.kind === "console-application" || manifest.kind === "test-application")
+        return "console";
+      const run = getActiveQtRunProfile(manifest);
+      return run && run.buildProfileId === profile.id && run.outputMode === "integrated-terminal" ? "console" : "windows";
+    }
+    function qtBuildUsesConsoleSubsystem(manifest, profile) {
+      return qtWindowsSubsystemForBuild(manifest, profile) === "console";
+    }
     function getActiveQtDeployProfile(manifest) {
       return manifest.profiles.deploys.find((entry) => entry.id === manifest.profiles.active.deployProfileId) ?? manifest.profiles.deploys[0];
     }
@@ -2154,7 +2168,7 @@ var require_qtProjectManifest = __commonJS({
           { id: debugId, name: "Debug", variant: "debug", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: [], compilerFlags: ["-O0", "-g"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" },
           { id: releaseId, name: "Release", variant: "release", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: ["QT_NO_DEBUG"], compilerFlags: ["-O2"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" }
         ],
-        runs: [{ id: "default-run", name: "Desktop Run", buildProfileId: debugId, arguments: "", workingDirectory: "", environment: {} }],
+        runs: [{ id: "default-run", name: "Desktop Run", buildProfileId: debugId, arguments: "", workingDirectory: "", environment: {}, outputMode: "integrated-terminal" }],
         deploys: [{ id: "desktop-deploy", name: "Desktop Deploy", buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: "dist", cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
         debugs: [createDefaultDebugProfile(debugId, "default-run")],
         platforms: [createDefaultPlatformProfile(kitId, debugId, "default-run", "desktop-deploy", "local-debug")],
@@ -2631,7 +2645,10 @@ var require_qtProjectManifest = __commonJS({
         if (typeof entry === "string" && key.trim())
           environment[key.trim()] = entry;
       const id = normalizeProfileId(optionalString(value.id) || fallbackId);
-      return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment };
+      return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment, outputMode: normalizeQtProgramOutputMode(value.outputMode) };
+    }
+    function normalizeQtProgramOutputMode(value) {
+      return value === "output-channel" || value === "detached" || value === "integrated-terminal" ? value : "integrated-terminal";
     }
     function normalizeDeployProfile(raw, fallbackId, buildProfileId) {
       const value = objectValue(raw);
@@ -5741,14 +5758,16 @@ var require_qpmQtDirectBuildService = __commonJS({
       ]);
       const modeSettings = buildProfile;
       const guiApplication = manifest.kind === "widgets-application" || manifest.kind === "quick-application" || manifest.kind === "quick-test-application";
-      const platformDefines = process.platform === "win32" ? ["WIN32", "_WIN32", "UNICODE", "_UNICODE", ...installation.architecture === "x64" ? ["WIN64", "_WIN64"] : [], ...guiApplication ? ["QT_NEEDS_QMAIN"] : []] : [];
+      const consoleSubsystem = process.platform === "win32" && (0, qtProjectManifest_12.qtBuildUsesConsoleSubsystem)(manifest, buildProfile);
+      const windowsGuiEntryPoint = guiApplication && !consoleSubsystem;
+      const platformDefines = process.platform === "win32" ? ["WIN32", "_WIN32", "UNICODE", "_UNICODE", ...installation.architecture === "x64" ? ["WIN64", "_WIN64"] : [], ...windowsGuiEntryPoint ? ["QT_NEEDS_QMAIN"] : []] : [];
       const defines = unique([
         ...manifest.defines,
         ...modeSettings.defines,
         ...platformDefines,
         ...moduleOrder.map((module3) => `QT_${moduleDefineName(module3)}_LIB`)
       ]);
-      const windowsEntryPoint = resolveWindowsEntryPointArguments(installation, manifest, (0, qtProjectManifest_12.isReleaseBuildMode)(mode));
+      const windowsEntryPoint = resolveWindowsEntryPointArguments(installation, manifest, (0, qtProjectManifest_12.isReleaseBuildMode)(mode), windowsGuiEntryPoint);
       if (buildProfile.autoUic) {
         for (const formPath of files.forms) {
           assertFileExists(formPath, "Qt Designer form");
@@ -5960,8 +5979,12 @@ var require_qpmQtDirectBuildService = __commonJS({
         args.push("-shared");
       if (plan.importLibraryPath)
         args.push(`-Wl,--out-implib,${plan.importLibraryPath}`);
-      if (process.platform === "win32" && plan.manifest.kind !== "console-application" && plan.manifest.kind !== "test-application" && plan.manifest.kind !== "static-library" && plan.manifest.kind !== "shared-library")
-        args.push("-mwindows");
+      if (process.platform === "win32" && plan.manifest.kind !== "static-library" && plan.manifest.kind !== "shared-library") {
+        if ((0, qtProjectManifest_12.qtBuildUsesConsoleSubsystem)(plan.manifest, plan.buildProfile))
+          args.push("-mconsole");
+        else if (plan.manifest.kind !== "console-application" && plan.manifest.kind !== "test-application")
+          args.push("-mwindows");
+      }
       args.push(...objectFiles, ...plan.libraryDirectories.flatMap((directory) => ["-L", directory]), ...plan.entryPointArguments, ...plan.qtLibraries.map((library) => library.startsWith("-l") || path2.isAbsolute(library) ? library : `-l${library}`), ...plan.userLibraries.map(normalizeUserLibraryArgument), ...plan.platformLibraries, ...plan.linkerFlags, "-o", plan.targetPath);
       return args;
     }
@@ -6095,9 +6118,8 @@ var require_qpmQtDirectBuildService = __commonJS({
       visit("Core");
       return result;
     }
-    function resolveWindowsEntryPointArguments(installation, manifest, release) {
-      const guiApplication = manifest.kind === "widgets-application" || manifest.kind === "quick-application" || manifest.kind === "quick-test-application";
-      if (process.platform !== "win32" || !guiApplication)
+    function resolveWindowsEntryPointArguments(installation, manifest, release, useGuiEntryPoint) {
+      if (process.platform !== "win32" || !useGuiEntryPoint)
         return { arguments: [], platformLibraries: [] };
       const major = installation.majorVersion || Number(installation.version.split(".")[0]) || 6;
       const entryPointNames = major >= 6 ? ["libQt6EntryPoint.a", "Qt6EntryPoint.lib"] : release ? ["libqtmain.a", "qtmain.lib"] : ["libqtmaind.a", "qtmaind.lib", "libqtmain.a", "qtmain.lib"];
@@ -6951,7 +6973,8 @@ Target: ${manifest.publication.publish.target}`, "qpm.openPublicationReport"));
             }
           }
           items.push(health("run", "Run profile", runProfile.workingDirectory || "Target directory", "info", `Arguments: ${runProfile.arguments || "none"}
-Environment variables: ${Object.keys(runProfile.environment).length}`, "qpm.chooseRunAction"));
+Environment variables: ${Object.keys(runProfile.environment).length}
+Program output: ${runProfile.outputMode}`, "qpm.chooseRunAction"));
           const debugKit = manifest.profiles.kits.find((entry) => entry.id === manifest.profiles.builds.find((entry2) => entry2.id === debugProfile.buildProfileId)?.kitId) ?? kitProfile;
           const debugReady = debugProfile.request === "qml-attach" || Boolean(debugKit.debuggerPath || installation?.toolchain.debuggerPath || debugProfile.debuggerType === "cppvsdbg" || debugProfile.debuggerType === "cdb" || debugKit.compilerFamily === "msvc");
           items.push(health("debug", "Debug profile", `${debugProfile.name} \xB7 ${debugProfile.request}`, debugReady ? "ok" : "warning", `Debugger: ${debugProfile.debuggerType === "auto" ? debugKit.debuggerType : debugProfile.debuggerType}
@@ -8519,9 +8542,9 @@ var require_qpmQtBuildBackendService = __commonJS({
         config.push("staticlib");
       if (kind === "shared-library")
         config.push("dll");
-      if (kind === "console-application" || kind === "test-application")
+      if ((0, qtProjectManifest_12.qtBuildUsesConsoleSubsystem)(context.manifest, context.profile))
         config.push("console");
-      else
+      else if (kind !== "static-library" && kind !== "shared-library")
         config.push("windows");
       if (context.profile.precompiledHeader)
         config.push("precompile_header");
@@ -8587,7 +8610,8 @@ var require_qpmQtBuildBackendService = __commonJS({
       const modules = effectiveModules.join(" ");
       const qtTargets = effectiveModules.map((module3) => `Qt${major}::${module3}`).join(" ");
       const kind = context.manifest.kind;
-      const addTarget = kind === "static-library" ? `add_library(${target} STATIC` : kind === "shared-library" ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === "win32" ? " WIN32" : ""}`;
+      const consoleSubsystem = (0, qtProjectManifest_12.qtBuildUsesConsoleSubsystem)(context.manifest, context.profile);
+      const addTarget = kind === "static-library" ? `add_library(${target} STATIC` : kind === "shared-library" ? `add_library(${target} SHARED` : `add_executable(${target}${isGuiKind(kind) && process.platform === "win32" && !consoleSubsystem ? " WIN32" : ""}`;
       const closeTarget = `  ${sourceList}
 )`;
       const outputDir = cmakeQuote(path2.dirname(context.targetPath));
@@ -9417,6 +9441,7 @@ var require_qpmBuildService = __commonJS({
       qtInstallations;
       projectSettings;
       output;
+      programOutput;
       qtPython;
       qtDependencies;
       buildTrace;
@@ -9430,12 +9455,13 @@ var require_qpmBuildService = __commonJS({
       buildWarnings = 0;
       failedPhase = "";
       firstBuildError;
-      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies, buildTrace) {
+      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
         this.projectSettings = projectSettings;
         this.output = output;
+        this.programOutput = programOutput;
         this.qtPython = qtPython;
         this.qtDependencies = qtDependencies;
         this.buildTrace = buildTrace;
@@ -9812,11 +9838,63 @@ var require_qpmBuildService = __commonJS({
         const sdlPlan = project ? this.resolveSdlPlan(ref, project.files, project.targetType) : void 0;
         this.deploySdlRuntimeDlls(executablePath, sdlPlan);
         const env = this.createRuntimeEnvironment(this.projectSettings.parseEnvironment(run.environmentOptions), config, executablePath);
+        if (process.platform === "win32" && run.outputMode === "integrated-terminal" && readWindowsPeSubsystem(executablePath) === "gui") {
+          this.output.appendLine(`[Qt/C++] WARNING: ${executablePath} is linked as a Windows GUI-subsystem executable.`);
+          this.output.appendLine("[Qt/C++] Interactive stdin/stdout/stderr require the console subsystem. Rebuild the active QPM-generated profile after selecting Integrated Terminal.");
+          const action = await vscode2.window.showWarningMessage("This executable is linked as a Windows GUI application, so printf/std::cout/std::cerr/stdin cannot attach to the Integrated Terminal. Rebuild the active profile with Integrated Terminal selected. For external qmake/CMake files, use CONFIG += console or WIN32_EXECUTABLE FALSE.", "Run anyway");
+          if (action !== "Run anyway")
+            return;
+        }
+        this.launchExecutable(ref.name, executablePath, args, cwd, env, run.outputMode);
+        this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path2.delimiter)}`);
+      }
+      launchExecutable(projectName, executablePath, args, cwd, env, mode) {
+        const rendered = [executablePath, ...args].map(renderArgument).join(" ");
+        if (mode === "integrated-terminal") {
+          const terminal = vscode2.window.createTerminal({
+            name: `QPM \u2014 ${projectName}`,
+            shellPath: executablePath,
+            shellArgs: args,
+            cwd,
+            env
+          });
+          terminal.show(false);
+          this.output.appendLine(`[Qt/C++] Started in Integrated Terminal: ${rendered}`);
+          this.output.appendLine(`[Qt/C++] stdin/stdout/stderr are attached to the VS Code terminal.`);
+          return;
+        }
+        if (mode === "output-channel") {
+          this.programOutput.clear();
+          this.programOutput.appendLine(`=== ${projectName} ===`);
+          this.programOutput.appendLine(`> ${rendered}`);
+          this.programOutput.appendLine(`Working directory: ${cwd}`);
+          this.programOutput.appendLine("");
+          this.programOutput.show(true);
+          const child2 = (0, child_process_1.spawn)(executablePath, args, {
+            cwd,
+            env,
+            detached: false,
+            windowsHide: true,
+            shell: false,
+            stdio: ["ignore", "pipe", "pipe"]
+          });
+          this.trackLaunchedApplication(executablePath, child2);
+          child2.stdout?.on("data", (chunk) => this.programOutput.append(chunk.toString()));
+          child2.stderr?.on("data", (chunk) => this.programOutput.append(chunk.toString()));
+          child2.on("error", (error) => this.programOutput.appendLine(`
+[QPM] Unable to start process: ${error.message}`));
+          child2.on("close", (code, signal) => {
+            const status = signal ? `signal ${signal}` : `exit code ${code ?? "unknown"}`;
+            this.programOutput.appendLine(`
+[QPM] Process finished (${status}).`);
+          });
+          this.output.appendLine(`[Qt/C++] Started with captured output: ${rendered}${child2.pid ? ` (PID ${child2.pid})` : ""}`);
+          return;
+        }
         const child = (0, child_process_1.spawn)(executablePath, args, { cwd, env, detached: true, shell: false, stdio: "ignore" });
         this.trackLaunchedApplication(executablePath, child);
         child.unref();
-        this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(" ")}${child.pid ? ` (PID ${child.pid})` : ""}`);
-        this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path2.delimiter)}`);
+        this.output.appendLine(`[Qt/C++] Started detached: ${rendered}${child.pid ? ` (PID ${child.pid})` : ""}`);
       }
       async debugWithGdb(projectRef) {
         const ref = projectRef ?? this.workspaces.activeProjectRef;
@@ -9876,6 +9954,7 @@ var require_qpmBuildService = __commonJS({
           cwd,
           stopAtEntry: false,
           externalConsole: false,
+          internalConsoleOptions: "neverOpen",
           environment: debugEnvironment
         } : {
           name: `Debug ${ref.name}`,
@@ -9886,6 +9965,8 @@ var require_qpmBuildService = __commonJS({
           cwd,
           stopAtEntry: false,
           externalConsole: false,
+          avoidWindowsConsoleRedirection: false,
+          internalConsoleOptions: "neverOpen",
           MIMode: debuggerType === "lldb" ? "lldb" : "gdb",
           miDebuggerPath: config.debuggerPath || (debuggerType === "lldb" ? "lldb" : "gdb"),
           environment: debugEnvironment
@@ -10941,7 +11022,8 @@ var require_qpmBuildService = __commonJS({
             arguments: profile.arguments || legacy.arguments,
             workingDirectory: profile.workingDirectory || legacy.workingDirectory,
             environmentOptions: environmentOptions || legacy.environmentOptions,
-            externalProcessPath: legacy.externalProcessPath
+            externalProcessPath: legacy.externalProcessPath,
+            outputMode: profile.outputMode || legacy.outputMode
           };
         } catch {
           return legacy;
@@ -11913,6 +11995,38 @@ var require_qpmBuildService = __commonJS({
       const safe = withoutConfiguredRoot.split("/").filter((part) => part && part !== "." && part !== "..").join("/");
       const parsed = path2.posix.parse(safe || path2.basename(entry));
       return path2.join(parsed.dir, `${parsed.name}.qm`);
+    }
+    function readWindowsPeSubsystem(executablePath) {
+      if (process.platform !== "win32")
+        return "unknown";
+      try {
+        const fd = fs.openSync(executablePath, "r");
+        try {
+          const dos = Buffer.alloc(64);
+          if (fs.readSync(fd, dos, 0, dos.length, 0) < dos.length || dos.readUInt16LE(0) !== 23117)
+            return "unknown";
+          const peOffset = dos.readUInt32LE(60);
+          const header = Buffer.alloc(96);
+          if (fs.readSync(fd, header, 0, header.length, peOffset) < header.length)
+            return "unknown";
+          if (header.readUInt32LE(0) !== 17744)
+            return "unknown";
+          const optionalHeaderOffset = 24;
+          const magic = header.readUInt16LE(optionalHeaderOffset);
+          if (magic !== 267 && magic !== 523)
+            return "unknown";
+          const subsystem = header.readUInt16LE(optionalHeaderOffset + 68);
+          if (subsystem === 2)
+            return "gui";
+          if (subsystem === 3)
+            return "console";
+          return "unknown";
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch {
+        return "unknown";
+      }
     }
     function renderArgument(value) {
       return /\s/.test(value) ? `"${value}"` : value;
@@ -50013,7 +50127,8 @@ var require_qpmProjectSettingsService = __commonJS({
       arguments: "",
       workingDirectory: "",
       environmentOptions: "",
-      externalProcessPath: ""
+      externalProcessPath: "",
+      outputMode: "integrated-terminal"
     };
     var QpmProjectSettingsService = class {
       workspaces;
@@ -50219,10 +50334,14 @@ var require_qpmProjectSettingsService = __commonJS({
           arguments: String(fallbackRun?.arguments ?? value?.run?.arguments ?? EMPTY_RUN_SETTINGS.arguments),
           workingDirectory: String(fallbackRun?.workingDirectory ?? value?.run?.workingDirectory ?? EMPTY_RUN_SETTINGS.workingDirectory),
           environmentOptions: String(fallbackRun?.environmentOptions ?? value?.run?.environmentOptions ?? EMPTY_RUN_SETTINGS.environmentOptions),
-          externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath)
+          externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath),
+          outputMode: normalizeProgramOutputMode(value?.run?.outputMode ?? fallbackRun?.outputMode)
         },
         nativeBuildActions: nativeBuildActions || value?.nativeBuildActions === true
       };
+    }
+    function normalizeProgramOutputMode(value) {
+      return value === "output-channel" || value === "detached" || value === "integrated-terminal" ? value : "integrated-terminal";
     }
     function normalizeActions(value) {
       return Array.isArray(value) ? value.map(String).map((entry) => entry.trim()).filter(Boolean) : [];
@@ -50342,6 +50461,7 @@ var require_buildSettingsPanel = __commonJS({
             { id: "arguments", label: "$(terminal) Command-line arguments", description: projectSettings.run.arguments || "Empty" },
             { id: "workingDirectory", label: "$(folder) Working directory", description: projectSettings.run.workingDirectory || "Empty" },
             { id: "environmentOptions", label: "$(symbol-key) Environment options", description: projectSettings.run.environmentOptions || "Empty" },
+            { id: "outputMode", label: "$(terminal) Program output", description: programOutputModeLabel(projectSettings.run.outputMode) },
             { id: "externalProcessPath", label: "$(debug-start) External executable for DLL debugging", description: projectSettings.run.externalProcessPath || "Empty" },
             { id: "preBuildActions", label: "$(list-ordered) Pre-build actions", description: `${projectSettings.preBuildActions.length} action(s)` },
             { id: "customBuildActions", label: "$(list-ordered) Custom build actions", description: `${projectSettings.customBuildActions.length} action(s)` },
@@ -50385,6 +50505,19 @@ var require_buildSettingsPanel = __commonJS({
             environmentOptions: "environmentOptions",
             externalProcessPath: "externalProcessPath"
           };
+          if (choice.id === "outputMode") {
+            const selected = await vscode2.window.showQuickPick([
+              { label: "Integrated Terminal", description: "stdout, stderr and interactive stdin in the VS Code terminal", value: "integrated-terminal" },
+              { label: "QPM Program Output", description: "Capture stdout/stderr in an Output channel; stdin is unavailable", value: "output-channel" },
+              { label: "Detached", description: "Launch without terminal I/O; suited to GUI/background applications", value: "detached" }
+            ], { title: "Program output" });
+            if (selected) {
+              projectSettings.run.outputMode = selected.value;
+              this.applyProjectSettings(ref, scope, projectSettings);
+              this.workspaces.refresh();
+            }
+            continue;
+          }
           if (choice.id in nativeTextFields) {
             const key = nativeTextFields[choice.id];
             const value = await vscode2.window.showInputBox({ title: stripCodicon(choice.label), value: String(target[key] ?? ""), ignoreFocusOut: true });
@@ -50868,17 +51001,17 @@ var require_buildSettingsPanel = __commonJS({
 <section class="card wide target-linkable-only"><details open><summary>SDL integration</summary><div class="section-body two">${selectField("SDL integration", "sdlEnabled", compiler.sdlEnabled, sdlEnabledOptions)}${selectField("SDL version", "sdlVersion", compiler.sdlVersion, sdlVersionOptions)}${pathField("SDL SDK root", "sdlRootPath", compiler.sdlRootPath)}${textAreaField("SDL packages", "sdlPackages", compiler.sdlPackages)}${selectField("SDL runtime handling", "sdlRuntimeMode", compiler.sdlRuntimeMode, sdlRuntimeOptions)}${selectField("SDL Windows subsystem", "sdlSubsystem", compiler.sdlSubsystem, sdlSubsystemOptions)}<label class="check"><input id="sdlCopyAllRuntimeDlls" type="checkbox" ${checked(compiler.sdlCopyAllRuntimeDlls)}> Copy every DLL from SDL bin directory</label></div><p class="muted">Use packages such as SDL2, SDL2_image, SDL2_ttf, SDL2_mixer, SDL2_net, SDL2_gfx, SDL3, SDL3_image, SDL3_ttf, SDL3_mixer or SDL3_net, one per line. Short aliases such as image, mixer, ttf or net are accepted. During build, QPM also auto-adds installed SDL add-on packages when it detects calls such as IMG_*, Mix_* or TTF_* in the project sources.</p></details></section>
 <section class="card wide"><details><summary>Advanced compiler and linker flags</summary><div class="section-body two">${textAreaField("Define symbols (-D)", "defineSymbols", compiler.defineSymbols)}${pathListField("Include paths (-I)", "includePaths", compiler.includePaths)}<div class="target-linkable-only">${pathListField("Library paths (-L)", "libraryPaths", compiler.libraryPaths)}</div><div class="target-linkable-only">${textAreaField("Libraries (-l)", "libraries", compiler.libraries)}</div>${textAreaField("Common compiler flags", "compilerFlags", compiler.compilerFlags)}${textAreaField("C-only compiler flags", "cCompilerFlags", compiler.cCompilerFlags)}${textAreaField("C++-only compiler flags", "cppCompilerFlags", compiler.cppCompilerFlags)}<div class="target-linkable-only">${textAreaField("Linker flags", "linkerFlags", compiler.linkerFlags)}</div></div><p class="muted target-linkable-only">Use one value per line. Library paths, libraries and linker flags are used only for executable and DLL targets.</p><p class="muted target-static-only">Static libraries do not use linker flags, library paths or <code>-l</code> entries. Use compiler flags and include paths for object compilation, and the archiver path for final archive creation.</p></details></section>
 <section class="card wide"><details open><summary>Project dependencies and build order</summary><div class="section-body"><p class="muted">Checked projects are built before ${escapeHtml(ref.name)}.</p>${dependencies}</div></details></section>
-<section id="runOptionsSection" class="card wide target-runable-only"><details open><summary>Run / debug command line</summary><div class="section-body"><label class="field">Command line arguments<input id="arguments" value="${escapeHtml(settings.run.arguments)}" placeholder="--option value"></label>${pathField("Working directory", "workingDirectory", settings.run.workingDirectory)}<label class="field">Environment options<input id="environmentOptions" value="${escapeHtml(settings.run.environmentOptions)}" placeholder="NAME=value;OTHER=value"></label><div id="externalProcessPathRow" class="target-dll">${pathField("External executable for DLL debugging", "externalProcessPath", settings.run.externalProcessPath)}</div><p class="muted target-dll">DLL targets are not launched directly. These fields are used when an external host executable loads the DLL.</p></div></details></section>
+<section id="runOptionsSection" class="card wide target-runable-only"><details open><summary>Run / debug command line</summary><div class="section-body"><label class="field">Command line arguments<input id="arguments" value="${escapeHtml(settings.run.arguments)}" placeholder="--option value"></label>${pathField("Working directory", "workingDirectory", settings.run.workingDirectory)}<label class="field">Environment options<input id="environmentOptions" value="${escapeHtml(settings.run.environmentOptions)}" placeholder="NAME=value;OTHER=value"></label><label class="field">Program output<select id="outputMode"><option value="integrated-terminal" ${settings.run.outputMode === "integrated-terminal" ? "selected" : ""}>Integrated Terminal</option><option value="output-channel" ${settings.run.outputMode === "output-channel" ? "selected" : ""}>QPM Program Output</option><option value="detached" ${settings.run.outputMode === "detached" ? "selected" : ""}>Detached</option></select><small>Integrated Terminal supports printf/std::cout/std::cerr and interactive stdin (scanf/fgets/std::cin). On Windows GUI targets, rebuild after selecting it so QPM links the console subsystem. Output channel is non-interactive.</small></label><div id="externalProcessPathRow" class="target-dll">${pathField("External executable for DLL debugging", "externalProcessPath", settings.run.externalProcessPath)}</div><p class="muted target-dll">DLL targets are not launched directly. These fields are used when an external host executable loads the DLL.</p></div></details></section>
 <section class="card wide"><details open><summary>Build steps</summary><div class="section-body two"><label class="field">Pre-build actions<textarea id="preBuildActions">${escapeHtml(settings.preBuildActions.join("\n"))}</textarea></label><label class="field">Custom build actions<textarea id="customBuildActions">${escapeHtml(settings.customBuildActions.join("\n"))}</textarea></label><label class="field wide">Post-build actions<textarea id="postBuildActions">${escapeHtml(settings.postBuildActions.join("\n"))}</textarea></label></div></details></section>
 </div><div class="actions"><button id="importBuildParameters" class="secondary" type="button">Import build parameters</button><button id="exportBuildParameters" class="secondary" type="button">Export build parameters</button><button id="save" type="button">Save project build settings</button></div>
 <script>
 const vscode=acquireVsCodeApi();const nativeTargetDefaults=${nativeDefaults};
-const el=(id)=>document.getElementById(id);const val=(id)=>el(id)?.value??'';const flag=(id)=>!!el(id)?.checked;const lines=(id)=>val(id).split(/(?:\\r?\\n|;)/).map(x=>x.trim()).filter(Boolean);const chosen=(selector)=>[...document.querySelectorAll(selector+':checked')].map(e=>e.value);const disableField=(id,disabled)=>{const node=el(id);if(node)node.disabled=disabled;};const disableBrowse=(field,disabled)=>{const button=document.querySelector('[data-browse-field="'+field+'"]');if(button)button.disabled=disabled;};const setDisplay=(selector,visible)=>document.querySelectorAll(selector).forEach(node=>{node.style.display=visible?'':'none';});const updateTargetControls=()=>{const target=val('targetType');document.body.dataset.target=target;const exe=target==='Executable';const dll=target==='Dynamic Link Library';const stat=target==='Static Library';setDisplay('.target-exe-only',exe);setDisplay('.target-dll',dll);setDisplay('.target-static-only',stat);setDisplay('.target-linkable-only',exe||dll);setDisplay('.target-runable-only',exe||dll);setDisplay('.target-nonstatic-only',exe||dll);disableField('archiverPath',!stat);disableBrowse('archiverPath',!stat);disableField('debuggerPath',!exe);disableBrowse('debuggerPath',!exe);disableField('libraryPaths',stat);disableBrowse('libraryPaths',stat);disableField('libraries',stat);disableField('linkerFlags',stat);disableField('arguments',stat);disableField('workingDirectory',stat);disableBrowse('workingDirectory',stat);disableField('environmentOptions',stat);disableField('externalProcessPath',!dll);disableBrowse('externalProcessPath',!dll);};
+const el=(id)=>document.getElementById(id);const val=(id)=>el(id)?.value??'';const flag=(id)=>!!el(id)?.checked;const lines=(id)=>val(id).split(/(?:\\r?\\n|;)/).map(x=>x.trim()).filter(Boolean);const chosen=(selector)=>[...document.querySelectorAll(selector+':checked')].map(e=>e.value);const disableField=(id,disabled)=>{const node=el(id);if(node)node.disabled=disabled;};const disableBrowse=(field,disabled)=>{const button=document.querySelector('[data-browse-field="'+field+'"]');if(button)button.disabled=disabled;};const setDisplay=(selector,visible)=>document.querySelectorAll(selector).forEach(node=>{node.style.display=visible?'':'none';});const updateTargetControls=()=>{const target=val('targetType');document.body.dataset.target=target;const exe=target==='Executable';const dll=target==='Dynamic Link Library';const stat=target==='Static Library';setDisplay('.target-exe-only',exe);setDisplay('.target-dll',dll);setDisplay('.target-static-only',stat);setDisplay('.target-linkable-only',exe||dll);setDisplay('.target-runable-only',exe||dll);setDisplay('.target-nonstatic-only',exe||dll);disableField('archiverPath',!stat);disableBrowse('archiverPath',!stat);disableField('debuggerPath',!exe);disableBrowse('debuggerPath',!exe);disableField('libraryPaths',stat);disableBrowse('libraryPaths',stat);disableField('libraries',stat);disableField('linkerFlags',stat);disableField('arguments',stat);disableField('workingDirectory',stat);disableBrowse('workingDirectory',stat);disableField('environmentOptions',stat);disableField('outputMode',stat);disableField('externalProcessPath',!dll);disableBrowse('externalProcessPath',!dll);};
 document.querySelectorAll('[data-browse-field]').forEach(button=>button.addEventListener('click',()=>vscode.postMessage({type:'browse',field:button.dataset.browseField})));
 el('configurationScope')?.addEventListener('change',()=>vscode.postMessage({type:'changeScope',scope:val('configurationScope')}));el('targetType')?.addEventListener('change',updateTargetControls);el('architectureMode')?.addEventListener('change',()=>{const legacy=el('useBuildModeArchitectureFlags');if(legacy)legacy.checked=val('architectureMode')==='from-build-mode';});
 window.addEventListener('message',(event)=>{const message=event.data;if(message?.type==='setField'&&el(message.field))el(message.field).value=message.value||'';if(message?.type==='appendLines'&&el(message.field)){const node=el(message.field);const existing=node.value.trim();const values=[...(message.values||[])].map(String).map(x=>x.trim()).filter(Boolean);node.value=[existing,...values].filter(Boolean).join(String.fromCharCode(10));}});
 updateTargetControls();
-const collectBuildParameters=()=>({scope:val('configurationScope'),targetType:val('targetType'),settings:{preBuildActions:lines('preBuildActions'),customBuildActions:lines('customBuildActions'),postBuildActions:lines('postBuildActions'),dependencies:[...document.querySelectorAll('[data-dependency]:checked')].map(e=>e.dataset.dependency),run:{arguments:val('arguments'),workingDirectory:val('workingDirectory'),environmentOptions:val('environmentOptions'),externalProcessPath:val('externalProcessPath')}},compilerSettings:{cCompilerPath:val('cCompilerPath'),cppCompilerPath:val('cppCompilerPath'),archiverPath:val('archiverPath'),debuggerPath:val('debuggerPath'),outputDirectory:val('outputDirectory'),cStandard:val('cStandard'),cppStandard:val('cppStandard'),warningLevel:val('warningLevel'),optimizationLevel:val('optimizationLevel'),debugInformation:val('debugInformation'),architectureMode:val('architectureMode'),compilerFlags:lines('compilerFlags'),cCompilerFlags:lines('cCompilerFlags'),cppCompilerFlags:lines('cppCompilerFlags'),linkerFlags:lines('linkerFlags'),includePaths:lines('includePaths'),libraryPaths:lines('libraryPaths'),libraries:lines('libraries'),defineSymbols:lines('defineSymbols'),useBuildModeArchitectureFlags:flag('useBuildModeArchitectureFlags'),runtimeDependencyMode:val('runtimeDependencyMode'),cleanRuntimeDllsOnDeploy:flag('cleanRuntimeDllsOnDeploy'),sdlEnabled:val('sdlEnabled'),sdlVersion:val('sdlVersion'),sdlRootPath:val('sdlRootPath'),sdlPackages:lines('sdlPackages'),sdlRuntimeMode:val('sdlRuntimeMode'),sdlSubsystem:val('sdlSubsystem'),sdlCopyAllRuntimeDlls:flag('sdlCopyAllRuntimeDlls')},nativeTarget:{...nativeTargetDefaults,targetType:val('targetType'),outputPath:val('outputPath')}});
+const collectBuildParameters=()=>({scope:val('configurationScope'),targetType:val('targetType'),settings:{preBuildActions:lines('preBuildActions'),customBuildActions:lines('customBuildActions'),postBuildActions:lines('postBuildActions'),dependencies:[...document.querySelectorAll('[data-dependency]:checked')].map(e=>e.dataset.dependency),run:{arguments:val('arguments'),workingDirectory:val('workingDirectory'),environmentOptions:val('environmentOptions'),externalProcessPath:val('externalProcessPath'),outputMode:val('outputMode')}},compilerSettings:{cCompilerPath:val('cCompilerPath'),cppCompilerPath:val('cppCompilerPath'),archiverPath:val('archiverPath'),debuggerPath:val('debuggerPath'),outputDirectory:val('outputDirectory'),cStandard:val('cStandard'),cppStandard:val('cppStandard'),warningLevel:val('warningLevel'),optimizationLevel:val('optimizationLevel'),debugInformation:val('debugInformation'),architectureMode:val('architectureMode'),compilerFlags:lines('compilerFlags'),cCompilerFlags:lines('cCompilerFlags'),cppCompilerFlags:lines('cppCompilerFlags'),linkerFlags:lines('linkerFlags'),includePaths:lines('includePaths'),libraryPaths:lines('libraryPaths'),libraries:lines('libraries'),defineSymbols:lines('defineSymbols'),useBuildModeArchitectureFlags:flag('useBuildModeArchitectureFlags'),runtimeDependencyMode:val('runtimeDependencyMode'),cleanRuntimeDllsOnDeploy:flag('cleanRuntimeDllsOnDeploy'),sdlEnabled:val('sdlEnabled'),sdlVersion:val('sdlVersion'),sdlRootPath:val('sdlRootPath'),sdlPackages:lines('sdlPackages'),sdlRuntimeMode:val('sdlRuntimeMode'),sdlSubsystem:val('sdlSubsystem'),sdlCopyAllRuntimeDlls:flag('sdlCopyAllRuntimeDlls')},nativeTarget:{...nativeTargetDefaults,targetType:val('targetType'),outputPath:val('outputPath')}});
 el('save').addEventListener('click',()=>vscode.postMessage({type:'save',...collectBuildParameters()}));
 el('exportBuildParameters').addEventListener('click',()=>vscode.postMessage({type:'exportBuildParameters',...collectBuildParameters()}));
 el('importBuildParameters').addEventListener('click',()=>vscode.postMessage({type:'importBuildParameters',scope:val('configurationScope')}));
@@ -50925,6 +51058,13 @@ el('importBuildParameters').addEventListener('click',()=>vscode.postMessage({typ
     }
     function escapeHtml(value) {
       return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function programOutputModeLabel(value) {
+      if (value === "output-channel")
+        return "QPM Program Output";
+      if (value === "detached")
+        return "Detached";
+      return "Integrated Terminal";
     }
     function stripCodicon(value) {
       return value.replace(/^\$\([^)]*\)\s*/, "");
@@ -51290,6 +51430,7 @@ var require_qtProjectSettingsPanel = __commonJS({
       runArguments: "Command-line arguments passed to the application by the active run profile.",
       workingDirectory: "Current working directory used when running the application.",
       environmentOptions: "Environment variables written as NAME=value, separated by semicolons or new lines.",
+      programOutputMode: "Choose Integrated Terminal for stdout/stderr plus interactive stdin, QPM Program Output for captured non-interactive logs, or Detached for GUI/background launch.",
       externalProcessPath: "Host executable used when debugging a shared library instead of a standalone application.",
       platformName: "Display name of the active platform profile.",
       platformType: "Execution target: desktop, local Linux, Remote Linux, Docker, WebAssembly, Android, macOS or iOS.",
@@ -52118,6 +52259,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         runProfile.arguments = String(payload.runArguments ?? "");
         runProfile.workingDirectory = String(payload.workingDirectory ?? "");
         runProfile.environment = parseEnvironmentProfile(String(payload.environmentOptions ?? ""));
+        runProfile.outputMode = normalizeProgramOutputMode(payload.programOutputMode);
         const deployProfile = (0, qtProjectManifest_12.getActiveQtDeployProfile)(manifest);
         deployProfile.enabled = payload.autoDeploy === true;
         deployProfile.buildProfileId = String(payload.deployBuildProfileId ?? deployProfile.buildProfileId).trim() || buildProfile.id;
@@ -52268,6 +52410,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         projectSettings.run.arguments = runProfile.arguments;
         projectSettings.run.workingDirectory = runProfile.workingDirectory;
         projectSettings.run.environmentOptions = String(payload.environmentOptions ?? "");
+        projectSettings.run.outputMode = runProfile.outputMode;
         projectSettings.run.externalProcessPath = String(payload.externalProcessPath ?? "");
         projectSettings.preBuildActions = normalizeList(payload.preBuildActions);
         projectSettings.customBuildActions = normalizeList(payload.customBuildActions);
@@ -52322,6 +52465,7 @@ var require_qtProjectSettingsPanel = __commonJS({
         const runArguments = runProfile.arguments || projectSettings.run.arguments;
         const runWorkingDirectory = runProfile.workingDirectory || projectSettings.run.workingDirectory || path2.dirname(ref.absolutePath);
         const runEnvironmentOptions = Object.keys(runProfile.environment).length ? Object.entries(runProfile.environment).map(([key, value]) => `${key}=${value}`).join(";") : projectSettings.run.environmentOptions;
+        const programOutputMode = runProfile.outputMode || projectSettings.run.outputMode || "integrated-terminal";
         const installation = this.installations.getActive((0, qtProjectManifest_12.getQtInstallationPreference)(manifest, mode));
         const projectRoot = path2.dirname(ref.absolutePath);
         const moduleHtml = QT_MODULES.map((module3) => {
@@ -52472,8 +52616,9 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${field("Command-line arguments", "runArguments", runArguments, true)}
   ${field("Working directory", "workingDirectory", runWorkingDirectory)}
   ${field("Environment options (NAME=value;OTHER=value)", "environmentOptions", runEnvironmentOptions, true)}
+  ${selectField("Program output", "programOutputMode", programOutputModeOptions(programOutputMode))}
   ${field("External executable for shared-library debugging", "externalProcessPath", projectSettings.run.externalProcessPath)}
-</div></section>
+</div><p class="muted">Integrated Terminal is the recommended mode for C/C++ console I/O: printf, std::cout, std::cerr, scanf, fgets(stdin) and std::cin. On Windows, QPM-generated Qt GUI builds use the console subsystem for the linked build profile; rebuild after changing this option. QPM Program Output captures stdout/stderr but cannot accept stdin. Detached keeps the GUI/background subsystem behavior.</p></section>
 <section id="section-deployment" data-settings-section data-settings-page="run" data-settings-title="Standalone deployment" class="card wide"><h2>${sectionHeading("run", "Standalone deployment")}</h2>
   <div class="fields">
     ${selectField("Automatic deployment build profile", "deployBuildProfileId", profileOptions(manifest.profiles.builds, deployProfile.buildProfileId))}
@@ -53090,7 +53235,7 @@ on('save', 'click', () => {
     modules:[...document.querySelectorAll('input[name="qtModule"]:checked')].map((input) => input.value),
     defines:value('defines'), includeDirectories:value('includeDirectories'), libraryDirectories:value('libraryDirectories'), libraries:value('libraries'),
     variantDefines:value('variantDefines'), compilerFlags:value('compilerFlags'), linkerFlags:value('linkerFlags'), sourceDirectory:value('sourceDirectory'), projectFile:value('projectFile'), cmakeConfigurePreset:value('cmakeConfigurePreset'), cmakeBuildPreset:value('cmakeBuildPreset'), precompiledHeader:value('precompiledHeader'), configureArguments:value('configureArguments'), buildArguments:value('buildArguments'), cleanArguments:value('cleanArguments'),
-    runArguments:value('runArguments'), workingDirectory:value('workingDirectory'), environmentOptions:value('environmentOptions'), externalProcessPath:value('externalProcessPath'),
+    runArguments:value('runArguments'), workingDirectory:value('workingDirectory'), environmentOptions:value('environmentOptions'), programOutputMode:value('programOutputMode'), externalProcessPath:value('externalProcessPath'),
     platformName:value('platformName'), platformType:value('platformType'), platformBuildLocation:value('platformBuildLocation'), platformKitId:value('platformKitId'), platformBuildProfileId:value('platformBuildProfileId'), platformRunProfileId:value('platformRunProfileId'), platformDeployProfileId:value('platformDeployProfileId'), platformDebugProfileId:value('platformDebugProfileId'), platformEnvironment:value('platformEnvironment'), platformSysroot:value('platformSysroot'), platformSshHost:value('platformSshHost'), platformSshUser:value('platformSshUser'), platformSshPort:value('platformSshPort'), platformSshExecutable:value('platformSshExecutable'), platformScpExecutable:value('platformScpExecutable'), platformRsyncExecutable:value('platformRsyncExecutable'), platformRemoteProjectDirectory:value('platformRemoteProjectDirectory'), platformRemoteDeployDirectory:value('platformRemoteDeployDirectory'), platformRemoteBuildCommand:value('platformRemoteBuildCommand'), platformRemoteRunCommand:value('platformRemoteRunCommand'), platformUseRsync:checked('platformUseRsync'), platformStartGdbServer:checked('platformStartGdbServer'), platformGdbServerPort:value('platformGdbServerPort'), platformDockerExecutable:value('platformDockerExecutable'), platformDockerImage:value('platformDockerImage'), platformDockerContainerName:value('platformDockerContainerName'), platformDockerWorkspace:value('platformDockerWorkspace'), platformDockerBuildCommand:value('platformDockerBuildCommand'), platformDockerRunCommand:value('platformDockerRunCommand'), platformDockerArguments:value('platformDockerArguments'), platformDockerKeepContainer:checked('platformDockerKeepContainer'), platformDockerForwardDisplay:checked('platformDockerForwardDisplay'), platformDockerHostNetwork:checked('platformDockerHostNetwork'), platformEmsdkRoot:value('platformEmsdkRoot'), platformEmsdkEnvironmentScript:value('platformEmsdkEnvironmentScript'), platformWasmServerExecutable:value('platformWasmServerExecutable'), platformWasmServerPort:value('platformWasmServerPort'), platformWasmHtmlEntry:value('platformWasmHtmlEntry'), platformWasmOpenBrowser:checked('platformWasmOpenBrowser'), platformWasmServerArguments:value('platformWasmServerArguments'), platformAndroidSdkRoot:value('platformAndroidSdkRoot'), platformAndroidNdkRoot:value('platformAndroidNdkRoot'), platformAndroidJdkRoot:value('platformAndroidJdkRoot'), platformAndroidDeployQtPath:value('platformAndroidDeployQtPath'), platformAndroidAdbPath:value('platformAndroidAdbPath'), platformAndroidEmulatorPath:value('platformAndroidEmulatorPath'), platformAndroidAvdManagerPath:value('platformAndroidAvdManagerPath'), platformAndroidSdkManagerPath:value('platformAndroidSdkManagerPath'), platformAndroidAbis:value('platformAndroidAbis'), platformAndroidBuildAllAbis:checked('platformAndroidBuildAllAbis'), platformAndroidCompileSdk:value('platformAndroidCompileSdk'), platformAndroidTargetSdk:value('platformAndroidTargetSdk'), platformAndroidMinSdk:value('platformAndroidMinSdk'), platformAndroidBuildToolsVersion:value('platformAndroidBuildToolsVersion'), platformAndroidPackageName:value('platformAndroidPackageName'), platformAndroidAppName:value('platformAndroidAppName'), platformAndroidVersionCode:value('platformAndroidVersionCode'), platformAndroidVersionName:value('platformAndroidVersionName'), platformAndroidPackageFormat:value('platformAndroidPackageFormat'), platformAndroidDeviceSerial:value('platformAndroidDeviceSerial'), platformAndroidAvdName:value('platformAndroidAvdName'), platformAndroidLogcatFilter:value('platformAndroidLogcatFilter'), platformAndroidInstallReplace:checked('platformAndroidInstallReplace'), platformAndroidUninstallBeforeInstall:checked('platformAndroidUninstallBeforeInstall'), platformAndroidOpenLogcatAfterRun:checked('platformAndroidOpenLogcatAfterRun'), platformAndroidGradleArguments:value('platformAndroidGradleArguments'), platformAndroidCMakeArguments:value('platformAndroidCMakeArguments'), platformAndroidKeystore:value('platformAndroidKeystore'), platformAndroidKeystoreAlias:value('platformAndroidKeystoreAlias'), platformAndroidStorePasswordEnvironment:value('platformAndroidStorePasswordEnvironment'), platformAndroidKeyPasswordEnvironment:value('platformAndroidKeyPasswordEnvironment'), platformAppleDeveloperDirectory:value('platformAppleDeveloperDirectory'), platformAppleXcodebuildPath:value('platformAppleXcodebuildPath'), platformAppleXcrunPath:value('platformAppleXcrunPath'), platformAppleMacDeployQtPath:value('platformAppleMacDeployQtPath'), platformAppleBundleIdentifier:value('platformAppleBundleIdentifier'), platformAppleDeploymentTarget:value('platformAppleDeploymentTarget'), platformAppleArchitectures:value('platformAppleArchitectures'), platformAppleDevelopmentTeam:value('platformAppleDevelopmentTeam'), platformAppleCodeSignIdentity:value('platformAppleCodeSignIdentity'), platformAppleProvisioningProfile:value('platformAppleProvisioningProfile'), platformAppleEntitlementsFile:value('platformAppleEntitlementsFile'), platformAppleAutomaticSigning:checked('platformAppleAutomaticSigning'), platformAppleAllowProvisioningUpdates:checked('platformAppleAllowProvisioningUpdates'), platformAppleScheme:value('platformAppleScheme'), platformAppleConfiguration:value('platformAppleConfiguration'), platformAppleSimulatorId:value('platformAppleSimulatorId'), platformAppleDeviceId:value('platformAppleDeviceId'), platformAppleCreateDmg:checked('platformAppleCreateDmg'), platformAppleDmgFileSystem:value('platformAppleDmgFileSystem'), platformAppleNotaryProfile:value('platformAppleNotaryProfile'), platformAppleStapleAfterNotarization:checked('platformAppleStapleAfterNotarization'), platformAppleAppStoreCompliant:checked('platformAppleAppStoreCompliant'), platformAppleHardenedRuntime:checked('platformAppleHardenedRuntime'), platformAppleTimestamp:checked('platformAppleTimestamp'), platformAppleAdditionalCMakeArguments:value('platformAppleAdditionalCMakeArguments'), platformAppleAdditionalXcodebuildArguments:value('platformAppleAdditionalXcodebuildArguments'), platformAppleAdditionalMacDeployQtArguments:value('platformAppleAdditionalMacDeployQtArguments'),
     debugName:value('debugName'), debugRequest:value('debugRequest'), debuggerType:value('debuggerType'), debugBuildProfileId:value('debugBuildProfileId'), debugRunProfileId:value('debugRunProfileId'), debugProgram:value('debugProgram'), debugArguments:value('debugArguments'), debugWorkingDirectory:value('debugWorkingDirectory'), debugEnvironment:value('debugEnvironment'), debugStopAtEntry:checked('debugStopAtEntry'), debugExternalConsole:checked('debugExternalConsole'), debugProcessId:value('debugProcessId'), debugCoreDumpPath:value('debugCoreDumpPath'), debugRemoteHost:value('debugRemoteHost'), debugRemotePort:value('debugRemotePort'), debugRemoteProgram:value('debugRemoteProgram'), debugRemoteWorkingDirectory:value('debugRemoteWorkingDirectory'), debugSshHost:value('debugSshHost'), debugSshUser:value('debugSshUser'), debugSshPort:value('debugSshPort'), debugSshExecutable:value('debugSshExecutable'), debugStartGdbServerViaSsh:checked('debugStartGdbServerViaSsh'), debugSourceFileMap:value('debugSourceFileMap'), debugSolibPaths:value('debugSolibPaths'), debugSymbolSearchPath:value('debugSymbolSearchPath'), debugSetupCommands:value('debugSetupCommands'), debugPrettyPrinters:checked('debugPrettyPrinters'), debugBreakOnQtWarnings:checked('debugBreakOnQtWarnings'), debugQmlEnabled:checked('debugQmlEnabled'), debugQmlHost:value('debugQmlHost'), debugQmlPort:value('debugQmlPort'), debugQmlBlock:checked('debugQmlBlock'), debugQmlServices:value('debugQmlServices'),
     testFramework:value('testFramework'), testBuildBeforeRun:checked('testBuildBeforeRun'), testTimeoutMs:value('testTimeoutMs'), testArguments:value('testArguments'), testEnvironment:value('testEnvironment'), testOffscreenPlatform:checked('testOffscreenPlatform'), testParallelJobs:value('testParallelJobs'), testStopOnFailure:checked('testStopOnFailure'), testRepeatMode:value('testRepeatMode'), testRepeatCount:value('testRepeatCount'), testHistoryLimit:value('testHistoryLimit'),
@@ -53256,6 +53401,17 @@ on('save', 'click', () => {
     }
     function mappingToLines(value) {
       return Object.entries(value).map(([remote, local]) => `${remote}=${local}`);
+    }
+    function programOutputModeOptions(selected) {
+      const values = [
+        ["integrated-terminal", "Integrated Terminal \u2014 stdout/stderr + interactive stdin"],
+        ["output-channel", "QPM Program Output \u2014 stdout/stderr only"],
+        ["detached", "Detached \u2014 no terminal I/O"]
+      ];
+      return values.map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+    }
+    function normalizeProgramOutputMode(value) {
+      return value === "output-channel" || value === "detached" || value === "integrated-terminal" ? value : "integrated-terminal";
     }
     function debugRequestOptions(selected) {
       const options = [["launch", "Local launch"], ["attach", "Attach local process"], ["remote-gdb", "Remote GDB Server"], ["core-dump", "Core / dump file"], ["qml-attach", "QML attach"]];
@@ -59811,11 +59967,13 @@ var require_qpmQtTestingService = __commonJS({
           cwd,
           stopAtEntry: false,
           externalConsole: false,
+          internalConsoleOptions: "neverOpen",
           environment: Object.entries(env).filter((entry) => typeof entry[1] === "string").map(([name, value]) => ({ name, value }))
         };
         const debugConfig = visualStudio ? { ...common, type: "cppvsdbg" } : {
           ...common,
           type: "cppdbg",
+          avoidWindowsConsoleRedirection: false,
           MIMode: kit.debuggerType === "lldb" ? "lldb" : "gdb",
           miDebuggerPath: kit.debuggerPath || installation.toolchain.debuggerPath || (kit.debuggerType === "lldb" ? "lldb-mi" : "gdb"),
           setupCommands: [{ description: "Enable debugger pretty printing", text: "-enable-pretty-printing", ignoreFailures: true }]
@@ -61496,6 +61654,7 @@ var require_qpmQtDebugService = __commonJS({
         cwd,
         stopAtEntry: profile.stopAtEntry,
         externalConsole: profile.externalConsole,
+        internalConsoleOptions: "neverOpen",
         environment
       };
       if (useVisualStudio) {
@@ -61518,6 +61677,7 @@ var require_qpmQtDebugService = __commonJS({
       const config = {
         ...common,
         type: "cppdbg",
+        avoidWindowsConsoleRedirection: false,
         MIMode: miMode,
         miDebuggerPath: kit.debuggerPath || installation?.toolchain.debuggerPath || (miMode === "lldb" ? "lldb-mi" : "gdb"),
         setupCommands,
@@ -87809,13 +87969,15 @@ var require_qpmQtPythonService = __commonJS({
     var QpmQtPythonService = class {
       workspaces;
       output;
+      programOutput;
       changeEmitter = new vscode2.EventEmitter();
       onDidChange = this.changeEmitter.event;
       launchedApplications = /* @__PURE__ */ new Map();
       cachedStatus;
-      constructor(workspaces, output) {
+      constructor(workspaces, output, programOutput) {
         this.workspaces = workspaces;
         this.output = output;
+        this.programOutput = programOutput;
         this.workspaces.onDidChange(() => {
           this.cachedStatus = void 0;
           this.changeEmitter.fire();
@@ -88105,11 +88267,37 @@ var require_qpmQtPythonService = __commonJS({
         const args = splitArguments(runProfile?.arguments ?? "");
         const cwd = runProfile?.workingDirectory ? resolveProjectPath(path2.dirname(manifestPath), runProfile.workingDirectory) : path2.dirname(manifestPath);
         const env = { ...this.createEnvironment(manifestPath, manifest, interpreter), ...runProfile?.environment ?? {} };
-        const child = (0, child_process_1.spawn)(interpreter, [entryPoint, ...args], { cwd, env, detached: false, stdio: "ignore", windowsHide: false });
+        const outputMode = runProfile?.outputMode ?? "integrated-terminal";
+        const commandArgs = [entryPoint, ...args];
+        const rendered = [interpreter, ...commandArgs].map(renderPythonArgument).join(" ");
+        if (outputMode === "integrated-terminal") {
+          const terminal = vscode2.window.createTerminal({ name: `QPM Python \u2014 ${manifest.name}`, shellPath: interpreter, shellArgs: commandArgs, cwd, env });
+          terminal.show(false);
+          this.output.appendLine(`[Qt/Python] Started in Integrated Terminal: ${rendered}`);
+          return true;
+        }
+        if (outputMode === "output-channel") {
+          this.programOutput.clear();
+          this.programOutput.appendLine(`=== ${manifest.name} ===`);
+          this.programOutput.appendLine(`> ${rendered}`);
+          this.programOutput.appendLine(`Working directory: ${cwd}`);
+          this.programOutput.appendLine("");
+          this.programOutput.show(true);
+          const child2 = (0, child_process_1.spawn)(interpreter, commandArgs, { cwd, env, detached: false, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+          this.trackApplication(manifestPath, child2);
+          child2.stdout?.on("data", (chunk) => this.programOutput.append(chunk.toString()));
+          child2.stderr?.on("data", (chunk) => this.programOutput.append(chunk.toString()));
+          child2.on("error", (error) => this.programOutput.appendLine(`
+[QPM] Unable to start process: ${error.message}`));
+          child2.on("close", (code, signal) => this.programOutput.appendLine(`
+[QPM] Process finished (${signal ? `signal ${signal}` : `exit code ${code ?? "unknown"}`}).`));
+          this.output.appendLine(`[Qt/Python] Started with captured output: ${rendered}${child2.pid ? ` (PID ${child2.pid})` : ""}`);
+          return true;
+        }
+        const child = (0, child_process_1.spawn)(interpreter, commandArgs, { cwd, env, detached: true, stdio: "ignore", windowsHide: false });
         this.trackApplication(manifestPath, child);
         child.unref?.();
-        this.output.appendLine(`[Qt/Python] Started ${interpreter} ${entryPoint}${args.length ? ` ${args.join(" ")}` : ""}${child.pid ? ` (PID ${child.pid})` : ""}`);
-        vscode2.window.showInformationMessage(`Started Qt for Python application ${manifest.name}.`);
+        this.output.appendLine(`[Qt/Python] Started detached: ${rendered}${child.pid ? ` (PID ${child.pid})` : ""}`);
         return true;
       }
       async debug(manifestPath = this.requireActiveManifest()) {
@@ -88585,6 +88773,9 @@ var require_qpmQtPythonService = __commonJS({
           return value.resourceUri.fsPath;
       }
       return void 0;
+    }
+    function renderPythonArgument(value) {
+      return /[\s"']/u.test(value) ? JSON.stringify(value) : value;
     }
   }
 });
@@ -90277,6 +90468,7 @@ var qpmQtDependencyProvider_1 = require_qpmQtDependencyProvider();
 var qtProjectManifest_1 = require_qtProjectManifest();
 async function activate(context) {
   const output = vscode.window.createOutputChannel("Qt Project Manager");
+  const programOutput = vscode.window.createOutputChannel("Qt Project Manager - Program Output");
   const buildTrace = vscode.window.createOutputChannel("Qt Project Manager - Build Trace");
   await migrateLegacyConfiguration(output);
   const parser = new qpmParser_1.QpmParser();
@@ -90292,10 +90484,10 @@ async function activate(context) {
   const projectSettings = new qpmProjectSettingsService_1.QpmProjectSettingsService(workspaces, parser, output);
   const qtTools = new qpmQtToolsService_1.QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new qpmQmlLanguageService_1.QpmQmlLanguageService(workspaces, qtInstallations, output);
-  const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output);
+  const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output, programOutput);
   const qtDependencies = new qpmQtDependencyService_1.QpmQtDependencyService(workspaces, output);
   const instrumentProfiles = new qpmInstrumentProfileService_1.QpmInstrumentProfileService(context.extensionPath, workspaces, output);
-  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output, qtPython, qtDependencies, buildTrace);
+  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output, programOutput, qtPython, qtDependencies, buildTrace);
   const debugging = new qpmQtDebugService_1.QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new qpmQtAndroidService_1.QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new qpmQtAppleService_1.QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -90465,6 +90657,7 @@ async function activate(context) {
   const runGdbDebug = async () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
   context.subscriptions.push(
     output,
+    programOutput,
     buildTrace,
     builds,
     workspaces,

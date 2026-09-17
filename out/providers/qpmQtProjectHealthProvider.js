@@ -317,7 +317,7 @@ WinGet: ${manifest.publication.winget.enabled ? 'enabled' : 'disabled'}
 Target: ${manifest.publication.publish.target}`, 'qpm.openPublicationReport'));
                 }
             }
-            items.push(health('run', 'Run profile', runProfile.workingDirectory || 'Target directory', 'info', `Arguments: ${runProfile.arguments || 'none'}\nEnvironment variables: ${Object.keys(runProfile.environment).length}`, 'qpm.chooseRunAction'));
+            items.push(health('run', 'Run profile', runProfile.workingDirectory || 'Target directory', 'info', `Arguments: ${runProfile.arguments || 'none'}\nEnvironment variables: ${Object.keys(runProfile.environment).length}\nProgram output: ${runProfile.outputMode}`, 'qpm.chooseRunAction'));
             const debugKit = manifest.profiles.kits.find((entry) => entry.id === manifest.profiles.builds.find((entry) => entry.id === debugProfile.buildProfileId)?.kitId) ?? kitProfile;
             const debugReady = debugProfile.request === 'qml-attach' || Boolean(debugKit.debuggerPath || installation?.toolchain.debuggerPath || debugProfile.debuggerType === 'cppvsdbg' || debugProfile.debuggerType === 'cdb' || debugKit.compilerFamily === 'msvc');
             items.push(health('debug', 'Debug profile', `${debugProfile.name} · ${debugProfile.request}`, debugReady ? 'ok' : 'warning', `Debugger: ${debugProfile.debuggerType === 'auto' ? debugKit.debuggerType : debugProfile.debuggerType}\nPretty printers: ${debugProfile.enableQtPrettyPrinters ? 'enabled' : 'disabled'}\nQML debugger: ${debugProfile.qmlDebug || debugProfile.request === 'qml-attach' ? `${debugProfile.qmlHost}:${debugProfile.qmlPort}` : 'disabled'}\nRemote GDB: ${debugProfile.remoteHost}:${debugProfile.remotePort}`, 'qpm.manageQtDebugProfiles'));

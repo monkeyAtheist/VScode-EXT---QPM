@@ -1,3 +1,22 @@
+## 0.34.8
+
+- Fixed interactive C/C++ console I/O for Qt GUI applications on Windows: QPM-generated Direct, qmake and CMake builds now use the console subsystem when the active run profile uses Integrated Terminal.
+- Direct builds no longer link Qt's GUI entry-point shim when console I/O is requested.
+- Run now detects stale Windows GUI-subsystem executables and explains that a rebuild is required for stdin/stdout/stderr.
+- Updated Run settings help for printf/std::cout/std::cerr/scanf/fgets/std::cin.
+
+# 0.34.7 — Interactive program I/O
+
+- Replaced the previous always-detached native run behavior (`stdio: 'ignore'`) with three per-run-profile output modes: **Integrated Terminal**, **QPM Program Output**, and **Detached**.
+- **Integrated Terminal** is now the default and supports `printf`, `std::cout`, `std::cerr` plus interactive `scanf`, `fgets(stdin)` and `std::cin`.
+- Added the shared **Qt Project Manager - Program Output** channel for non-interactive stdout/stderr capture, including process exit status.
+- Kept **Detached** for GUI/background applications that should run without terminal I/O.
+- Added the Program output selector to both the native Qt project settings page and the generic QPM build settings editor, including safe-mode editing.
+- Run-output mode is persisted per Qt run profile; older projects default safely to Integrated Terminal without a schema-version bump. Legacy `.cws` files are not extended with QPM-specific keys; their output-mode preference remains in `.vscode/qpm-build.json`.
+- Updated `cppdbg` launch configurations with `avoidWindowsConsoleRedirection: false` and `internalConsoleOptions: neverOpen` so debugged console I/O remains attached to the VS Code terminal.
+- Applied the same run-profile output modes to Qt for Python / PySide6 launches.
+- Added `scripts/test-qpm-program-io-0347.js`.
+
 # 0.34.6
 
 - Added **OpenSSH Device Manager** directly to the QPM right-click menu in both the editor and VS Code Explorer.

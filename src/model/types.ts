@@ -1,10 +1,12 @@
 export type QpmBuildMode = 'debug' | 'release' | 'debug64' | 'release64';
+export type QpmProgramOutputMode = 'integrated-terminal' | 'output-channel' | 'detached';
 
 export interface QpmRunOptions {
   arguments: string;
   workingDirectory: string;
   environmentOptions: string;
   externalProcessPath: string;
+  outputMode: QpmProgramOutputMode;
 }
 
 export interface QpmWorkspaceProjectRef {

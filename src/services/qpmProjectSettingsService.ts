@@ -3,7 +3,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { QpmParser } from '../model/qpmParser';
-import { QpmBuildMode, QpmWorkspaceProjectRef } from '../model/types';
+import { QpmBuildMode, QpmProgramOutputMode, QpmWorkspaceProjectRef } from '../model/types';
 import { isQtProjectManifestPath } from '../model/qtProjectManifest';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
 
@@ -12,6 +12,7 @@ export interface QpmRunSettings {
   workingDirectory: string;
   environmentOptions: string;
   externalProcessPath: string;
+  outputMode: QpmProgramOutputMode;
 }
 
 export interface QpmProjectBuildSettings {
@@ -32,7 +33,8 @@ const EMPTY_RUN_SETTINGS: QpmRunSettings = {
   arguments: '',
   workingDirectory: '',
   environmentOptions: '',
-  externalProcessPath: ''
+  externalProcessPath: '',
+  outputMode: 'integrated-terminal'
 };
 
 export class QpmProjectSettingsService {
@@ -254,10 +256,15 @@ function normalizeSettings(value?: Partial<QpmProjectBuildSettings>, fallbackRun
       arguments: String(fallbackRun?.arguments ?? value?.run?.arguments ?? EMPTY_RUN_SETTINGS.arguments),
       workingDirectory: String(fallbackRun?.workingDirectory ?? value?.run?.workingDirectory ?? EMPTY_RUN_SETTINGS.workingDirectory),
       environmentOptions: String(fallbackRun?.environmentOptions ?? value?.run?.environmentOptions ?? EMPTY_RUN_SETTINGS.environmentOptions),
-      externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath)
+      externalProcessPath: String(fallbackRun?.externalProcessPath ?? value?.run?.externalProcessPath ?? EMPTY_RUN_SETTINGS.externalProcessPath),
+      outputMode: normalizeProgramOutputMode(value?.run?.outputMode ?? fallbackRun?.outputMode)
     },
     nativeBuildActions: nativeBuildActions || value?.nativeBuildActions === true
   };
+}
+
+function normalizeProgramOutputMode(value: unknown): QpmProgramOutputMode {
+  return value === 'output-channel' || value === 'detached' || value === 'integrated-terminal' ? value : 'integrated-terminal';
 }
 
 function normalizeActions(value: unknown): string[] {

@@ -803,7 +803,7 @@ class QpmParser {
     }
     getWorkspaceRunOptions(workspacePath, projectIndex, mode = 'debug') {
         if (path.extname(workspacePath).toLowerCase() !== '.cws') {
-            return { arguments: '', workingDirectory: '', environmentOptions: '', externalProcessPath: '' };
+            return { arguments: '', workingDirectory: '', environmentOptions: '', externalProcessPath: '', outputMode: 'integrated-terminal' };
         }
         const document = iniDocument_1.IniDocument.parse(readText(workspacePath));
         const suffix = String(projectIndex).padStart(4, '0');
@@ -817,7 +817,8 @@ class QpmParser {
             arguments: value('Command Line Args'),
             workingDirectory: value('Working Directory'),
             environmentOptions: value('Environment Options'),
-            externalProcessPath: value('External Process Path') || reconstructValue(dllSection ?? new iniDocument_1.IniSection('', []), 'External Process Path') || ''
+            externalProcessPath: value('External Process Path') || reconstructValue(dllSection ?? new iniDocument_1.IniSection('', []), 'External Process Path') || '',
+            outputMode: 'integrated-terminal'
         };
     }
     setWorkspaceRunOptions(workspacePath, projectIndex, mode, options) {

@@ -48,6 +48,8 @@ exports.getActiveQtKitProfile = getActiveQtKitProfile;
 exports.getActiveQtBuildProfile = getActiveQtBuildProfile;
 exports.getQtKitProfileForBuild = getQtKitProfileForBuild;
 exports.getActiveQtRunProfile = getActiveQtRunProfile;
+exports.qtWindowsSubsystemForBuild = qtWindowsSubsystemForBuild;
+exports.qtBuildUsesConsoleSubsystem = qtBuildUsesConsoleSubsystem;
 exports.getActiveQtDeployProfile = getActiveQtDeployProfile;
 exports.getActiveQtDebugProfile = getActiveQtDebugProfile;
 exports.getActiveQtPlatformProfile = getActiveQtPlatformProfile;
@@ -279,6 +281,17 @@ function getActiveQtRunProfile(manifest) {
     return manifest.profiles.runs.find((entry) => entry.id === manifest.profiles.active.runProfileId)
         ?? manifest.profiles.runs[0];
 }
+function qtWindowsSubsystemForBuild(manifest, profile) {
+    if (manifest.kind === 'static-library' || manifest.kind === 'shared-library')
+        return undefined;
+    if (manifest.kind === 'console-application' || manifest.kind === 'test-application')
+        return 'console';
+    const run = getActiveQtRunProfile(manifest);
+    return run && run.buildProfileId === profile.id && run.outputMode === 'integrated-terminal' ? 'console' : 'windows';
+}
+function qtBuildUsesConsoleSubsystem(manifest, profile) {
+    return qtWindowsSubsystemForBuild(manifest, profile) === 'console';
+}
 function getActiveQtDeployProfile(manifest) {
     return manifest.profiles.deploys.find((entry) => entry.id === manifest.profiles.active.deployProfileId)
         ?? manifest.profiles.deploys[0];
@@ -343,7 +356,7 @@ function createDefaultProfiles(qtInstallation) {
             { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' },
             { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' }
         ],
-        runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {} }],
+        runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {}, outputMode: 'integrated-terminal' }],
         deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: 'dist', cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
         debugs: [createDefaultDebugProfile(debugId, 'default-run')],
         platforms: [createDefaultPlatformProfile(kitId, debugId, 'default-run', 'desktop-deploy', 'local-debug')],
@@ -820,7 +833,10 @@ function normalizeRunProfile(raw, fallbackId, buildProfileId) {
         if (typeof entry === 'string' && key.trim())
             environment[key.trim()] = entry;
     const id = normalizeProfileId(optionalString(value.id) || fallbackId);
-    return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment };
+    return { id, name: optionalString(value.name) || id, buildProfileId: normalizeProfileId(optionalString(value.buildProfileId) || buildProfileId), arguments: optionalString(value.arguments), workingDirectory: optionalString(value.workingDirectory), environment, outputMode: normalizeQtProgramOutputMode(value.outputMode) };
+}
+function normalizeQtProgramOutputMode(value) {
+    return value === 'output-channel' || value === 'detached' || value === 'integrated-terminal' ? value : 'integrated-terminal';
 }
 function normalizeDeployProfile(raw, fallbackId, buildProfileId) {
     const value = objectValue(raw);

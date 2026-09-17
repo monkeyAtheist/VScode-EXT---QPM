@@ -59,6 +59,7 @@ class QpmBuildService {
     qtInstallations;
     projectSettings;
     output;
+    programOutput;
     qtPython;
     qtDependencies;
     buildTrace;
@@ -72,12 +73,13 @@ class QpmBuildService {
     buildWarnings = 0;
     failedPhase = '';
     firstBuildError;
-    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, qtPython, qtDependencies, buildTrace) {
+    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
         this.projectSettings = projectSettings;
         this.output = output;
+        this.programOutput = programOutput;
         this.qtPython = qtPython;
         this.qtDependencies = qtDependencies;
         this.buildTrace = buildTrace;
@@ -477,11 +479,61 @@ class QpmBuildService {
         const sdlPlan = project ? this.resolveSdlPlan(ref, project.files, project.targetType) : undefined;
         this.deploySdlRuntimeDlls(executablePath, sdlPlan);
         const env = this.createRuntimeEnvironment(this.projectSettings.parseEnvironment(run.environmentOptions), config, executablePath);
+        if (process.platform === 'win32' && run.outputMode === 'integrated-terminal' && readWindowsPeSubsystem(executablePath) === 'gui') {
+            this.output.appendLine(`[Qt/C++] WARNING: ${executablePath} is linked as a Windows GUI-subsystem executable.`);
+            this.output.appendLine('[Qt/C++] Interactive stdin/stdout/stderr require the console subsystem. Rebuild the active QPM-generated profile after selecting Integrated Terminal.');
+            const action = await vscode.window.showWarningMessage('This executable is linked as a Windows GUI application, so printf/std::cout/std::cerr/stdin cannot attach to the Integrated Terminal. Rebuild the active profile with Integrated Terminal selected. For external qmake/CMake files, use CONFIG += console or WIN32_EXECUTABLE FALSE.', 'Run anyway');
+            if (action !== 'Run anyway')
+                return;
+        }
+        this.launchExecutable(ref.name, executablePath, args, cwd, env, run.outputMode);
+        this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path.delimiter)}`);
+    }
+    launchExecutable(projectName, executablePath, args, cwd, env, mode) {
+        const rendered = [executablePath, ...args].map(renderArgument).join(' ');
+        if (mode === 'integrated-terminal') {
+            const terminal = vscode.window.createTerminal({
+                name: `QPM — ${projectName}`,
+                shellPath: executablePath,
+                shellArgs: args,
+                cwd,
+                env
+            });
+            terminal.show(false);
+            this.output.appendLine(`[Qt/C++] Started in Integrated Terminal: ${rendered}`);
+            this.output.appendLine(`[Qt/C++] stdin/stdout/stderr are attached to the VS Code terminal.`);
+            return;
+        }
+        if (mode === 'output-channel') {
+            this.programOutput.clear();
+            this.programOutput.appendLine(`=== ${projectName} ===`);
+            this.programOutput.appendLine(`> ${rendered}`);
+            this.programOutput.appendLine(`Working directory: ${cwd}`);
+            this.programOutput.appendLine('');
+            this.programOutput.show(true);
+            const child = (0, child_process_1.spawn)(executablePath, args, {
+                cwd,
+                env,
+                detached: false,
+                windowsHide: true,
+                shell: false,
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+            this.trackLaunchedApplication(executablePath, child);
+            child.stdout?.on('data', (chunk) => this.programOutput.append(chunk.toString()));
+            child.stderr?.on('data', (chunk) => this.programOutput.append(chunk.toString()));
+            child.on('error', (error) => this.programOutput.appendLine(`\n[QPM] Unable to start process: ${error.message}`));
+            child.on('close', (code, signal) => {
+                const status = signal ? `signal ${signal}` : `exit code ${code ?? 'unknown'}`;
+                this.programOutput.appendLine(`\n[QPM] Process finished (${status}).`);
+            });
+            this.output.appendLine(`[Qt/C++] Started with captured output: ${rendered}${child.pid ? ` (PID ${child.pid})` : ''}`);
+            return;
+        }
         const child = (0, child_process_1.spawn)(executablePath, args, { cwd, env, detached: true, shell: false, stdio: 'ignore' });
         this.trackLaunchedApplication(executablePath, child);
         child.unref();
-        this.output.appendLine(`[Qt/C++] Started ${executablePath} ${args.map(renderArgument).join(' ')}${child.pid ? ` (PID ${child.pid})` : ''}`);
-        this.output.appendLine(`[Qt/C++] Runtime PATH prepended with: ${this.runtimeSearchDirectories(config, executablePath).join(path.delimiter)}`);
+        this.output.appendLine(`[Qt/C++] Started detached: ${rendered}${child.pid ? ` (PID ${child.pid})` : ''}`);
     }
     async debugWithGdb(projectRef) {
         const ref = projectRef ?? this.workspaces.activeProjectRef;
@@ -547,6 +599,7 @@ class QpmBuildService {
                 cwd,
                 stopAtEntry: false,
                 externalConsole: false,
+                internalConsoleOptions: 'neverOpen',
                 environment: debugEnvironment
             }
             : {
@@ -558,6 +611,8 @@ class QpmBuildService {
                 cwd,
                 stopAtEntry: false,
                 externalConsole: false,
+                avoidWindowsConsoleRedirection: false,
+                internalConsoleOptions: 'neverOpen',
                 MIMode: debuggerType === 'lldb' ? 'lldb' : 'gdb',
                 miDebuggerPath: config.debuggerPath || (debuggerType === 'lldb' ? 'lldb' : 'gdb'),
                 environment: debugEnvironment
@@ -1651,7 +1706,8 @@ class QpmBuildService {
                 arguments: profile.arguments || legacy.arguments,
                 workingDirectory: profile.workingDirectory || legacy.workingDirectory,
                 environmentOptions: environmentOptions || legacy.environmentOptions,
-                externalProcessPath: legacy.externalProcessPath
+                externalProcessPath: legacy.externalProcessPath,
+                outputMode: profile.outputMode || legacy.outputMode
             };
         }
         catch {
@@ -2661,6 +2717,40 @@ function applicationTranslationRelativePath(entry) {
     const safe = withoutConfiguredRoot.split('/').filter((part) => part && part !== '.' && part !== '..').join('/');
     const parsed = path.posix.parse(safe || path.basename(entry));
     return path.join(parsed.dir, `${parsed.name}.qm`);
+}
+function readWindowsPeSubsystem(executablePath) {
+    if (process.platform !== 'win32')
+        return 'unknown';
+    try {
+        const fd = fs.openSync(executablePath, 'r');
+        try {
+            const dos = Buffer.alloc(64);
+            if (fs.readSync(fd, dos, 0, dos.length, 0) < dos.length || dos.readUInt16LE(0) !== 0x5a4d)
+                return 'unknown';
+            const peOffset = dos.readUInt32LE(0x3c);
+            const header = Buffer.alloc(96);
+            if (fs.readSync(fd, header, 0, header.length, peOffset) < header.length)
+                return 'unknown';
+            if (header.readUInt32LE(0) !== 0x00004550)
+                return 'unknown';
+            const optionalHeaderOffset = 24;
+            const magic = header.readUInt16LE(optionalHeaderOffset);
+            if (magic !== 0x10b && magic !== 0x20b)
+                return 'unknown';
+            const subsystem = header.readUInt16LE(optionalHeaderOffset + 68);
+            if (subsystem === 2)
+                return 'gui';
+            if (subsystem === 3)
+                return 'console';
+            return 'unknown';
+        }
+        finally {
+            fs.closeSync(fd);
+        }
+    }
+    catch {
+        return 'unknown';
+    }
 }
 function renderArgument(value) { return /\s/.test(value) ? `"${value}"` : value; }
 function replaceExtension(filePath, extension) { return path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}${extension}`); }
