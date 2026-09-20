@@ -4353,6 +4353,10 @@ var require_qpmSymbolService = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.QpmCompletionProvider = exports2.QpmSymbolService = void 0;
     exports2.scanCFunctions = scanCFunctions;
+    exports2.normalizeSourceSymbolDeclaration = normalizeSourceSymbolDeclaration;
+    exports2.formatSourceSymbolList = formatSourceSymbolList;
+    exports2.buildHeaderFromSourceSymbols = buildHeaderFromSourceSymbols;
+    exports2.buildSourceFromSourceSymbols = buildSourceFromSourceSymbols;
     exports2.isSourceOrHeader = isSourceOrHeader;
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
@@ -4548,24 +4552,440 @@ ${needsBlankLine ? "\n" : ""}`;
     }
     function scanCFunctions(source, filePath) {
       const masked = maskCommentsAndStrings(source);
-      const pattern = /(^|\n)\s*((?:(?:extern|static|inline|const|volatile|unsigned|signed|long|short|struct|enum|union|__declspec\s*\([^)]*\)|__stdcall|__cdecl|QPMFUNC(?:_C)?|QPMCALLBACK|[A-Za-z_]\w*)\s+|\*\s*)+)([A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*(?=;|\{)/gm;
+      const functionBodyRanges = [...collectFunctionBodyRanges(masked), ...collectScopedConstructorBodyRanges(masked)];
       const result = [];
+      const controlOrStatementPrefixes = /^(?:return|co_return|throw|emit|case|else|do|goto|break|continue|new|delete|using|typedef|static_assert)\b/;
+      const pattern = /(^|\n)\s*((?:(?:extern|static|inline|constexpr|consteval|constinit|virtual|explicit|friend|const|volatile|unsigned|signed|long|short|struct|enum|union|typename|auto|QPMFUNC(?:_C)?|QPMCALLBACK|[A-Za-z_]\w*)\s+|[*&]\s*)+)(((?:[A-Za-z_]\w*::)*)~?[A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*((?:(?:const|override|final)\b\s*|noexcept(?:\s*\([^)]*\))?\s*|[&]{1,2}\s*)*)(?=;|\{|:|=\s*(?:default|delete))/gm;
       let match;
       while ((match = pattern.exec(masked)) !== null) {
-        const name = match[3];
-        if (["if", "for", "while", "switch", "return", "sizeof"].includes(name)) {
+        const prefix = match[2].trim();
+        const qualifiedName = match[3].trim();
+        const name = qualifiedName.split("::").pop() || qualifiedName;
+        if (controlOrStatementPrefixes.test(prefix) || ["if", "for", "while", "switch", "return", "sizeof", "catch"].includes(name)) {
           continue;
         }
-        const nameOffset = match.index + match[0].lastIndexOf(name);
+        const nameOffset = match.index + match[0].lastIndexOf(qualifiedName);
+        if (isOffsetInsideRanges(nameOffset, functionBodyRanges)) {
+          continue;
+        }
         const before = source.slice(0, nameOffset);
         const line = before.split("\n").length - 1;
         const lineStart = before.lastIndexOf("\n") + 1;
         const character = nameOffset - lineStart;
         const raw = source.slice(match.index + match[1].length, pattern.lastIndex).trim();
         const signature = raw.replace(/\s+/g, " ").replace(/\s*\{\s*$/, "").trim();
-        result.push({ name, signature, filePath, line, character, kind: vscode2.SymbolKind.Function, source: "fallback" });
+        const owner = qualifiedName.includes("::") ? qualifiedName.slice(0, qualifiedName.lastIndexOf("::")) : "";
+        const ownerLeaf = owner ? owner.split("::").pop() || owner : "";
+        const kind = owner && (name === ownerLeaf || name === `~${ownerLeaf}`) ? vscode2.SymbolKind.Constructor : owner ? vscode2.SymbolKind.Method : vscode2.SymbolKind.Function;
+        result.push({
+          name,
+          qualifiedName,
+          signature,
+          declaration: normalizeSourceSymbolDeclaration(signature),
+          filePath,
+          line,
+          character,
+          kind,
+          source: "fallback"
+        });
+      }
+      const ctorStartPattern = /(^|\n)\s*((?:[A-Za-z_]\w*::)+~?[A-Za-z_]\w*)\s*\(/gm;
+      while ((match = ctorStartPattern.exec(masked)) !== null) {
+        const qualifiedName = match[2].trim();
+        const parts = qualifiedName.split("::");
+        const name = parts[parts.length - 1] || qualifiedName;
+        const ownerLeaf = parts.length > 1 ? parts[parts.length - 2] : "";
+        if (name.replace(/^~/, "") !== ownerLeaf)
+          continue;
+        const openParen = match.index + match[0].lastIndexOf("(");
+        const closeParen = findMatchingCloseParen(masked, openParen);
+        if (closeParen < 0)
+          continue;
+        const following = masked.slice(closeParen + 1, Math.min(masked.length, closeParen + 800));
+        if (!/^\s*(?:(?:noexcept(?:\s*\([^)]*\))?|override|final)\s*)*(?:;|\{|:|=\s*(?:default|delete))/.test(following))
+          continue;
+        const nameOffset = match.index + match[0].indexOf(qualifiedName);
+        if (isOffsetInsideRanges(nameOffset, functionBodyRanges))
+          continue;
+        const before = source.slice(0, nameOffset);
+        const line = before.split("\n").length - 1;
+        const lineStart = before.lastIndexOf("\n") + 1;
+        const character = nameOffset - lineStart;
+        const declarationStart = match.index + match[1].length;
+        const raw = source.slice(declarationStart, closeParen + 1).trim();
+        const signature = raw.replace(/\s+/g, " ").trim();
+        result.push({
+          name,
+          qualifiedName,
+          signature,
+          declaration: normalizeSourceSymbolDeclaration(signature),
+          filePath,
+          line,
+          character,
+          kind: vscode2.SymbolKind.Constructor,
+          source: "fallback"
+        });
       }
       return dedupeSourceSymbols(result);
+    }
+    function collectFunctionBodyRanges(masked) {
+      const ranges = [];
+      const controlNames = /* @__PURE__ */ new Set(["if", "for", "while", "switch", "catch"]);
+      for (let brace = 0; brace < masked.length; brace += 1) {
+        if (masked[brace] !== "{")
+          continue;
+        const contextStart = Math.max(masked.lastIndexOf(";", brace - 1), masked.lastIndexOf("{", brace - 1), masked.lastIndexOf("}", brace - 1)) + 1;
+        const context = masked.slice(contextStart, brace);
+        const closeParenInContext = context.lastIndexOf(")");
+        if (closeParenInContext < 0)
+          continue;
+        const closeParen = contextStart + closeParenInContext;
+        const openParen = findMatchingOpenParen(masked, closeParen);
+        if (openParen < 0)
+          continue;
+        const beforeParen = masked.slice(contextStart, openParen).trimEnd();
+        const nameMatch = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(beforeParen);
+        if (!nameMatch)
+          continue;
+        const leaf = (nameMatch[1].split("::").pop() || nameMatch[1]).replace(/^~/, "");
+        if (controlNames.has(leaf))
+          continue;
+        const closingBrace = findMatchingBrace(masked, brace);
+        if (closingBrace > brace) {
+          ranges.push({ start: brace + 1, end: closingBrace });
+        }
+      }
+      return ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+    }
+    function collectScopedConstructorBodyRanges(masked) {
+      const ranges = [];
+      const pattern = /(^|\n)\s*((?:[A-Za-z_]\w*::)+~?[A-Za-z_]\w*)\s*\(/gm;
+      let match;
+      while ((match = pattern.exec(masked)) !== null) {
+        const qualifiedName = match[2];
+        const parts = qualifiedName.split("::");
+        const name = parts[parts.length - 1] || "";
+        const ownerLeaf = parts.length > 1 ? parts[parts.length - 2] : "";
+        if (name.replace(/^~/, "") !== ownerLeaf)
+          continue;
+        const openParen = match.index + match[0].lastIndexOf("(");
+        const closeParen = findMatchingCloseParen(masked, openParen);
+        if (closeParen < 0)
+          continue;
+        const bodyBrace = findDefinitionBodyBrace(masked, closeParen + 1);
+        if (bodyBrace < 0)
+          continue;
+        const closingBrace = findMatchingBrace(masked, bodyBrace);
+        if (closingBrace > bodyBrace)
+          ranges.push({ start: bodyBrace + 1, end: closingBrace });
+      }
+      return ranges;
+    }
+    function findDefinitionBodyBrace(text, startIndex) {
+      let parenDepth = 0;
+      let bracketDepth = 0;
+      for (let index = startIndex; index < text.length; index += 1) {
+        const ch = text[index];
+        if (ch === "(")
+          parenDepth += 1;
+        else if (ch === ")")
+          parenDepth = Math.max(0, parenDepth - 1);
+        else if (ch === "[")
+          bracketDepth += 1;
+        else if (ch === "]")
+          bracketDepth = Math.max(0, bracketDepth - 1);
+        else if (parenDepth === 0 && bracketDepth === 0 && ch === ";")
+          return -1;
+        else if (parenDepth === 0 && bracketDepth === 0 && ch === "{")
+          return index;
+      }
+      return -1;
+    }
+    function findMatchingCloseParen(text, openIndex) {
+      let depth = 0;
+      for (let index = openIndex; index < text.length; index += 1) {
+        if (text[index] === "(")
+          depth += 1;
+        else if (text[index] === ")") {
+          depth -= 1;
+          if (depth === 0)
+            return index;
+        }
+      }
+      return -1;
+    }
+    function findMatchingOpenParen(text, closeIndex) {
+      let depth = 0;
+      for (let index = closeIndex; index >= 0; index -= 1) {
+        if (text[index] === ")")
+          depth += 1;
+        else if (text[index] === "(") {
+          depth -= 1;
+          if (depth === 0)
+            return index;
+        }
+      }
+      return -1;
+    }
+    function findMatchingBrace(text, openIndex) {
+      let depth = 0;
+      for (let index = openIndex; index < text.length; index += 1) {
+        if (text[index] === "{")
+          depth += 1;
+        else if (text[index] === "}") {
+          depth -= 1;
+          if (depth === 0)
+            return index;
+        }
+      }
+      return -1;
+    }
+    function isOffsetInsideRanges(offset, ranges) {
+      return ranges.some((range) => offset >= range.start && offset < range.end);
+    }
+    function normalizeSourceSymbolDeclaration(signature) {
+      const compact = String(signature || "").replace(/\s+/g, " ").trim().replace(/\s*\{\s*$/, "").trim();
+      if (!compact)
+        return "";
+      return compact.endsWith(";") ? compact : `${compact};`;
+    }
+    function formatSourceSymbolList(symbols, filePath, format = "text") {
+      const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+      if (format === "json") {
+        return JSON.stringify({
+          file: filePath,
+          symbols: ordered.map((symbol) => ({
+            name: symbol.name,
+            qualifiedName: symbol.qualifiedName || symbol.name,
+            line: symbol.line + 1,
+            kind: vscode2.SymbolKind[symbol.kind] || "Function",
+            signature: symbol.signature,
+            declaration: symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)
+          }))
+        }, null, 2) + "\n";
+      }
+      if (format === "markdown") {
+        const lines = [`# Qt File Symbols \u2014 ${path2.basename(filePath)}`, "", `Source: \`${filePath}\``, "", "| Line | Symbol | Declaration |", "| ---: | --- | --- |"];
+        for (const symbol of ordered) {
+          const declaration = (symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)).replace(/\|/g, "\\|");
+          lines.push(`| ${symbol.line + 1} | \`${symbol.qualifiedName || symbol.name}\` | \`${declaration.replace(/`/g, "\\`")}\` |`);
+        }
+        lines.push("");
+        return lines.join("\n");
+      }
+      return ordered.map((symbol) => `L${symbol.line + 1}	${symbol.qualifiedName || symbol.name}	${symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)}`).join("\n") + (ordered.length ? "\n" : "");
+    }
+    function buildHeaderFromSourceSymbols(symbols, sourceFilePath) {
+      const isC = path2.extname(sourceFilePath).toLowerCase() === ".c";
+      const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+      const publicDeclarations = [];
+      const internalDeclarations = [];
+      const memberDeclarations = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const symbol of ordered) {
+        const declaration = symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature);
+        if (!declaration || seen.has(declaration))
+          continue;
+        seen.add(declaration);
+        const qualified = symbol.qualifiedName || symbol.name;
+        if (qualified.includes("::")) {
+          memberDeclarations.push(declaration);
+        } else if (/^static\b/.test(declaration)) {
+          internalDeclarations.push(declaration);
+        } else {
+          publicDeclarations.push(declaration);
+        }
+      }
+      const lines = [
+        "#pragma once",
+        "",
+        `// Generated by Qt Project Manager from ${path2.basename(sourceFilePath)}.`,
+        "// Review generated declarations before using this header as a public API.",
+        ""
+      ];
+      if (isC && publicDeclarations.length) {
+        lines.push("#ifdef __cplusplus", 'extern "C" {', "#endif", "");
+      }
+      if (publicDeclarations.length) {
+        lines.push("// Free/public function declarations", ...publicDeclarations, "");
+      }
+      if (isC && publicDeclarations.length) {
+        lines.push("#ifdef __cplusplus", "}", "#endif", "");
+      }
+      if (internalDeclarations.length) {
+        lines.push("// Internal source-file functions are intentionally not declared as active header API:", ...internalDeclarations.map((line) => `// ${line}`), "");
+      }
+      if (memberDeclarations.length) {
+        lines.push("// Scoped member definitions must be copied into their owning class declaration:", ...memberDeclarations.map((line) => `// ${line}`), "");
+      }
+      if (!publicDeclarations.length && !internalDeclarations.length && !memberDeclarations.length) {
+        lines.push("// No function declarations were detected.", "");
+      }
+      return lines.join("\n");
+    }
+    function buildSourceFromSourceSymbols(symbols, sourceFilePath) {
+      const sourceExt = path2.extname(sourceFilePath).toLowerCase();
+      const isC = sourceExt === ".c";
+      const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+      const seen = /* @__PURE__ */ new Set();
+      const definitions = [];
+      let needsAbort = false;
+      for (const symbol of ordered) {
+        const declaration = symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature);
+        if (!declaration)
+          continue;
+        const definitionSignature = sourceDefinitionSignature(declaration, symbol);
+        if (!definitionSignature || seen.has(definitionSignature))
+          continue;
+        seen.add(definitionSignature);
+        const bodyKind = sourceDefinitionBodyKind(definitionSignature, symbol);
+        const body = ["{", "    // TODO: implement generated stub."];
+        if (bodyKind === "abort") {
+          needsAbort = true;
+          body.push(isC ? "    abort();" : "    std::abort();");
+        }
+        body.push("}");
+        definitions.push(`${definitionSignature}
+${body.join("\n")}`);
+      }
+      const lines = [
+        `// Generated by Qt Project Manager from Qt File Symbols in ${path2.basename(sourceFilePath)}.`,
+        "// Review generated stubs before adding them to a build.",
+        ""
+      ];
+      const includes = sourceGeneratorIncludes(sourceFilePath);
+      if (needsAbort) {
+        const abortInclude = isC ? "#include <stdlib.h>" : "#include <cstdlib>";
+        if (!includes.includes(abortInclude))
+          includes.push(abortInclude);
+      }
+      if (includes.length) {
+        lines.push(...includes, "");
+      }
+      if (definitions.length) {
+        lines.push(...definitions.flatMap((definition, index) => index === 0 ? [definition] : ["", definition]), "");
+      } else {
+        lines.push("// No function/method symbols were available for source generation.", "");
+      }
+      if ([".h", ".hh", ".hpp", ".hxx"].includes(sourceExt)) {
+        lines.splice(2, 0, "// Note: class ownership may need review for unqualified declarations parsed from headers.");
+      }
+      return lines.join("\n");
+    }
+    function sourceGeneratorIncludes(sourceFilePath) {
+      const ext = path2.extname(sourceFilePath).toLowerCase();
+      const headerExtensions = /* @__PURE__ */ new Set([".h", ".hh", ".hpp", ".hxx"]);
+      if (headerExtensions.has(ext)) {
+        return [`#include "${path2.basename(sourceFilePath)}"`];
+      }
+      try {
+        const source = fs.readFileSync(sourceFilePath, "utf8");
+        const includes = source.match(/^\s*#\s*include\s*[<"][^>"\r\n]+[>"]\s*$/gm) || [];
+        return [...new Set(includes.map((line) => line.trim()))];
+      } catch {
+        return [];
+      }
+    }
+    function sourceDefinitionSignature(declaration, symbol) {
+      let signature = String(declaration || "").trim().replace(/;\s*$/, "").trim();
+      if (!signature)
+        return "";
+      signature = signature.replace(/^(?:(?:virtual|explicit|friend)\s+)+/, "");
+      if ((symbol.qualifiedName || symbol.name).includes("::")) {
+        signature = signature.replace(/^static\s+/, "");
+      }
+      const qualifiedName = symbol.qualifiedName || symbol.name;
+      const nameIndex = signature.lastIndexOf(qualifiedName);
+      if (nameIndex < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, "").trim();
+      const openParen = signature.indexOf("(", nameIndex + qualifiedName.length);
+      if (openParen < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, "").trim();
+      const closeParen = findMatchingCloseParen(signature, openParen);
+      if (closeParen < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, "").trim();
+      const parameters = signature.slice(openParen + 1, closeParen);
+      const withoutDefaults = stripParameterDefaultArguments(parameters);
+      const suffix = signature.slice(closeParen + 1).replace(/\b(?:override|final)\b/g, "").replace(/\s+/g, " ").trim();
+      const prefix = signature.slice(0, openParen + 1);
+      return `${prefix}${withoutDefaults})${suffix ? ` ${suffix}` : ""}`.replace(/\s+$/g, "").trim();
+    }
+    function stripParameterDefaultArguments(parameters) {
+      const result = [];
+      let current = "";
+      let skippingDefault = false;
+      let paren = 0, bracket = 0, brace = 0, angle = 0;
+      let quote;
+      let escaped = false;
+      const flush = () => {
+        result.push(current.trim());
+        current = "";
+        skippingDefault = false;
+      };
+      for (let index = 0; index < parameters.length; index += 1) {
+        const ch = parameters[index];
+        if (quote) {
+          if (!skippingDefault)
+            current += ch;
+          if (escaped)
+            escaped = false;
+          else if (ch === "\\")
+            escaped = true;
+          else if (ch === quote)
+            quote = void 0;
+          continue;
+        }
+        if (ch === '"' || ch === "'") {
+          quote = ch;
+          if (!skippingDefault)
+            current += ch;
+          continue;
+        }
+        if (ch === "(")
+          paren += 1;
+        else if (ch === ")")
+          paren = Math.max(0, paren - 1);
+        else if (ch === "[")
+          bracket += 1;
+        else if (ch === "]")
+          bracket = Math.max(0, bracket - 1);
+        else if (ch === "{")
+          brace += 1;
+        else if (ch === "}")
+          brace = Math.max(0, brace - 1);
+        else if (ch === "<")
+          angle += 1;
+        else if (ch === ">" && angle > 0)
+          angle -= 1;
+        const topLevel = paren === 0 && bracket === 0 && brace === 0 && angle === 0;
+        if (topLevel && ch === "=" && !skippingDefault) {
+          skippingDefault = true;
+          continue;
+        }
+        if (topLevel && ch === ",") {
+          flush();
+          continue;
+        }
+        if (!skippingDefault)
+          current += ch;
+      }
+      if (current.trim() || parameters.trim())
+        flush();
+      return result.join(", ");
+    }
+    function sourceDefinitionBodyKind(signature, symbol) {
+      const qualifiedName = symbol.qualifiedName || symbol.name;
+      const leaf = symbol.name.replace(/^~/, "");
+      const ownerLeaf = qualifiedName.includes("::") ? qualifiedName.slice(0, qualifiedName.lastIndexOf("::")).split("::").pop() || "" : "";
+      if (symbol.kind === vscode2.SymbolKind.Constructor || leaf === ownerLeaf || symbol.name.startsWith("~"))
+        return "empty";
+      const nameIndex = signature.lastIndexOf(qualifiedName);
+      if (nameIndex < 0)
+        return "abort";
+      const prefix = signature.slice(0, nameIndex).trim();
+      if (/(?:^|\s)void$/.test(prefix))
+        return "empty";
+      return "abort";
     }
     function maskCommentsAndStrings(source) {
       let result = "";
@@ -4746,6 +5166,12 @@ var require_qpmFileSymbolsProvider = __commonJS({
       refresh() {
         this.changeEmitter.fire();
       }
+      getSelectedFile() {
+        return this.selectedFile;
+      }
+      async currentSymbols() {
+        return this.selectedFile ? this.symbols.symbolsForFile(this.selectedFile) : [];
+      }
       async reveal(symbol) {
         const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(symbol.filePath));
         const editor = await vscode2.window.showTextDocument(document, { preview: false });
@@ -4753,17 +5179,138 @@ var require_qpmFileSymbolsProvider = __commonJS({
         editor.selection = new vscode2.Selection(position, position);
         editor.revealRange(new vscode2.Range(position, position), vscode2.TextEditorRevealType.InCenterIfOutsideViewport);
       }
+      async copySymbol(symbol) {
+        if (!symbol || "label" in symbol)
+          return;
+        await vscode2.env.clipboard.writeText(symbol.signature);
+        void vscode2.window.setStatusBarMessage(`QPM: copied ${symbol.qualifiedName || symbol.name}`, 1800);
+      }
+      async copySymbolDeclaration(symbol) {
+        if (!symbol || "label" in symbol)
+          return;
+        const declaration = symbol.declaration || (0, qpmSymbolService_12.normalizeSourceSymbolDeclaration)(symbol.signature);
+        await vscode2.env.clipboard.writeText(declaration);
+        void vscode2.window.setStatusBarMessage(`QPM: copied declaration for ${symbol.qualifiedName || symbol.name}`, 1800);
+      }
+      async copyAllSymbols(asDeclarations = false) {
+        if (!this.selectedFile) {
+          void vscode2.window.showWarningMessage("Select a C/C++ or Qt source/header file first.");
+          return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+          void vscode2.window.showWarningMessage("No function/method symbol was detected in the selected file.");
+          return;
+        }
+        const text = asDeclarations ? symbols.map((symbol) => symbol.declaration || (0, qpmSymbolService_12.normalizeSourceSymbolDeclaration)(symbol.signature)).join("\n") + "\n" : (0, qpmSymbolService_12.formatSourceSymbolList)(symbols, this.selectedFile, "text");
+        await vscode2.env.clipboard.writeText(text);
+        void vscode2.window.showInformationMessage(`Copied ${symbols.length} Qt File Symbol${symbols.length === 1 ? "" : "s"} to the clipboard.`);
+      }
+      async exportSymbols() {
+        if (!this.selectedFile) {
+          void vscode2.window.showWarningMessage("Select a C/C++ or Qt source/header file first.");
+          return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+          void vscode2.window.showWarningMessage("No function/method symbol was detected in the selected file.");
+          return;
+        }
+        const choice = await vscode2.window.showQuickPick([
+          { label: "Markdown report (.md)", value: "markdown", extension: ".symbols.md" },
+          { label: "Plain text (.txt)", value: "text", extension: ".symbols.txt" },
+          { label: "JSON (.json)", value: "json", extension: ".symbols.json" }
+        ], { title: "Export Qt File Symbols" });
+        if (!choice)
+          return;
+        const source = path2.parse(this.selectedFile);
+        const target = await vscode2.window.showSaveDialog({
+          title: "Export Qt File Symbols",
+          defaultUri: vscode2.Uri.file(path2.join(source.dir, `${source.name}${choice.extension}`)),
+          filters: choice.value === "markdown" ? { Markdown: ["md"] } : choice.value === "json" ? { JSON: ["json"] } : { Text: ["txt"] }
+        });
+        if (!target)
+          return;
+        const content = (0, qpmSymbolService_12.formatSourceSymbolList)(symbols, this.selectedFile, choice.value);
+        await vscode2.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
+        const action = await vscode2.window.showInformationMessage(`Exported ${symbols.length} symbol(s) to ${target.fsPath}.`, "Open");
+        if (action === "Open") {
+          const document = await vscode2.workspace.openTextDocument(target);
+          await vscode2.window.showTextDocument(document, { preview: false });
+        }
+      }
+      async generateHeader() {
+        if (!this.selectedFile) {
+          void vscode2.window.showWarningMessage("Select a C/C++ or Qt source/header file first.");
+          return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+          void vscode2.window.showWarningMessage("No function/method symbol was detected in the selected file.");
+          return;
+        }
+        const source = path2.parse(this.selectedFile);
+        const isCpp = [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"].includes(source.ext.toLowerCase());
+        const headerExtension = isCpp ? ".hpp" : ".h";
+        const target = await vscode2.window.showSaveDialog({
+          title: "Generate Header From Qt File Symbols",
+          defaultUri: vscode2.Uri.file(path2.join(source.dir, `${source.name}${headerExtension}`)),
+          filters: isCpp ? { "C++ Header": ["hpp", "h"] } : { "C Header": ["h"] }
+        });
+        if (!target)
+          return;
+        const content = (0, qpmSymbolService_12.buildHeaderFromSourceSymbols)(symbols, this.selectedFile);
+        await vscode2.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
+        const action = await vscode2.window.showInformationMessage(`Generated header from ${symbols.length} detected symbol(s): ${target.fsPath}`, "Open");
+        if (action === "Open") {
+          const document = await vscode2.workspace.openTextDocument(target);
+          await vscode2.window.showTextDocument(document, { preview: false });
+        }
+      }
+      async generateSource() {
+        if (!this.selectedFile) {
+          void vscode2.window.showWarningMessage("Select a C/C++ or Qt source/header file first.");
+          return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+          void vscode2.window.showWarningMessage("No function/method symbol was detected in the selected file.");
+          return;
+        }
+        const source = path2.parse(this.selectedFile);
+        const selectedExt = source.ext.toLowerCase();
+        const isC = selectedExt === ".c";
+        const isHeader = [".h", ".hh", ".hpp", ".hxx"].includes(selectedExt);
+        const sourceExtension = isC ? ".c" : ".cpp";
+        const defaultName = isHeader ? `${source.name}${sourceExtension}` : `${source.name}_generated${sourceExtension}`;
+        const target = await vscode2.window.showSaveDialog({
+          title: "Generate Source From Qt File Symbols",
+          defaultUri: vscode2.Uri.file(path2.join(source.dir, defaultName)),
+          filters: isC ? { "C Source": ["c"] } : { "C++ Source": ["cpp", "cc", "cxx"] }
+        });
+        if (!target)
+          return;
+        const content = (0, qpmSymbolService_12.buildSourceFromSourceSymbols)(symbols, this.selectedFile);
+        await vscode2.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
+        const action = await vscode2.window.showInformationMessage(`Generated source stubs from ${symbols.length} detected symbol(s): ${target.fsPath}`, "Open");
+        if (action === "Open") {
+          const document = await vscode2.workspace.openTextDocument(target);
+          await vscode2.window.showTextDocument(document, { preview: false });
+        }
+      }
       getTreeItem(node) {
         if ("label" in node) {
           const item2 = new vscode2.TreeItem(node.label, vscode2.TreeItemCollapsibleState.None);
           item2.iconPath = new vscode2.ThemeIcon("info");
           return item2;
         }
-        const item = new vscode2.TreeItem(node.name, vscode2.TreeItemCollapsibleState.None);
+        const displayName = node.qualifiedName || node.name;
+        const item = new vscode2.TreeItem(displayName, vscode2.TreeItemCollapsibleState.None);
         item.description = `L${node.line + 1}`;
         item.tooltip = `${node.signature}
 ${node.filePath}:${node.line + 1}`;
-        item.iconPath = new vscode2.ThemeIcon("symbol-function");
+        item.contextValue = "qpmFileSymbol";
+        item.iconPath = new vscode2.ThemeIcon(node.kind === vscode2.SymbolKind.Method ? "symbol-method" : node.kind === vscode2.SymbolKind.Constructor ? "symbol-constructor" : "symbol-function");
         item.command = { command: "qpm.revealFileSymbol", title: "Reveal Qt/C++ file symbol", arguments: [node] };
         return item;
       }
@@ -4772,7 +5319,7 @@ ${node.filePath}:${node.line + 1}`;
           return [{ kind: "placeholder", label: "Select a Qt/C++ source or header file in the Qt Workspace." }];
         }
         const symbols = await this.symbols.symbolsForFile(this.selectedFile);
-        return symbols.length > 0 ? symbols : [{ kind: "placeholder", label: "No function found in the selected file." }];
+        return symbols.length > 0 ? symbols : [{ kind: "placeholder", label: "No function or method declaration found in the selected file." }];
       }
       updateDescription() {
         if (this.view) {
@@ -35180,8 +35727,10 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
         }
         const languageChoice = await vscode2.window.showQuickPick([
           { label: "C", value: "c" },
-          { label: "QPM", value: "cvi" },
           { label: "C++", value: "cpp" },
+          { label: "Qt / C++", value: "qt" },
+          { label: "QML / Qt Quick", value: "qml" },
+          { label: "Python / PySide6", value: "python" },
           { label: "Other", value: "other" }
         ], {
           title: "Choose the default language for the pack"
@@ -35244,21 +35793,8 @@ ${escapeMarkdown(environment.name)} \u2192 ${escapeMarkdown(lib.name)} \u2192 ${
         void vscode2.window.showInformationMessage(`Imported ${path2.basename(destination)} into ${sourceLabel(scope)} packs.`);
       };
       context.subscriptions.push(vscode2.commands.registerCommand("qpm.library.createPack", async () => {
-        const modeChoice = await vscode2.window.showQuickPick([
-          { label: "Create new pack", value: "create", description: "Start from an empty Qt Libraries pack template" },
-          { label: "Import existing pack", value: "import", description: "Copy an existing JSON library pack into Qt Libraries storage" }
-        ], {
-          title: "Add library pack"
-        });
-        if (!modeChoice) {
-          return;
-        }
         const scope = await choosePackScope(!!getWorkspaceRoot());
         if (!scope) {
-          return;
-        }
-        if (modeChoice.value === "import") {
-          await runImportPackFlow(scope);
           return;
         }
         await runCreatePackFlow(scope);
@@ -91493,6 +92029,13 @@ async function activate(context) {
     register("qpm.prepareDllImportLibraryGeneration", (node) => node ? builds.prepareDllImportLibraryGeneration(node.file.absolutePath) : void 0),
     register("qpm.refreshFileSymbols", () => fileSymbolsProvider.refresh()),
     register("qpm.revealFileSymbol", (symbol) => symbol ? fileSymbolsProvider.reveal(symbol) : void 0),
+    register("qpm.copyFileSymbol", (symbol) => fileSymbolsProvider.copySymbol(symbol)),
+    register("qpm.copyFileSymbolDeclaration", (symbol) => fileSymbolsProvider.copySymbolDeclaration(symbol)),
+    register("qpm.copyFileSymbols", () => fileSymbolsProvider.copyAllSymbols(false)),
+    register("qpm.copyFileSymbolDeclarations", () => fileSymbolsProvider.copyAllSymbols(true)),
+    register("qpm.exportFileSymbols", () => fileSymbolsProvider.exportSymbols()),
+    register("qpm.generateFileSymbolsHeader", () => fileSymbolsProvider.generateHeader()),
+    register("qpm.generateFileSymbolsSource", () => fileSymbolsProvider.generateSource()),
     register("qpm.saveFile", (node) => node ? workspaces.saveFile(node.file.absolutePath) : void 0),
     register("qpm.openPanelFile", (node) => node ? builds.openPanelFile(node.file.absolutePath) : void 0),
     register("qpm.openQtDesigner", (target) => isQtPythonActive() ? qtPython.openDesigner(void 0, target) : qtProjects.openDesigner(target)),

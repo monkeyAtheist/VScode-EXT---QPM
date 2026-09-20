@@ -1,3 +1,17 @@
+> QPM 0.34.10 completes **Qt File Symbols** generation with a **Generate Source From Qt File Symbols...** action beside the header generator. It creates reviewable C/C++ implementation stubs, preserves useful includes, strips default arguments from definitions, and keeps qualified Qt/C++ member names.
+
+## QPM 0.34.10 — Generate source from Qt File Symbols
+
+The Qt File Symbols toolbar now offers both header and source generation. Header generation remains declaration-oriented, while source generation creates `.cpp`/`.c` implementation stubs with TODO bodies. Non-void C++ stubs terminate through `std::abort()` until implemented instead of inventing potentially invalid return values.
+
+> QPM 0.34.9 improves **Qt File Symbols** accuracy and makes library-pack creation/import directly accessible. The symbol fallback scanner now ignores calls, Qt value construction and local declarations inside function bodies; symbols can be copied, exported or converted into a reviewable `.h`/`.hpp` declaration header. Qt Libraries now exposes dedicated **Create Library Pack** and **Import Library Pack** actions from the view toolbar and QPM context menus.
+
+## QPM 0.34.9 — Qt File Symbols and custom library packs
+
+The Qt File Symbols view is now declaration-oriented instead of matching function-like expressions. `return QPointF(...)`, `QStringLiteral(...)`, `QObject::connect(...)` and local constructor-style declarations are no longer listed as functions. The view supports copying one signature/declaration, copying all detected symbols/declarations, exporting Markdown/text/JSON reports, and generating a safe declaration header.
+
+Custom Qt Libraries packs can now be created or imported explicitly from the Qt Libraries toolbar and from **QPM → Qt Libraries / packs**. New packs support C, C++, Qt/C++, QML/Qt Quick, Python/PySide6 and generic metadata, with Global or Workspace storage.
+
 > QPM 0.34.8 fixes Windows interactive C/C++ console I/O for Qt GUI applications. Selecting **Integrated Terminal** now makes QPM-generated Direct/qmake/CMake builds use the Windows console subsystem for the linked build profile, so `printf`, `std::cout`, `std::cerr`, `scanf`, `fgets(stdin)` and `std::cin` receive real terminal streams after a rebuild.
 
 ## QPM 0.34.8 — Windows console I/O for Qt GUI targets

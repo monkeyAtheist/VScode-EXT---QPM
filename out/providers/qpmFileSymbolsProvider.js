@@ -62,6 +62,12 @@ class QpmFileSymbolsProvider {
     refresh() {
         this.changeEmitter.fire();
     }
+    getSelectedFile() {
+        return this.selectedFile;
+    }
+    async currentSymbols() {
+        return this.selectedFile ? this.symbols.symbolsForFile(this.selectedFile) : [];
+    }
     async reveal(symbol) {
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(symbol.filePath));
         const editor = await vscode.window.showTextDocument(document, { preview: false });
@@ -69,16 +75,143 @@ class QpmFileSymbolsProvider {
         editor.selection = new vscode.Selection(position, position);
         editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
     }
+    async copySymbol(symbol) {
+        if (!symbol || 'label' in symbol)
+            return;
+        await vscode.env.clipboard.writeText(symbol.signature);
+        void vscode.window.setStatusBarMessage(`QPM: copied ${symbol.qualifiedName || symbol.name}`, 1800);
+    }
+    async copySymbolDeclaration(symbol) {
+        if (!symbol || 'label' in symbol)
+            return;
+        const declaration = symbol.declaration || (0, qpmSymbolService_1.normalizeSourceSymbolDeclaration)(symbol.signature);
+        await vscode.env.clipboard.writeText(declaration);
+        void vscode.window.setStatusBarMessage(`QPM: copied declaration for ${symbol.qualifiedName || symbol.name}`, 1800);
+    }
+    async copyAllSymbols(asDeclarations = false) {
+        if (!this.selectedFile) {
+            void vscode.window.showWarningMessage('Select a C/C++ or Qt source/header file first.');
+            return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+            void vscode.window.showWarningMessage('No function/method symbol was detected in the selected file.');
+            return;
+        }
+        const text = asDeclarations
+            ? symbols.map((symbol) => symbol.declaration || (0, qpmSymbolService_1.normalizeSourceSymbolDeclaration)(symbol.signature)).join('\n') + '\n'
+            : (0, qpmSymbolService_1.formatSourceSymbolList)(symbols, this.selectedFile, 'text');
+        await vscode.env.clipboard.writeText(text);
+        void vscode.window.showInformationMessage(`Copied ${symbols.length} Qt File Symbol${symbols.length === 1 ? '' : 's'} to the clipboard.`);
+    }
+    async exportSymbols() {
+        if (!this.selectedFile) {
+            void vscode.window.showWarningMessage('Select a C/C++ or Qt source/header file first.');
+            return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+            void vscode.window.showWarningMessage('No function/method symbol was detected in the selected file.');
+            return;
+        }
+        const choice = await vscode.window.showQuickPick([
+            { label: 'Markdown report (.md)', value: 'markdown', extension: '.symbols.md' },
+            { label: 'Plain text (.txt)', value: 'text', extension: '.symbols.txt' },
+            { label: 'JSON (.json)', value: 'json', extension: '.symbols.json' }
+        ], { title: 'Export Qt File Symbols' });
+        if (!choice)
+            return;
+        const source = path.parse(this.selectedFile);
+        const target = await vscode.window.showSaveDialog({
+            title: 'Export Qt File Symbols',
+            defaultUri: vscode.Uri.file(path.join(source.dir, `${source.name}${choice.extension}`)),
+            filters: choice.value === 'markdown'
+                ? { Markdown: ['md'] }
+                : choice.value === 'json' ? { JSON: ['json'] } : { Text: ['txt'] }
+        });
+        if (!target)
+            return;
+        const content = (0, qpmSymbolService_1.formatSourceSymbolList)(symbols, this.selectedFile, choice.value);
+        await vscode.workspace.fs.writeFile(target, Buffer.from(content, 'utf8'));
+        const action = await vscode.window.showInformationMessage(`Exported ${symbols.length} symbol(s) to ${target.fsPath}.`, 'Open');
+        if (action === 'Open') {
+            const document = await vscode.workspace.openTextDocument(target);
+            await vscode.window.showTextDocument(document, { preview: false });
+        }
+    }
+    async generateHeader() {
+        if (!this.selectedFile) {
+            void vscode.window.showWarningMessage('Select a C/C++ or Qt source/header file first.');
+            return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+            void vscode.window.showWarningMessage('No function/method symbol was detected in the selected file.');
+            return;
+        }
+        const source = path.parse(this.selectedFile);
+        const isCpp = ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'].includes(source.ext.toLowerCase());
+        const headerExtension = isCpp ? '.hpp' : '.h';
+        const target = await vscode.window.showSaveDialog({
+            title: 'Generate Header From Qt File Symbols',
+            defaultUri: vscode.Uri.file(path.join(source.dir, `${source.name}${headerExtension}`)),
+            filters: isCpp ? { 'C++ Header': ['hpp', 'h'] } : { 'C Header': ['h'] }
+        });
+        if (!target)
+            return;
+        const content = (0, qpmSymbolService_1.buildHeaderFromSourceSymbols)(symbols, this.selectedFile);
+        await vscode.workspace.fs.writeFile(target, Buffer.from(content, 'utf8'));
+        const action = await vscode.window.showInformationMessage(`Generated header from ${symbols.length} detected symbol(s): ${target.fsPath}`, 'Open');
+        if (action === 'Open') {
+            const document = await vscode.workspace.openTextDocument(target);
+            await vscode.window.showTextDocument(document, { preview: false });
+        }
+    }
+    async generateSource() {
+        if (!this.selectedFile) {
+            void vscode.window.showWarningMessage('Select a C/C++ or Qt source/header file first.');
+            return;
+        }
+        const symbols = await this.currentSymbols();
+        if (!symbols.length) {
+            void vscode.window.showWarningMessage('No function/method symbol was detected in the selected file.');
+            return;
+        }
+        const source = path.parse(this.selectedFile);
+        const selectedExt = source.ext.toLowerCase();
+        const isC = selectedExt === '.c';
+        const isHeader = ['.h', '.hh', '.hpp', '.hxx'].includes(selectedExt);
+        const sourceExtension = isC ? '.c' : '.cpp';
+        const defaultName = isHeader ? `${source.name}${sourceExtension}` : `${source.name}_generated${sourceExtension}`;
+        const target = await vscode.window.showSaveDialog({
+            title: 'Generate Source From Qt File Symbols',
+            defaultUri: vscode.Uri.file(path.join(source.dir, defaultName)),
+            filters: isC ? { 'C Source': ['c'] } : { 'C++ Source': ['cpp', 'cc', 'cxx'] }
+        });
+        if (!target)
+            return;
+        const content = (0, qpmSymbolService_1.buildSourceFromSourceSymbols)(symbols, this.selectedFile);
+        await vscode.workspace.fs.writeFile(target, Buffer.from(content, 'utf8'));
+        const action = await vscode.window.showInformationMessage(`Generated source stubs from ${symbols.length} detected symbol(s): ${target.fsPath}`, 'Open');
+        if (action === 'Open') {
+            const document = await vscode.workspace.openTextDocument(target);
+            await vscode.window.showTextDocument(document, { preview: false });
+        }
+    }
     getTreeItem(node) {
         if ('label' in node) {
             const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
             item.iconPath = new vscode.ThemeIcon('info');
             return item;
         }
-        const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.None);
+        const displayName = node.qualifiedName || node.name;
+        const item = new vscode.TreeItem(displayName, vscode.TreeItemCollapsibleState.None);
         item.description = `L${node.line + 1}`;
         item.tooltip = `${node.signature}\n${node.filePath}:${node.line + 1}`;
-        item.iconPath = new vscode.ThemeIcon('symbol-function');
+        item.contextValue = 'qpmFileSymbol';
+        item.iconPath = new vscode.ThemeIcon(node.kind === vscode.SymbolKind.Method
+            ? 'symbol-method'
+            : node.kind === vscode.SymbolKind.Constructor ? 'symbol-constructor' : 'symbol-function');
         item.command = { command: 'qpm.revealFileSymbol', title: 'Reveal Qt/C++ file symbol', arguments: [node] };
         return item;
     }
@@ -87,7 +220,7 @@ class QpmFileSymbolsProvider {
             return [{ kind: 'placeholder', label: 'Select a Qt/C++ source or header file in the Qt Workspace.' }];
         }
         const symbols = await this.symbols.symbolsForFile(this.selectedFile);
-        return symbols.length > 0 ? symbols : [{ kind: 'placeholder', label: 'No function found in the selected file.' }];
+        return symbols.length > 0 ? symbols : [{ kind: 'placeholder', label: 'No function or method declaration found in the selected file.' }];
     }
     updateDescription() {
         if (this.view) {

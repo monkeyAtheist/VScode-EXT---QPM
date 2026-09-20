@@ -35,6 +35,10 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.QpmCompletionProvider = exports.QpmSymbolService = void 0;
 exports.scanCFunctions = scanCFunctions;
+exports.normalizeSourceSymbolDeclaration = normalizeSourceSymbolDeclaration;
+exports.formatSourceSymbolList = formatSourceSymbolList;
+exports.buildHeaderFromSourceSymbols = buildHeaderFromSourceSymbols;
+exports.buildSourceFromSourceSymbols = buildSourceFromSourceSymbols;
 exports.isSourceOrHeader = isSourceOrHeader;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -308,24 +312,452 @@ function flattenDocumentSymbols(entries, fallbackPath) {
 }
 function scanCFunctions(source, filePath) {
     const masked = maskCommentsAndStrings(source);
-    const pattern = /(^|\n)\s*((?:(?:extern|static|inline|const|volatile|unsigned|signed|long|short|struct|enum|union|__declspec\s*\([^)]*\)|__stdcall|__cdecl|QPMFUNC(?:_C)?|QPMCALLBACK|[A-Za-z_]\w*)\s+|\*\s*)+)([A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*(?=;|\{)/gm;
+    const functionBodyRanges = [...collectFunctionBodyRanges(masked), ...collectScopedConstructorBodyRanges(masked)];
     const result = [];
+    const controlOrStatementPrefixes = /^(?:return|co_return|throw|emit|case|else|do|goto|break|continue|new|delete|using|typedef|static_assert)\b/;
+    const pattern = /(^|\n)\s*((?:(?:extern|static|inline|constexpr|consteval|constinit|virtual|explicit|friend|const|volatile|unsigned|signed|long|short|struct|enum|union|typename|auto|QPMFUNC(?:_C)?|QPMCALLBACK|[A-Za-z_]\w*)\s+|[*&]\s*)+)(((?:[A-Za-z_]\w*::)*)~?[A-Za-z_]\w*)\s*\(([^;{}]*)\)\s*((?:(?:const|override|final)\b\s*|noexcept(?:\s*\([^)]*\))?\s*|[&]{1,2}\s*)*)(?=;|\{|:|=\s*(?:default|delete))/gm;
     let match;
     while ((match = pattern.exec(masked)) !== null) {
-        const name = match[3];
-        if (['if', 'for', 'while', 'switch', 'return', 'sizeof'].includes(name)) {
+        const prefix = match[2].trim();
+        const qualifiedName = match[3].trim();
+        const name = qualifiedName.split('::').pop() || qualifiedName;
+        if (controlOrStatementPrefixes.test(prefix) || ['if', 'for', 'while', 'switch', 'return', 'sizeof', 'catch'].includes(name)) {
             continue;
         }
-        const nameOffset = match.index + match[0].lastIndexOf(name);
+        const nameOffset = match.index + match[0].lastIndexOf(qualifiedName);
+        if (isOffsetInsideRanges(nameOffset, functionBodyRanges)) {
+            continue;
+        }
         const before = source.slice(0, nameOffset);
         const line = before.split('\n').length - 1;
         const lineStart = before.lastIndexOf('\n') + 1;
         const character = nameOffset - lineStart;
         const raw = source.slice(match.index + match[1].length, pattern.lastIndex).trim();
         const signature = raw.replace(/\s+/g, ' ').replace(/\s*\{\s*$/, '').trim();
-        result.push({ name, signature, filePath, line, character, kind: vscode.SymbolKind.Function, source: 'fallback' });
+        const owner = qualifiedName.includes('::') ? qualifiedName.slice(0, qualifiedName.lastIndexOf('::')) : '';
+        const ownerLeaf = owner ? owner.split('::').pop() || owner : '';
+        const kind = owner && (name === ownerLeaf || name === `~${ownerLeaf}`)
+            ? vscode.SymbolKind.Constructor
+            : owner ? vscode.SymbolKind.Method : vscode.SymbolKind.Function;
+        result.push({
+            name,
+            qualifiedName,
+            signature,
+            declaration: normalizeSourceSymbolDeclaration(signature),
+            filePath,
+            line,
+            character,
+            kind,
+            source: 'fallback'
+        });
+    }
+    // Out-of-class constructors and destructors have no return type. Parse
+    // their first parameter list with balanced parentheses so initializer-list
+    // calls such as QMainWindow(parent) or std::make_unique<T>() cannot become
+    // false symbols.
+    const ctorStartPattern = /(^|\n)\s*((?:[A-Za-z_]\w*::)+~?[A-Za-z_]\w*)\s*\(/gm;
+    while ((match = ctorStartPattern.exec(masked)) !== null) {
+        const qualifiedName = match[2].trim();
+        const parts = qualifiedName.split('::');
+        const name = parts[parts.length - 1] || qualifiedName;
+        const ownerLeaf = parts.length > 1 ? parts[parts.length - 2] : '';
+        if (name.replace(/^~/, '') !== ownerLeaf)
+            continue;
+        const openParen = match.index + match[0].lastIndexOf('(');
+        const closeParen = findMatchingCloseParen(masked, openParen);
+        if (closeParen < 0)
+            continue;
+        const following = masked.slice(closeParen + 1, Math.min(masked.length, closeParen + 800));
+        if (!/^\s*(?:(?:noexcept(?:\s*\([^)]*\))?|override|final)\s*)*(?:;|\{|:|=\s*(?:default|delete))/.test(following))
+            continue;
+        const nameOffset = match.index + match[0].indexOf(qualifiedName);
+        if (isOffsetInsideRanges(nameOffset, functionBodyRanges))
+            continue;
+        const before = source.slice(0, nameOffset);
+        const line = before.split('\n').length - 1;
+        const lineStart = before.lastIndexOf('\n') + 1;
+        const character = nameOffset - lineStart;
+        const declarationStart = match.index + match[1].length;
+        const raw = source.slice(declarationStart, closeParen + 1).trim();
+        const signature = raw.replace(/\s+/g, ' ').trim();
+        result.push({
+            name,
+            qualifiedName,
+            signature,
+            declaration: normalizeSourceSymbolDeclaration(signature),
+            filePath,
+            line,
+            character,
+            kind: vscode.SymbolKind.Constructor,
+            source: 'fallback'
+        });
     }
     return dedupeSourceSymbols(result);
+}
+function collectFunctionBodyRanges(masked) {
+    const ranges = [];
+    const controlNames = new Set(['if', 'for', 'while', 'switch', 'catch']);
+    for (let brace = 0; brace < masked.length; brace += 1) {
+        if (masked[brace] !== '{')
+            continue;
+        const contextStart = Math.max(masked.lastIndexOf(';', brace - 1), masked.lastIndexOf('{', brace - 1), masked.lastIndexOf('}', brace - 1)) + 1;
+        const context = masked.slice(contextStart, brace);
+        const closeParenInContext = context.lastIndexOf(')');
+        if (closeParenInContext < 0)
+            continue;
+        const closeParen = contextStart + closeParenInContext;
+        const openParen = findMatchingOpenParen(masked, closeParen);
+        if (openParen < 0)
+            continue;
+        const beforeParen = masked.slice(contextStart, openParen).trimEnd();
+        const nameMatch = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(beforeParen);
+        if (!nameMatch)
+            continue;
+        const leaf = (nameMatch[1].split('::').pop() || nameMatch[1]).replace(/^~/, '');
+        if (controlNames.has(leaf))
+            continue;
+        const closingBrace = findMatchingBrace(masked, brace);
+        if (closingBrace > brace) {
+            ranges.push({ start: brace + 1, end: closingBrace });
+        }
+    }
+    return ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+function collectScopedConstructorBodyRanges(masked) {
+    const ranges = [];
+    const pattern = /(^|\n)\s*((?:[A-Za-z_]\w*::)+~?[A-Za-z_]\w*)\s*\(/gm;
+    let match;
+    while ((match = pattern.exec(masked)) !== null) {
+        const qualifiedName = match[2];
+        const parts = qualifiedName.split('::');
+        const name = parts[parts.length - 1] || '';
+        const ownerLeaf = parts.length > 1 ? parts[parts.length - 2] : '';
+        if (name.replace(/^~/, '') !== ownerLeaf)
+            continue;
+        const openParen = match.index + match[0].lastIndexOf('(');
+        const closeParen = findMatchingCloseParen(masked, openParen);
+        if (closeParen < 0)
+            continue;
+        const bodyBrace = findDefinitionBodyBrace(masked, closeParen + 1);
+        if (bodyBrace < 0)
+            continue;
+        const closingBrace = findMatchingBrace(masked, bodyBrace);
+        if (closingBrace > bodyBrace)
+            ranges.push({ start: bodyBrace + 1, end: closingBrace });
+    }
+    return ranges;
+}
+function findDefinitionBodyBrace(text, startIndex) {
+    let parenDepth = 0;
+    let bracketDepth = 0;
+    for (let index = startIndex; index < text.length; index += 1) {
+        const ch = text[index];
+        if (ch === '(')
+            parenDepth += 1;
+        else if (ch === ')')
+            parenDepth = Math.max(0, parenDepth - 1);
+        else if (ch === '[')
+            bracketDepth += 1;
+        else if (ch === ']')
+            bracketDepth = Math.max(0, bracketDepth - 1);
+        else if (parenDepth === 0 && bracketDepth === 0 && ch === ';')
+            return -1;
+        else if (parenDepth === 0 && bracketDepth === 0 && ch === '{')
+            return index;
+    }
+    return -1;
+}
+function findMatchingCloseParen(text, openIndex) {
+    let depth = 0;
+    for (let index = openIndex; index < text.length; index += 1) {
+        if (text[index] === '(')
+            depth += 1;
+        else if (text[index] === ')') {
+            depth -= 1;
+            if (depth === 0)
+                return index;
+        }
+    }
+    return -1;
+}
+function findMatchingOpenParen(text, closeIndex) {
+    let depth = 0;
+    for (let index = closeIndex; index >= 0; index -= 1) {
+        if (text[index] === ')')
+            depth += 1;
+        else if (text[index] === '(') {
+            depth -= 1;
+            if (depth === 0)
+                return index;
+        }
+    }
+    return -1;
+}
+function findMatchingBrace(text, openIndex) {
+    let depth = 0;
+    for (let index = openIndex; index < text.length; index += 1) {
+        if (text[index] === '{')
+            depth += 1;
+        else if (text[index] === '}') {
+            depth -= 1;
+            if (depth === 0)
+                return index;
+        }
+    }
+    return -1;
+}
+function isOffsetInsideRanges(offset, ranges) {
+    return ranges.some((range) => offset >= range.start && offset < range.end);
+}
+function normalizeSourceSymbolDeclaration(signature) {
+    const compact = String(signature || '').replace(/\s+/g, ' ').trim().replace(/\s*\{\s*$/, '').trim();
+    if (!compact)
+        return '';
+    return compact.endsWith(';') ? compact : `${compact};`;
+}
+function formatSourceSymbolList(symbols, filePath, format = 'text') {
+    const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+    if (format === 'json') {
+        return JSON.stringify({
+            file: filePath,
+            symbols: ordered.map((symbol) => ({
+                name: symbol.name,
+                qualifiedName: symbol.qualifiedName || symbol.name,
+                line: symbol.line + 1,
+                kind: vscode.SymbolKind[symbol.kind] || 'Function',
+                signature: symbol.signature,
+                declaration: symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)
+            }))
+        }, null, 2) + '\n';
+    }
+    if (format === 'markdown') {
+        const lines = [`# Qt File Symbols — ${path.basename(filePath)}`, '', `Source: \`${filePath}\``, '', '| Line | Symbol | Declaration |', '| ---: | --- | --- |'];
+        for (const symbol of ordered) {
+            const declaration = (symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)).replace(/\|/g, '\\|');
+            lines.push(`| ${symbol.line + 1} | \`${symbol.qualifiedName || symbol.name}\` | \`${declaration.replace(/`/g, '\\`')}\` |`);
+        }
+        lines.push('');
+        return lines.join('\n');
+    }
+    return ordered.map((symbol) => `L${symbol.line + 1}\t${symbol.qualifiedName || symbol.name}\t${symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature)}`).join('\n') + (ordered.length ? '\n' : '');
+}
+function buildHeaderFromSourceSymbols(symbols, sourceFilePath) {
+    const isC = path.extname(sourceFilePath).toLowerCase() === '.c';
+    const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+    const publicDeclarations = [];
+    const internalDeclarations = [];
+    const memberDeclarations = [];
+    const seen = new Set();
+    for (const symbol of ordered) {
+        const declaration = symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature);
+        if (!declaration || seen.has(declaration))
+            continue;
+        seen.add(declaration);
+        const qualified = symbol.qualifiedName || symbol.name;
+        if (qualified.includes('::')) {
+            memberDeclarations.push(declaration);
+        }
+        else if (/^static\b/.test(declaration)) {
+            internalDeclarations.push(declaration);
+        }
+        else {
+            publicDeclarations.push(declaration);
+        }
+    }
+    const lines = [
+        '#pragma once',
+        '',
+        `// Generated by Qt Project Manager from ${path.basename(sourceFilePath)}.`,
+        '// Review generated declarations before using this header as a public API.',
+        ''
+    ];
+    if (isC && publicDeclarations.length) {
+        lines.push('#ifdef __cplusplus', 'extern "C" {', '#endif', '');
+    }
+    if (publicDeclarations.length) {
+        lines.push('// Free/public function declarations', ...publicDeclarations, '');
+    }
+    if (isC && publicDeclarations.length) {
+        lines.push('#ifdef __cplusplus', '}', '#endif', '');
+    }
+    if (internalDeclarations.length) {
+        lines.push('// Internal source-file functions are intentionally not declared as active header API:', ...internalDeclarations.map((line) => `// ${line}`), '');
+    }
+    if (memberDeclarations.length) {
+        lines.push('// Scoped member definitions must be copied into their owning class declaration:', ...memberDeclarations.map((line) => `// ${line}`), '');
+    }
+    if (!publicDeclarations.length && !internalDeclarations.length && !memberDeclarations.length) {
+        lines.push('// No function declarations were detected.', '');
+    }
+    return lines.join('\n');
+}
+function buildSourceFromSourceSymbols(symbols, sourceFilePath) {
+    const sourceExt = path.extname(sourceFilePath).toLowerCase();
+    const isC = sourceExt === '.c';
+    const ordered = [...symbols].sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
+    const seen = new Set();
+    const definitions = [];
+    let needsAbort = false;
+    for (const symbol of ordered) {
+        const declaration = symbol.declaration || normalizeSourceSymbolDeclaration(symbol.signature);
+        if (!declaration)
+            continue;
+        const definitionSignature = sourceDefinitionSignature(declaration, symbol);
+        if (!definitionSignature || seen.has(definitionSignature))
+            continue;
+        seen.add(definitionSignature);
+        const bodyKind = sourceDefinitionBodyKind(definitionSignature, symbol);
+        const body = ['{', '    // TODO: implement generated stub.'];
+        if (bodyKind === 'abort') {
+            needsAbort = true;
+            body.push(isC ? '    abort();' : '    std::abort();');
+        }
+        body.push('}');
+        definitions.push(`${definitionSignature}\n${body.join('\n')}`);
+    }
+    const lines = [
+        `// Generated by Qt Project Manager from Qt File Symbols in ${path.basename(sourceFilePath)}.`,
+        '// Review generated stubs before adding them to a build.',
+        ''
+    ];
+    const includes = sourceGeneratorIncludes(sourceFilePath);
+    if (needsAbort) {
+        const abortInclude = isC ? '#include <stdlib.h>' : '#include <cstdlib>';
+        if (!includes.includes(abortInclude))
+            includes.push(abortInclude);
+    }
+    if (includes.length) {
+        lines.push(...includes, '');
+    }
+    if (definitions.length) {
+        lines.push(...definitions.flatMap((definition, index) => index === 0 ? [definition] : ['', definition]), '');
+    }
+    else {
+        lines.push('// No function/method symbols were available for source generation.', '');
+    }
+    if (['.h', '.hh', '.hpp', '.hxx'].includes(sourceExt)) {
+        lines.splice(2, 0, '// Note: class ownership may need review for unqualified declarations parsed from headers.');
+    }
+    return lines.join('\n');
+}
+function sourceGeneratorIncludes(sourceFilePath) {
+    const ext = path.extname(sourceFilePath).toLowerCase();
+    const headerExtensions = new Set(['.h', '.hh', '.hpp', '.hxx']);
+    if (headerExtensions.has(ext)) {
+        return [`#include "${path.basename(sourceFilePath)}"`];
+    }
+    try {
+        const source = fs.readFileSync(sourceFilePath, 'utf8');
+        const includes = source.match(/^\s*#\s*include\s*[<"][^>"\r\n]+[>"]\s*$/gm) || [];
+        return [...new Set(includes.map((line) => line.trim()))];
+    }
+    catch {
+        return [];
+    }
+}
+function sourceDefinitionSignature(declaration, symbol) {
+    let signature = String(declaration || '').trim().replace(/;\s*$/, '').trim();
+    if (!signature)
+        return '';
+    // Specifiers that are valid on a class declaration but not on an out-of-class definition.
+    signature = signature.replace(/^(?:(?:virtual|explicit|friend)\s+)+/, '');
+    if ((symbol.qualifiedName || symbol.name).includes('::')) {
+        signature = signature.replace(/^static\s+/, '');
+    }
+    const qualifiedName = symbol.qualifiedName || symbol.name;
+    const nameIndex = signature.lastIndexOf(qualifiedName);
+    if (nameIndex < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, '').trim();
+    const openParen = signature.indexOf('(', nameIndex + qualifiedName.length);
+    if (openParen < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, '').trim();
+    const closeParen = findMatchingCloseParen(signature, openParen);
+    if (closeParen < 0)
+        return signature.replace(/\s+(?:override|final)(?=\s|$)/g, '').trim();
+    const parameters = signature.slice(openParen + 1, closeParen);
+    const withoutDefaults = stripParameterDefaultArguments(parameters);
+    const suffix = signature.slice(closeParen + 1).replace(/\b(?:override|final)\b/g, '').replace(/\s+/g, ' ').trim();
+    const prefix = signature.slice(0, openParen + 1);
+    return `${prefix}${withoutDefaults})${suffix ? ` ${suffix}` : ''}`.replace(/\s+$/g, '').trim();
+}
+function stripParameterDefaultArguments(parameters) {
+    const result = [];
+    let current = '';
+    let skippingDefault = false;
+    let paren = 0, bracket = 0, brace = 0, angle = 0;
+    let quote;
+    let escaped = false;
+    const flush = () => {
+        result.push(current.trim());
+        current = '';
+        skippingDefault = false;
+    };
+    for (let index = 0; index < parameters.length; index += 1) {
+        const ch = parameters[index];
+        if (quote) {
+            if (!skippingDefault)
+                current += ch;
+            if (escaped)
+                escaped = false;
+            else if (ch === '\\')
+                escaped = true;
+            else if (ch === quote)
+                quote = undefined;
+            continue;
+        }
+        if (ch === '"' || ch === "'") {
+            quote = ch;
+            if (!skippingDefault)
+                current += ch;
+            continue;
+        }
+        if (ch === '(')
+            paren += 1;
+        else if (ch === ')')
+            paren = Math.max(0, paren - 1);
+        else if (ch === '[')
+            bracket += 1;
+        else if (ch === ']')
+            bracket = Math.max(0, bracket - 1);
+        else if (ch === '{')
+            brace += 1;
+        else if (ch === '}')
+            brace = Math.max(0, brace - 1);
+        else if (ch === '<')
+            angle += 1;
+        else if (ch === '>' && angle > 0)
+            angle -= 1;
+        const topLevel = paren === 0 && bracket === 0 && brace === 0 && angle === 0;
+        if (topLevel && ch === '=' && !skippingDefault) {
+            skippingDefault = true;
+            continue;
+        }
+        if (topLevel && ch === ',') {
+            flush();
+            continue;
+        }
+        if (!skippingDefault)
+            current += ch;
+    }
+    if (current.trim() || parameters.trim())
+        flush();
+    return result.join(', ');
+}
+function sourceDefinitionBodyKind(signature, symbol) {
+    const qualifiedName = symbol.qualifiedName || symbol.name;
+    const leaf = symbol.name.replace(/^~/, '');
+    const ownerLeaf = qualifiedName.includes('::')
+        ? qualifiedName.slice(0, qualifiedName.lastIndexOf('::')).split('::').pop() || ''
+        : '';
+    if (symbol.kind === vscode.SymbolKind.Constructor || leaf === ownerLeaf || symbol.name.startsWith('~'))
+        return 'empty';
+    const nameIndex = signature.lastIndexOf(qualifiedName);
+    if (nameIndex < 0)
+        return 'abort';
+    const prefix = signature.slice(0, nameIndex).trim();
+    if (/(?:^|\s)void$/.test(prefix))
+        return 'empty';
+    return 'abort';
 }
 function maskCommentsAndStrings(source) {
     let result = '';

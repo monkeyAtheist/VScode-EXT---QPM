@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.8",
+  "version": "0.34.10",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -314,7 +314,15 @@
     "onCommand:qpm.openQtDesignerWithCustomWidgets",
     "onCommand:qpm.cleanQtDesignerWidgets",
     "onCommand:qpm.revealQtDesignerWidgets",
-    "onCommand:qpm.moveFileToFolder"
+    "onCommand:qpm.moveFileToFolder",
+    "onCommand:qpm.library.createPack",
+    "onCommand:qpm.library.importPack",
+    "onCommand:qpm.copyFileSymbol",
+    "onCommand:qpm.copyFileSymbolDeclaration",
+    "onCommand:qpm.copyFileSymbols",
+    "onCommand:qpm.copyFileSymbolDeclarations",
+    "onCommand:qpm.exportFileSymbols",
+    "onCommand:qpm.generateFileSymbolsHeader"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -934,14 +942,15 @@
       },
       {
         "command": "qpm.library.importPack",
-        "title": "Import Library Pack",
-        "category": "Qt Project Manager"
+        "title": "Import Library Pack...",
+        "category": "Qt Project Manager",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.library.createPack",
-        "title": "Add Library Pack",
+        "title": "Create Library Pack...",
         "category": "Qt Project Manager",
-        "icon": "$(add)"
+        "icon": "$(new-file)"
       },
       {
         "command": "qpm.library.openVisualEditor",
@@ -2174,6 +2183,46 @@
         "command": "qpm.moveFileToFolder",
         "title": "Move File To Folder...",
         "icon": "$(move)"
+      },
+      {
+        "command": "qpm.copyFileSymbol",
+        "title": "Copy Qt File Symbol Signature",
+        "category": "Qt Project Manager",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "qpm.copyFileSymbolDeclaration",
+        "title": "Copy Qt File Symbol Declaration",
+        "category": "Qt Project Manager"
+      },
+      {
+        "command": "qpm.copyFileSymbols",
+        "title": "Copy Qt File Symbols",
+        "category": "Qt Project Manager",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "qpm.copyFileSymbolDeclarations",
+        "title": "Copy Qt File Symbol Declarations",
+        "category": "Qt Project Manager"
+      },
+      {
+        "command": "qpm.exportFileSymbols",
+        "title": "Export Qt File Symbols...",
+        "category": "Qt Project Manager",
+        "icon": "$(export)"
+      },
+      {
+        "command": "qpm.generateFileSymbolsHeader",
+        "title": "Generate Header From Qt File Symbols...",
+        "category": "Qt Project Manager",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "qpm.generateFileSymbolsSource",
+        "title": "Generate Source From Qt File Symbols...",
+        "category": "Qt Project Manager",
+        "icon": "$(new-file)"
       }
     ],
     "menus": {
@@ -2189,24 +2238,54 @@
           "group": "navigation@2"
         },
         {
-          "command": "qpm.library.managePacks",
+          "command": "qpm.library.createPack",
           "when": "view == qpm.libraryExplorer",
           "group": "navigation@3"
         },
         {
-          "command": "qpm.library.openVisualEditor",
+          "command": "qpm.library.importPack",
           "when": "view == qpm.libraryExplorer",
           "group": "navigation@4"
         },
         {
-          "command": "qpm.library.reloadPacks",
+          "command": "qpm.library.managePacks",
           "when": "view == qpm.libraryExplorer",
           "group": "navigation@5"
+        },
+        {
+          "command": "qpm.library.openVisualEditor",
+          "when": "view == qpm.libraryExplorer",
+          "group": "navigation@6"
+        },
+        {
+          "command": "qpm.library.reloadPacks",
+          "when": "view == qpm.libraryExplorer",
+          "group": "navigation@7"
         },
         {
           "command": "qpm.refreshFileSymbols",
           "when": "view == qpm.fileSymbols",
           "group": "navigation@1"
+        },
+        {
+          "command": "qpm.copyFileSymbols",
+          "when": "view == qpm.fileSymbols",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.exportFileSymbols",
+          "when": "view == qpm.fileSymbols",
+          "group": "navigation@3"
+        },
+        {
+          "command": "qpm.generateFileSymbolsHeader",
+          "when": "view == qpm.fileSymbols",
+          "group": "navigation@4"
+        },
+        {
+          "command": "qpm.generateFileSymbolsSource",
+          "when": "view == qpm.fileSymbols",
+          "group": "navigation@5"
         },
         {
           "command": "qpm.openHome",
@@ -2844,6 +2923,21 @@
           "command": "qpm.openSshDeviceManager",
           "when": "view == qpm.workspaceExplorer && viewItem == qpmFolder",
           "group": "qtPlatforms@0.5"
+        },
+        {
+          "command": "qpm.revealFileSymbol",
+          "when": "view == qpm.fileSymbols && viewItem == qpmFileSymbol",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.copyFileSymbol",
+          "when": "view == qpm.fileSymbols && viewItem == qpmFileSymbol",
+          "group": "clipboard@1"
+        },
+        {
+          "command": "qpm.copyFileSymbolDeclaration",
+          "when": "view == qpm.fileSymbols && viewItem == qpmFileSymbol",
+          "group": "clipboard@2"
         }
       ],
       "commandPalette": [
@@ -3215,6 +3309,10 @@
         {
           "command": "qpm.openSshDeviceManager",
           "group": "2_remote@1"
+        },
+        {
+          "submenu": "qpm.editorLibraries",
+          "group": "5_libraries@1"
         }
       ],
       "qpm.editorDocumentation": [
@@ -3849,6 +3947,10 @@
         {
           "command": "qpm.openSshDeviceManager",
           "group": "2_remote@1"
+        },
+        {
+          "submenu": "qpm.editorLibraries",
+          "group": "5_libraries@1"
         }
       ],
       "qpm.editorPackaging": [
@@ -4500,6 +4602,28 @@
           "command": "qpm.dependencies.clean",
           "group": "4_clean@1",
           "when": "qpm.qtCppProjectActive"
+        }
+      ],
+      "qpm.editorLibraries": [
+        {
+          "command": "qpm.library.createPack",
+          "group": "packs@1"
+        },
+        {
+          "command": "qpm.library.importPack",
+          "group": "packs@2"
+        },
+        {
+          "command": "qpm.library.managePacks",
+          "group": "packs@3"
+        },
+        {
+          "command": "qpm.library.openVisualEditor",
+          "group": "editor@1"
+        },
+        {
+          "command": "qpm.library.reloadPacks",
+          "group": "editor@2"
         }
       ]
     },
@@ -5252,6 +5376,10 @@
       {
         "id": "qpm.explorerDependencies",
         "label": "Dependencies / package managers"
+      },
+      {
+        "id": "qpm.editorLibraries",
+        "label": "Qt Libraries / packs"
       }
     ],
     "breakpoints": [

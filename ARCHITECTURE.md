@@ -554,3 +554,7 @@ The instrumentation architecture now separates producer-rate data acquisition fr
 `Acquisition worker(s) -> QpmSignalBuffer -> QpmSignalPlotBridge/QTimer -> SignalPlot`
 
 `QpmSignalBuffer` is transport-agnostic and thread-safe. Writers use a fixed-capacity ring per channel; the GUI obtains ordered snapshots. `trySnapshot()` deliberately permits dropping a display refresh rather than blocking the GUI behind a writer. `QpmSignalPlotBridge` must stay in the GUI thread because it updates a QWidget. The bridge does not own either endpoint.
+
+## Qt File Symbols source generation (0.34.10)
+
+`QpmFileSymbolsProvider` exposes paired header/source generation commands. Header generation delegates to `buildHeaderFromSourceSymbols`; source generation delegates to `buildSourceFromSourceSymbols`. The source generator preserves useful includes, removes default arguments and declaration-only specifiers, keeps qualified member names, and emits reviewable TODO stubs rather than cloning existing bodies.

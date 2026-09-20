@@ -1,3 +1,22 @@
+## 0.34.10
+
+- Added **Generate Source From Qt File Symbols...** beside the existing header generator in the Qt File Symbols view.
+- Source generation creates reviewable `.cpp`/`.c` implementation stubs from detected function and qualified member symbols.
+- Generated C++ non-void stubs use `std::abort()` until implemented, avoiding fabricated return values; constructors, destructors and `void` functions receive an empty TODO body.
+- Preserved source includes when generating from `.c/.cpp` files and include the selected header directly when generating from `.h/.hpp` files.
+- Default arguments and declaration-only `override`/`final` specifiers are removed from generated definitions.
+- Added regression coverage for the toolbar placement and source-stub generation.
+
+## 0.34.9
+
+- Fixed Qt File Symbols false positives caused by function-like expressions inside C/C++ function bodies, including Qt constructors, `QStringLiteral(...)`, `QObject::connect(...)`, and local direct-initialization.
+- Added scoped method/constructor recognition to the fallback symbol scanner.
+- Added Qt File Symbols actions to copy signatures/declarations, copy all symbols, export Markdown/text/JSON, and generate a `.h`/`.hpp` declaration header.
+- Added context-menu actions on individual Qt File Symbols.
+- Exposed **Create Library Pack** and **Import Library Pack** directly in the Qt Libraries toolbar and under **QPM → Qt Libraries / packs**.
+- Split pack creation and import into explicit flows and removed the obsolete QPM/CVI language metadata choice from newly created packs.
+- Added regression coverage for the reported Qt symbol false positives and the custom-pack UI contributions.
+
 ## 0.34.8
 
 - Fixed interactive C/C++ console I/O for Qt GUI applications on Windows: QPM-generated Direct, qmake and CMake builds now use the console subsystem when the active run profile uses Integrated Terminal.
