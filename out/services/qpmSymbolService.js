@@ -410,10 +410,10 @@ function collectFunctionBodyRanges(masked) {
         if (openParen < 0)
             continue;
         const beforeParen = masked.slice(contextStart, openParen).trimEnd();
-        const nameMatch = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(beforeParen);
-        if (!nameMatch)
+        const callableName = extractCallableNameBeforeParen(beforeParen);
+        if (!callableName)
             continue;
-        const leaf = (nameMatch[1].split('::').pop() || nameMatch[1]).replace(/^~/, '');
+        const leaf = callableLeafName(callableName);
         if (controlNames.has(leaf))
             continue;
         const closingBrace = findMatchingBrace(masked, brace);
@@ -422,6 +422,38 @@ function collectFunctionBodyRanges(masked) {
         }
     }
     return ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+/**
+ * Returns the callable token immediately preceding a parameter list.
+ *
+ * C++ operator overloads need explicit handling here. Without it, their body
+ * ranges are not protected and local direct-initialisation such as
+ * `QPointF point(x, y);` or `Widget result(other);` can later be mistaken for
+ * function declarations by the fallback Qt File Symbols scanner.
+ */
+function extractCallableNameBeforeParen(beforeParen) {
+    const text = beforeParen.trimEnd();
+    const regular = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(text);
+    if (regular)
+        return regular[1];
+    // Symbolic, allocation and call/subscript operators. Longest tokens are
+    // listed first so operators such as <<= are not truncated.
+    const symbolicOperator = /((?:[A-Za-z_]\w*::)*operator\s*(?:new\s*\[\s*\]|delete\s*\[\s*\]|new|delete|\(\)|\[\]|->\*|->|<=>|<<=|>>=|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|%=|\^=|&=|\|=|&&|\|\||<<|>>|[+\-*\/%^&|~!=<>]))\s*$/.exec(text);
+    if (symbolicOperator)
+        return symbolicOperator[1].replace(/\s+/g, '');
+    // Conversion operators such as Widget::operator bool() or
+    // Widget::operator const char*(). A complete C++ type parser is unnecessary
+    // here; recognising the scoped operator suffix is enough to protect its body.
+    const conversionOperator = /((?:[A-Za-z_]\w*::)*operator\s+(?:const\s+|volatile\s+)*(?:[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*(?:\s*<[^{};()]*>)?)(?:\s*[*&]{1,2})?)\s*$/.exec(text);
+    if (conversionOperator)
+        return conversionOperator[1].replace(/\s+/g, ' ');
+    return undefined;
+}
+function callableLeafName(callableName) {
+    const compact = callableName.trim();
+    const scopeIndex = compact.lastIndexOf('::');
+    const leaf = scopeIndex >= 0 ? compact.slice(scopeIndex + 2) : compact;
+    return leaf.replace(/^~/, '').trim();
 }
 function collectScopedConstructorBodyRanges(masked) {
     const ranges = [];

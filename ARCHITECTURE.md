@@ -558,3 +558,8 @@ The instrumentation architecture now separates producer-rate data acquisition fr
 ## Qt File Symbols source generation (0.34.10)
 
 `QpmFileSymbolsProvider` exposes paired header/source generation commands. Header generation delegates to `buildHeaderFromSourceSymbols`; source generation delegates to `buildSourceFromSourceSymbols`. The source generator preserves useful includes, removes default arguments and declaration-only specifiers, keeps qualified member names, and emits reviewable TODO stubs rather than cloning existing bodies.
+
+
+## Operator-aware Qt File Symbols scanner (0.34.11)
+
+`QpmSymbolService.collectFunctionBodyRanges()` recognises normal functions/methods as well as symbolic/allocation/call/subscript and conversion `operator` overloads. Their complete body ranges are excluded before the fallback declaration pattern runs. This is important because constructor-style local variables inside an operator body (for example `QPointF p(x, y);` or `Widget result(other);`) otherwise have the same superficial token shape as a function declaration. The implementation mirrors the validated JC Lib File Symbols correction.

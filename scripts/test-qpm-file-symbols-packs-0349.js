@@ -46,6 +46,19 @@ void MainWindow::pushButton()
     QPointF localPoint(1.0, 2.0);
     QString text = QStringLiteral("local");
 }
+
+Widget Widget::operator+(const Widget &other)
+{
+    Widget result(other);
+    QPointF operatorLocalPoint(3.0, 4.0);
+    return result;
+}
+
+Widget& Widget::operator+=(const Widget &other)
+{
+    Widget temporary(other);
+    return *this;
+}
 `;
 const detected = symbolsModule.scanCFunctions(source, 'sample.cpp');
 const names = detected.map((symbol) => symbol.qualifiedName || symbol.name);
@@ -57,7 +70,7 @@ assert.deepStrictEqual(names, [
   'MainWindow::MainWindow',
   'MainWindow::pushButton'
 ]);
-for (const falsePositive of ['QPointF', 'QStringLiteral', 'QObject::connect', 'localPoint']) {
+for (const falsePositive of ['QPointF', 'QStringLiteral', 'QObject::connect', 'localPoint', 'result', 'operatorLocalPoint', 'temporary']) {
   assert(!names.includes(falsePositive), `False positive still present: ${falsePositive}`);
 }
 

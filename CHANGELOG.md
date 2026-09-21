@@ -1,3 +1,10 @@
+## 0.34.11
+
+- Fixed Qt File Symbols false positives inside C++ operator-overload bodies.
+- Function-body detection now recognises symbolic operators (`operator+`, `operator+=`, `operator[]`, `operator()`, allocation operators, shifts/comparisons, etc.) and conversion operators.
+- Local class/Qt object instantiations such as `Widget result(other);` or `QPointF point(x, y);` inside those operators are no longer listed as functions.
+- Ported the corresponding JC Lib File Symbols correction and added regression coverage for local direct-initialisation inside overloaded operators.
+
 ## 0.34.10
 
 - Added **Generate Source From Qt File Symbols...** beside the existing header generator in the Qt File Symbols view.

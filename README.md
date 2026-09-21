@@ -1,3 +1,9 @@
+> QPM 0.34.11 fixes the remaining **Qt File Symbols** false positives found inside C++ operator overloads. Operator bodies are now recognised by the fallback scanner, so local class/Qt object instantiations are no longer shown as function symbols.
+
+## QPM 0.34.11 — Operator-aware Qt File Symbols
+
+The lightweight C/C++ symbol scanner now protects bodies of overloaded operators such as `operator+`, `operator+=`, `operator[]`, `operator()`, `operator<<` and conversion operators. This ports the correction validated in JC Lib and prevents local direct-initialisation expressions inside those bodies from being interpreted as declarations.
+
 > QPM 0.34.10 completes **Qt File Symbols** generation with a **Generate Source From Qt File Symbols...** action beside the header generator. It creates reviewable C/C++ implementation stubs, preserves useful includes, strips default arguments from definitions, and keeps qualified Qt/C++ member names.
 
 ## QPM 0.34.10 — Generate source from Qt File Symbols

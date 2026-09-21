@@ -4644,10 +4644,10 @@ ${needsBlankLine ? "\n" : ""}`;
         if (openParen < 0)
           continue;
         const beforeParen = masked.slice(contextStart, openParen).trimEnd();
-        const nameMatch = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(beforeParen);
-        if (!nameMatch)
+        const callableName = extractCallableNameBeforeParen(beforeParen);
+        if (!callableName)
           continue;
-        const leaf = (nameMatch[1].split("::").pop() || nameMatch[1]).replace(/^~/, "");
+        const leaf = callableLeafName(callableName);
         if (controlNames.has(leaf))
           continue;
         const closingBrace = findMatchingBrace(masked, brace);
@@ -4656,6 +4656,25 @@ ${needsBlankLine ? "\n" : ""}`;
         }
       }
       return ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+    }
+    function extractCallableNameBeforeParen(beforeParen) {
+      const text = beforeParen.trimEnd();
+      const regular = /((?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*$/.exec(text);
+      if (regular)
+        return regular[1];
+      const symbolicOperator = /((?:[A-Za-z_]\w*::)*operator\s*(?:new\s*\[\s*\]|delete\s*\[\s*\]|new|delete|\(\)|\[\]|->\*|->|<=>|<<=|>>=|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|%=|\^=|&=|\|=|&&|\|\||<<|>>|[+\-*\/%^&|~!=<>]))\s*$/.exec(text);
+      if (symbolicOperator)
+        return symbolicOperator[1].replace(/\s+/g, "");
+      const conversionOperator = /((?:[A-Za-z_]\w*::)*operator\s+(?:const\s+|volatile\s+)*(?:[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*(?:\s*<[^{};()]*>)?)(?:\s*[*&]{1,2})?)\s*$/.exec(text);
+      if (conversionOperator)
+        return conversionOperator[1].replace(/\s+/g, " ");
+      return void 0;
+    }
+    function callableLeafName(callableName) {
+      const compact = callableName.trim();
+      const scopeIndex = compact.lastIndexOf("::");
+      const leaf = scopeIndex >= 0 ? compact.slice(scopeIndex + 2) : compact;
+      return leaf.replace(/^~/, "").trim();
     }
     function collectScopedConstructorBodyRanges(masked) {
       const ranges = [];
