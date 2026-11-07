@@ -1,3 +1,15 @@
+## 0.34.14
+
+- Replaced the custom Run Debug SVG with VS Code's native `debug-alt` Codicon, matching the **Build and debug** action exactly.
+- **Run debug without build** now uses the same `debug-alt` shape in Advanced Run options.
+- The Advanced Run option uses `debugIcon.startForeground` so the no-build debug action is rendered with VS Code's native debug-start green when the active theme defines it.
+- Removed the obsolete `run-debug-light.svg` / `run-debug-dark.svg` assets.
+
+## 0.34.13
+
+- Replaced the generic Run Debug Codicon with a custom Run + bug overlay icon in the Qt Workspace toolbar.
+- Added light and dark SVG variants while keeping Run Debug behavior unchanged.
+
 ## 0.34.12
 
 - Added a dedicated **Run Debug** button to the Qt Workspace toolbar.

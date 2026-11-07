@@ -118,8 +118,8 @@ class QpmBuildService {
         const selected = await vscode.window.showQuickPick([
             { label: '$(play) Build and run', value: 'buildRun', description: 'Build the active executable and launch it' },
             { label: '$(run) Run without build', value: 'runOnly', description: 'Launch the existing executable target' },
-            { label: '$(debug-start) Run debug without build', value: 'debugOnly', description: 'Start the existing executable under the active Qt debug profile without rebuilding' },
-            { label: '$(debug-alt) Build and debug', value: 'debug', description: 'Build, then start a VS Code Qt/C++ debugger session' }
+            { label: 'Run debug without build', iconPath: new vscode.ThemeIcon('debug-alt', new vscode.ThemeColor('debugIcon.startForeground')), value: 'debugOnly', description: 'Start the existing executable under the active Qt debug profile without rebuilding' },
+            { label: 'Build and debug', iconPath: new vscode.ThemeIcon('debug-alt'), value: 'debug', description: 'Build, then start a VS Code Qt/C++ debugger session' }
         ], { title: 'Qt run action' });
         if (!selected) {
             return;

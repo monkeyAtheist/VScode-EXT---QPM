@@ -1,3 +1,5 @@
+> QPM 0.34.14 standardizes **Run Debug** on VS Code's native `debug-alt` icon; the Advanced Run picker uses the native debug-start foreground color for the no-build debug action.
+
 > QPM 0.34.12 adds a dedicated **Run Debug** action to the Qt Workspace toolbar. It starts the existing executable under the active Qt debug profile without forcing a rebuild; Build & Debug remains available separately.
 
 ## QPM 0.34.12 — Run Debug without build

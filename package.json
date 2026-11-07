@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.12",
+  "version": "0.34.14",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -1440,7 +1440,7 @@
       {
         "command": "qpm.startQtDebugProfileWithoutBuild",
         "title": "Qt Project Manager: Run Debug Without Build",
-        "icon": "$(debug-start)",
+        "icon": "$(debug-alt)",
         "category": "Qt Project Manager"
       },
       {

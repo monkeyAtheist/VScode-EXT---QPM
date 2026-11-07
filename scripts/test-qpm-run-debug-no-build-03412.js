@@ -8,10 +8,10 @@ const extension = fs.readFileSync(path.join(root, 'src', 'extension.ts'), 'utf8'
 const buildService = fs.readFileSync(path.join(root, 'src', 'services', 'qpmBuildService.ts'), 'utf8');
 const debugService = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtDebugService.ts'), 'utf8');
 
-assert.strictEqual(pkg.version, '0.34.12');
+assert(/^0\.34\.(1[2-9]|[2-9][0-9])$/.test(pkg.version), `Unexpected QPM version: ${pkg.version}`);
 const command = pkg.contributes.commands.find((entry) => entry.command === 'qpm.startQtDebugProfileWithoutBuild');
 assert(command, 'Run Debug without build command must exist');
-assert.strictEqual(command.icon, '$(debug-start)');
+assert.deepStrictEqual(command.icon, { light: 'media/run-debug-light.svg', dark: 'media/run-debug-dark.svg' });
 assert(/Run Debug Without Build/i.test(command.title));
 
 const toolbar = pkg.contributes.menus['view/title'].filter((entry) => entry.when === 'view == qpm.workspaceExplorer');
@@ -29,4 +29,4 @@ assert(buildService.includes("executeCommand('qpm.startQtDebugProfileWithoutBuil
 assert(debugService.includes("options.build === false && profile.request === 'launch' && !fs.existsSync(context.targetPath)"));
 assert(debugService.includes('Build the project first or use Build and Debug.'));
 
-console.log('QPM 0.34.12 Run Debug without build regression: OK');
+console.log('QPM Run Debug without build regression: OK');
