@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.11",
+  "version": "0.34.12",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -1439,8 +1439,9 @@
       },
       {
         "command": "qpm.startQtDebugProfileWithoutBuild",
-        "title": "Qt Project Manager: Start Active Debug Profile Without Build",
-        "icon": "$(play)"
+        "title": "Qt Project Manager: Run Debug Without Build",
+        "icon": "$(debug-start)",
+        "category": "Qt Project Manager"
       },
       {
         "command": "qpm.attachQtProcess",
@@ -2313,9 +2314,14 @@
           "group": "navigation@4"
         },
         {
-          "command": "qpm.chooseRunAction",
+          "command": "qpm.startQtDebugProfileWithoutBuild",
           "when": "view == qpm.workspaceExplorer",
           "group": "navigation@5"
+        },
+        {
+          "command": "qpm.chooseRunAction",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "navigation@6"
         },
         {
           "command": "qpm.toolbarBuildModeD32",
@@ -2355,12 +2361,12 @@
         {
           "command": "qpm.editBuildSettings",
           "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@8"
+          "group": "navigation@9"
         },
         {
           "command": "qpm.refresh",
           "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@9"
+          "group": "navigation@10"
         },
         {
           "command": "qpm.refreshProjectHealth",

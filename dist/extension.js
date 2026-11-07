@@ -10065,6 +10065,7 @@ var require_qpmBuildService = __commonJS({
         const selected = await vscode2.window.showQuickPick([
           { label: "$(play) Build and run", value: "buildRun", description: "Build the active executable and launch it" },
           { label: "$(run) Run without build", value: "runOnly", description: "Launch the existing executable target" },
+          { label: "$(debug-start) Run debug without build", value: "debugOnly", description: "Start the existing executable under the active Qt debug profile without rebuilding" },
           { label: "$(debug-alt) Build and debug", value: "debug", description: "Build, then start a VS Code Qt/C++ debugger session" }
         ], { title: "Qt run action" });
         if (!selected) {
@@ -10072,6 +10073,8 @@ var require_qpmBuildService = __commonJS({
         }
         if (selected.value === "runOnly") {
           await this.runWithoutBuild(projectRef);
+        } else if (selected.value === "debugOnly") {
+          await vscode2.commands.executeCommand("qpm.startQtDebugProfileWithoutBuild");
         } else if (selected.value === "debug") {
           await this.debugWithGdb(projectRef);
         } else {
@@ -61873,6 +61876,11 @@ var require_qpmQtDebugService = __commonJS({
         const context = this.resolveContext(ref, manifest, profile, mode);
         if (profile.request === "qml-attach")
           return this.startQmlAttach(profile, ref);
+        if (options.build === false && profile.request === "launch" && !fs.existsSync(context.targetPath)) {
+          vscode2.window.showErrorMessage(`Debug target not found: ${context.targetPath}. Build the project first or use Build and Debug.`);
+          this.output.appendLine(`[Qt Debug] Run Debug skipped: executable does not exist: ${context.targetPath}`);
+          return false;
+        }
         if (profile.request === "remote-gdb" && profile.startGdbServerViaSsh)
           await this.startRemoteGdbServer(profile, context);
         const configuration = buildQtCppDebugConfiguration(context);
@@ -91117,6 +91125,7 @@ async function activate(context) {
     createStatusBarAction("$(tools)", "Build / rebuild / clean the active Qt project", "qpm.chooseBuildAction", 97),
     createStatusBarAction("$(play)", "Build and run the active Qt target", "qpm.run", 96),
     createStatusBarAction("$(list-selection)", "Advanced Qt run options", "qpm.chooseRunAction", 95),
+    createStatusBarAction("$(debug-start)", "Run the active Qt debug profile without rebuilding", "qpm.startQtDebugProfileWithoutBuild", 94.7),
     createStatusBarAction("$(debug-alt-small)", "Build and debug with the active Qt kit debugger", "qpm.debugWithGdb", 94.5),
     createStatusBarAction("D32", "Select the Qt build mode", "qpm.selectBuildMode", 94),
     createStatusBarAction("EXE", "Select the Qt target type", "qpm.selectTargetType", 93)

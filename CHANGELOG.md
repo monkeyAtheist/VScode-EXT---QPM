@@ -1,3 +1,11 @@
+## 0.34.12
+
+- Added a dedicated **Run Debug** button to the Qt Workspace toolbar.
+- Run Debug starts the active Qt debug profile without rebuilding the project.
+- Added **Run debug without build** to Advanced Qt run options.
+- Added a preflight check for missing local debug executables with a clear Build & Debug hint.
+- Kept **Build & Debug** as a distinct action for workflows that require recompilation.
+
 ## 0.34.11
 
 - Fixed Qt File Symbols false positives inside C++ operator-overload bodies.

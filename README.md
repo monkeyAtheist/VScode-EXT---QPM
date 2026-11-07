@@ -1,3 +1,9 @@
+> QPM 0.34.12 adds a dedicated **Run Debug** action to the Qt Workspace toolbar. It starts the existing executable under the active Qt debug profile without forcing a rebuild; Build & Debug remains available separately.
+
+## QPM 0.34.12 — Run Debug without build
+
+The main Qt Workspace toolbar now exposes a dedicated debug-start button immediately after Run. It reuses the active QPM debug profile and starts the executable already on disk. If the executable is missing, QPM reports the missing target instead of silently building it.
+
 > QPM 0.34.11 fixes the remaining **Qt File Symbols** false positives found inside C++ operator overloads. Operator bodies are now recognised by the fallback scanner, so local class/Qt object instantiations are no longer shown as function symbols.
 
 ## QPM 0.34.11 — Operator-aware Qt File Symbols

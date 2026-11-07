@@ -158,6 +158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     createStatusBarAction('$(tools)', 'Build / rebuild / clean the active Qt project', 'qpm.chooseBuildAction', 97),
     createStatusBarAction('$(play)', 'Build and run the active Qt target', 'qpm.run', 96),
     createStatusBarAction('$(list-selection)', 'Advanced Qt run options', 'qpm.chooseRunAction', 95),
+    createStatusBarAction('$(debug-start)', 'Run the active Qt debug profile without rebuilding', 'qpm.startQtDebugProfileWithoutBuild', 94.7),
     createStatusBarAction('$(debug-alt-small)', 'Build and debug with the active Qt kit debugger', 'qpm.debugWithGdb', 94.5),
     createStatusBarAction('D32', 'Select the Qt build mode', 'qpm.selectBuildMode', 94),
     createStatusBarAction('EXE', 'Select the Qt target type', 'qpm.selectTargetType', 93)

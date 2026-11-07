@@ -132,6 +132,11 @@ class QpmQtDebugService {
         const context = this.resolveContext(ref, manifest, profile, mode);
         if (profile.request === 'qml-attach')
             return this.startQmlAttach(profile, ref);
+        if (options.build === false && profile.request === 'launch' && !fs.existsSync(context.targetPath)) {
+            vscode.window.showErrorMessage(`Debug target not found: ${context.targetPath}. Build the project first or use Build and Debug.`);
+            this.output.appendLine(`[Qt Debug] Run Debug skipped: executable does not exist: ${context.targetPath}`);
+            return false;
+        }
         if (profile.request === 'remote-gdb' && profile.startGdbServerViaSsh)
             await this.startRemoteGdbServer(profile, context);
         const configuration = buildQtCppDebugConfiguration(context);
