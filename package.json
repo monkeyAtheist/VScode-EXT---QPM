@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.34.14",
+  "version": "0.35.0",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -121,7 +121,6 @@
     "onCommand:qpm.selectTargetTypeEXE",
     "onCommand:qpm.selectTargetTypeDLL",
     "onCommand:qpm.selectTargetTypeLIB",
-    "onCommand:qpm.prepareDllImportLibraryGeneration",
     "onCommand:qpm.copyFilePath",
     "onCommand:qpm.copyRelativeFilePath",
     "onCommand:qpm.convertSelectedIntegerToDecimal",
@@ -322,7 +321,13 @@
     "onCommand:qpm.copyFileSymbols",
     "onCommand:qpm.copyFileSymbolDeclarations",
     "onCommand:qpm.exportFileSymbols",
-    "onCommand:qpm.generateFileSymbolsHeader"
+    "onCommand:qpm.generateFileSymbolsHeader",
+    "onCommand:qpm.generateImportLibraryFromDll",
+    "onCommand:qpm.analyzeDll",
+    "onCommand:qpm.generateImportLibraryFromHeaders",
+    "onCommand:qpm.analyzeLibrary",
+    "onCommand:qpm.openImportLibraryReport",
+    "onCommand:qpm.extractDllDefinitionFile"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -1181,11 +1186,6 @@
         "command": "qpm.selectTargetTypeLIB",
         "title": "LIB",
         "category": "Qt Project Manager"
-      },
-      {
-        "command": "qpm.prepareDllImportLibraryGeneration",
-        "title": "Prepare DLL Import Library Generation in editor...",
-        "icon": "$(library)"
       },
       {
         "command": "qpm.convertSelectedIntegerToDecimal",
@@ -2224,6 +2224,42 @@
         "title": "Generate Source From Qt File Symbols...",
         "category": "Qt Project Manager",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "qpm.generateImportLibraryFromHeaders",
+        "title": "Generate Import Library (.lib) from Header(s)...",
+        "category": "Qt Project Manager",
+        "icon": "$(library)"
+      },
+      {
+        "command": "qpm.generateImportLibraryFromDll",
+        "title": "Generate DLL Import Library (.lib)...",
+        "category": "Qt Project Manager",
+        "icon": "$(library)"
+      },
+      {
+        "command": "qpm.extractDllDefinitionFile",
+        "title": "Extract DLL Exports (.def)...",
+        "category": "Qt Project Manager",
+        "icon": "$(symbol-file)"
+      },
+      {
+        "command": "qpm.openImportLibraryReport",
+        "title": "Open Import-Library Generation Report",
+        "category": "Qt Project Manager",
+        "icon": "$(report)"
+      },
+      {
+        "command": "qpm.analyzeDll",
+        "title": "Analyze DLL...",
+        "category": "Qt Project Manager",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "qpm.analyzeLibrary",
+        "title": "Analyze .a / .lib Library...",
+        "category": "Qt Project Manager",
+        "icon": "$(inspect)"
       }
     ],
     "menus": {
@@ -2806,11 +2842,6 @@
           "group": "build@4"
         },
         {
-          "command": "qpm.prepareDllImportLibraryGeneration",
-          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\.header\\./",
-          "group": "build@5"
-        },
-        {
           "command": "qpm.openQtDesigner",
           "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\.form\\./",
           "group": "navigation@0"
@@ -2944,6 +2975,31 @@
           "command": "qpm.copyFileSymbolDeclaration",
           "when": "view == qpm.fileSymbols && viewItem == qpmFileSymbol",
           "group": "clipboard@2"
+        },
+        {
+          "command": "qpm.generateImportLibraryFromHeaders",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\.header\\..*\\.ext-(h|hh|hpp|hxx)$/",
+          "group": "libraries@1"
+        },
+        {
+          "command": "qpm.generateImportLibraryFromDll",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\..*\\.ext-dll$/",
+          "group": "libraries@1"
+        },
+        {
+          "command": "qpm.extractDllDefinitionFile",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\..*\\.ext-dll$/",
+          "group": "libraries@2"
+        },
+        {
+          "command": "qpm.analyzeDll",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\..*\\.ext-dll$/",
+          "group": "libraries@3"
+        },
+        {
+          "command": "qpm.analyzeLibrary",
+          "when": "view == qpm.workspaceExplorer && viewItem =~ /^qpmFile\\..*\\.ext-(a|lib)$/",
+          "group": "libraries@3"
         }
       ],
       "commandPalette": [
@@ -3101,10 +3157,6 @@
         },
         {
           "command": "qpm.selectTargetTypeLIB",
-          "when": "!qpm.nativeQtProjectActive"
-        },
-        {
-          "command": "qpm.prepareDllImportLibraryGeneration",
           "when": "!qpm.nativeQtProjectActive"
         },
         {

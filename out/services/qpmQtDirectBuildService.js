@@ -263,6 +263,11 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         precompiledHeaderCopyPath = path.join(generatedDirectory, 'qpm_precompiled_header.h');
         precompiledHeaderOutputPath = `${precompiledHeaderCopyPath}.gch`;
     }
+    const defaultTargetPath = (0, qtProjectManifest_1.qtTargetPath)(manifestPath, mode, manifest);
+    const targetPath = manifest.kind === 'static-library' && buildProfile.staticLibraryFormat === 'windows-lib'
+        ? changeExtension(defaultTargetPath, '.lib')
+        : defaultTargetPath;
+    const dllOutputs = resolveDirectDllImportOutputs(manifest.kind, buildProfile.dllImportLibraryFormat, targetPath);
     return {
         manifestPath,
         manifest,
@@ -270,8 +275,10 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         installation,
         mode,
         projectDirectory,
-        targetPath: (0, qtProjectManifest_1.qtTargetPath)(manifestPath, mode, manifest),
-        importLibraryPath: (0, qtProjectManifest_1.qtImportLibraryPath)(manifestPath, mode, manifest),
+        targetPath,
+        importLibraryPath: dllOutputs.primaryGnuPath,
+        gnuImportLibraryAliasPath: dllOutputs.gnuAliasPath,
+        windowsImportLibraryPath: dllOutputs.windowsLibPath,
         objectDirectory,
         generatedDirectory,
         sourceFiles: files.sources,
@@ -299,6 +306,28 @@ function createQtDirectBuildPlan(manifestPath, mode, installation) {
         warnings,
         autoDetectedModules
     };
+}
+function changeExtension(filePath, extension) {
+    return path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}${extension}`);
+}
+function resolveDirectDllImportOutputs(kind, format, dllPath) {
+    if (kind !== 'shared-library' || process.platform !== 'win32')
+        return {};
+    const effective = format === 'auto' ? 'gnu-dll-a' : format;
+    if (effective === 'none')
+        return {};
+    const directory = path.dirname(dllPath);
+    const stem = path.basename(dllPath, path.extname(dllPath));
+    const gnuBase = stem.toLowerCase().startsWith('lib') ? stem : `lib${stem}`;
+    const gnuDllA = path.join(directory, `${gnuBase}.dll.a`);
+    const gnuA = path.join(directory, `${gnuBase}.a`);
+    const windowsLib = path.join(directory, `${stem}.lib`);
+    const wantsGnuDllA = effective === 'gnu-dll-a' || effective === 'gnu-both' || effective === 'both' || effective === 'all';
+    const wantsGnuA = effective === 'gnu-a' || effective === 'gnu-both' || effective === 'gnu-a-windows-lib' || effective === 'all';
+    const wantsWindowsLib = effective === 'windows-lib' || effective === 'gnu-a-windows-lib' || effective === 'both' || effective === 'all';
+    const primaryGnuPath = wantsGnuDllA ? gnuDllA : wantsGnuA ? gnuA : undefined;
+    const gnuAliasPath = wantsGnuDllA && wantsGnuA ? gnuA : undefined;
+    return { primaryGnuPath, gnuAliasPath, windowsLibPath: wantsWindowsLib ? windowsLib : undefined };
 }
 function qtCompileArguments(plan, sourcePath, objectPath) {
     const dependencyPath = qtDependencyPathForObject(objectPath);

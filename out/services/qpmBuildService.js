@@ -63,6 +63,7 @@ class QpmBuildService {
     qtPython;
     qtDependencies;
     buildTrace;
+    importLibraries;
     qtBackends;
     launchedApplications = new Map();
     buildDiagnostics = vscode.languages.createDiagnosticCollection('qpm-build');
@@ -73,7 +74,7 @@ class QpmBuildService {
     buildWarnings = 0;
     failedPhase = '';
     firstBuildError;
-    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace) {
+    constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace, importLibraries) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
@@ -83,6 +84,7 @@ class QpmBuildService {
         this.qtPython = qtPython;
         this.qtDependencies = qtDependencies;
         this.buildTrace = buildTrace;
+        this.importLibraries = importLibraries;
         this.qtBackends = new qpmQtBuildBackendService_1.QpmQtBuildBackendService(output);
     }
     dispose() {
@@ -349,8 +351,19 @@ class QpmBuildService {
             return;
         }
         const candidates = new Set([artifacts.targetPath]);
-        if (path.extname(artifacts.targetPath).toLowerCase() === '.exe')
+        const targetExtension = path.extname(artifacts.targetPath).toLowerCase();
+        if (targetExtension === '.exe')
             candidates.add(replaceExtension(artifacts.targetPath, '.pdb'));
+        if (targetExtension === '.dll') {
+            const directory = path.dirname(artifacts.targetPath);
+            const stem = path.basename(artifacts.targetPath, '.dll');
+            const gnuStem = stem.toLowerCase().startsWith('lib') ? stem : `lib${stem}`;
+            for (const candidate of [
+                path.join(directory, `${gnuStem}.dll.a`), path.join(directory, `${gnuStem}.a`),
+                path.join(directory, `${stem}.lib`), path.join(directory, `${stem}.def`), path.join(directory, `${stem}.exp`)
+            ])
+                candidates.add(candidate);
+        }
         let removed = 0;
         for (const candidate of candidates) {
             if (!fs.existsSync(candidate))
@@ -1157,8 +1170,10 @@ class QpmBuildService {
         this.output.appendLine('');
         const objectFiles = [...sourceObjectFiles, ...plan.additionalObjectFiles];
         if (manifest.kind === 'static-library') {
-            const archiver = installation.toolchain.archiverPath || 'ar';
-            const archived = await this.spawnTool(archiver, ['rcs', plan.targetPath, ...objectFiles], plan.projectDirectory, `Archive ${path.basename(plan.targetPath)}`);
+            const archiveCommand = this.resolveQtDirectStaticLibraryCommand(plan, objectFiles);
+            if (!archiveCommand)
+                return false;
+            const archived = await this.spawnTool(archiveCommand.executable, archiveCommand.args, plan.projectDirectory, `Archive ${path.basename(plan.targetPath)}`);
             return archived && this.validateProducedFile(plan.targetPath, 'archive output');
         }
         const rawLinkArguments = (0, qpmQtDirectBuildService_1.qtLinkArguments)(plan, objectFiles);
@@ -1188,12 +1203,69 @@ class QpmBuildService {
             return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, 'import library output'))
             return false;
+        this.materializeQtDirectGnuImportAlias(plan);
+        await this.generateQtDirectWindowsImportLibrary(ref, plan);
         return true;
+    }
+    resolveQtDirectStaticLibraryCommand(plan, objectFiles) {
+        if (path.extname(plan.targetPath).toLowerCase() !== '.lib') {
+            let executable = installationSafeArchiver(plan.installation.toolchain.archiverPath || 'ar');
+            const base = path.basename(executable).toLowerCase();
+            if (base === 'lib' || base === 'lib.exe' || base === 'llvm-lib' || base === 'llvm-lib.exe') {
+                executable = resolveExecutableFromPath('llvm-ar');
+                if (executable === 'llvm-ar' && !fs.existsSync(executable))
+                    executable = resolveExecutableFromPath('ar');
+            }
+            return { executable, args: ['rcs', plan.targetPath, ...objectFiles] };
+        }
+        const candidates = [plan.installation.toolchain.archiverPath || '', 'llvm-lib', 'lib']
+            .filter(Boolean)
+            .map(resolveExecutableFromPath);
+        const executable = candidates.find((candidate) => {
+            const base = path.basename(candidate).toLowerCase();
+            return (base === 'lib' || base === 'lib.exe' || base === 'llvm-lib' || base === 'llvm-lib.exe') && fs.existsSync(candidate);
+        });
+        if (!executable) {
+            const message = 'Static .lib output requires Microsoft lib.exe or LLVM llvm-lib. Select a compatible librarian or choose GNU/LLVM .a.';
+            this.output.appendLine(`[Qt/C++] ${message}`);
+            vscode.window.showErrorMessage(message);
+            return undefined;
+        }
+        return { executable, args: ['/NOLOGO', `/OUT:${plan.targetPath}`, ...objectFiles] };
+    }
+    materializeQtDirectGnuImportAlias(plan) {
+        if (!plan.gnuImportLibraryAliasPath || !plan.importLibraryPath)
+            return;
+        if (!fs.existsSync(plan.importLibraryPath)) {
+            this.output.appendLine(`[Qt/C++] Warning: requested GNU import-library alias was not created because ${plan.importLibraryPath} is missing.`);
+            return;
+        }
+        try {
+            fs.copyFileSync(plan.importLibraryPath, plan.gnuImportLibraryAliasPath);
+            this.output.appendLine(`[Qt/C++] DLL import library (GNU alias): ${plan.gnuImportLibraryAliasPath}`);
+        }
+        catch (error) {
+            this.output.appendLine(`[Qt/C++] Warning: unable to create GNU import-library alias: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async generateQtDirectWindowsImportLibrary(ref, plan) {
+        if (!plan.windowsImportLibraryPath || plan.manifest.kind !== 'shared-library')
+            return;
+        if (!this.importLibraries) {
+            this.output.appendLine('[Qt/C++] Warning: Windows .lib generation service is unavailable; the DLL itself was built successfully.');
+            return;
+        }
+        const result = await this.importLibraries.generateBuiltDllImportLibrary(ref, plan.targetPath, plan.windowsImportLibraryPath);
+        this.output.appendLine(`[Qt/C++] DLL import library (.lib): ${result.ok ? plan.windowsImportLibraryPath : `not generated — ${result.message}`}`);
+        if (!result.ok)
+            vscode.window.showWarningMessage(`DLL built, but Windows import library was not generated: ${result.message}`);
     }
     async linkArtifacts(ref, targetType, artifacts, files, config) {
         if (targetType === 'Static Library') {
-            const args = ['rcs', artifacts.targetPath, ...artifacts.objectFiles];
-            return await this.spawnTool(config.archiverPath || 'ar', args, path.dirname(ref.absolutePath), `Archive ${path.basename(artifacts.targetPath)}`);
+            const archiveCommand = this.resolveGenericStaticLibraryCommand(ref, artifacts.targetPath, artifacts.objectFiles, config);
+            if (!archiveCommand)
+                return false;
+            return await this.spawnTool(archiveCommand.executable, archiveCommand.args, path.dirname(ref.absolutePath), `Archive ${path.basename(artifacts.targetPath)}`);
         }
         const fileLibraries = files.filter((file) => !file.excluded && isLibrary(file.absolutePath)).map((file) => file.absolutePath);
         const diagnostics = this.diagnoseLinkedLibraries(fileLibraries, artifacts.objectFiles, config);
@@ -1220,6 +1292,7 @@ class QpmBuildService {
             ...this.modeFlags(config),
             ...this.runtimeLinkFlags(config, targetType, sdlPlan),
             ...(targetType === 'Dynamic Link Library' ? ['-shared'] : []),
+            ...this.genericDllImportLibraryFlags(ref, targetType, artifacts.targetPath, config),
             ...artifacts.objectFiles,
             ...fileLibraries,
             ...config.libraryPaths.flatMap((value) => ['-L', resolveAgainstProject(value, ref.absolutePath)]),
@@ -1230,10 +1303,85 @@ class QpmBuildService {
         ];
         const success = await this.spawnTool(config.cppCompilerPath || 'g++', args, path.dirname(ref.absolutePath), `Link ${path.basename(artifacts.targetPath)}`);
         if (success) {
+            if (targetType === 'Dynamic Link Library') {
+                this.materializeGenericGnuImportAlias(ref, artifacts.targetPath, config);
+                await this.generateGenericWindowsImportLibraryIfRequested(ref, artifacts.targetPath, config);
+            }
             this.deployToolchainRuntimeDlls(artifacts.targetPath, config);
             this.deploySdlRuntimeDlls(artifacts.targetPath, sdlPlan);
         }
         return success;
+    }
+    resolveGenericStaticLibraryCommand(ref, targetPath, objectFiles, config) {
+        if (path.extname(targetPath).toLowerCase() === '.lib') {
+            const candidates = [config.archiverPath || '', 'llvm-lib', 'lib'].filter(Boolean).map(resolveExecutableFromPath);
+            const executable = candidates.find((candidate) => { const base = path.basename(candidate).toLowerCase(); return (base === 'lib' || base === 'lib.exe' || base === 'llvm-lib' || base === 'llvm-lib.exe') && fs.existsSync(candidate); });
+            if (!executable) {
+                vscode.window.showErrorMessage('Static .lib build requires lib.exe or llvm-lib. Choose GNU .a or configure a compatible librarian.');
+                return undefined;
+            }
+            return { executable, args: ['/NOLOGO', `/OUT:${targetPath}`, ...objectFiles] };
+        }
+        let executable = resolveExecutableFromPath(config.archiverPath || 'ar');
+        const base = path.basename(executable).toLowerCase();
+        if (base === 'lib' || base === 'lib.exe' || base === 'llvm-lib' || base === 'llvm-lib.exe')
+            executable = resolveExecutableFromPath('ar');
+        return { executable, args: ['rcs', targetPath, ...objectFiles] };
+    }
+    resolveGenericDllImportLibraryFormat(ref, config) {
+        const requested = this.projectSettings.getSettings(ref, this.buildMode).dllImportLibraryFormat;
+        if (requested !== 'auto')
+            return requested;
+        const compiler = path.basename(resolveExecutableFromPath(config.cppCompilerPath || 'g++')).toLowerCase();
+        return compiler === 'cl.exe' || compiler === 'cl' || compiler.includes('clang-cl') ? 'windows-lib' : 'gnu-dll-a';
+    }
+    genericDllImportOutputs(ref, dllPath, config) {
+        const format = this.resolveGenericDllImportLibraryFormat(ref, config);
+        if (format === 'none')
+            return {};
+        const directory = path.dirname(dllPath);
+        const stem = path.basename(dllPath, path.extname(dllPath));
+        const gnuStem = stem.toLowerCase().startsWith('lib') ? stem : `lib${stem}`;
+        const gnuA = path.join(directory, `${gnuStem}.a`);
+        const gnuDllA = path.join(directory, `${gnuStem}.dll.a`);
+        const windowsLib = path.join(directory, `${stem}.lib`);
+        const wantsA = ['gnu-a', 'gnu-both', 'gnu-a-windows-lib', 'all'].includes(format);
+        const wantsDllA = ['gnu-dll-a', 'gnu-both', 'both', 'all'].includes(format);
+        const wantsLib = ['windows-lib', 'gnu-a-windows-lib', 'both', 'all'].includes(format);
+        return {
+            ...(wantsA ? { gnuA } : {}), ...(wantsDllA ? { gnuDllA } : {}), ...(wantsLib ? { windowsLib } : {}),
+            ...(wantsDllA ? { primaryGnu: gnuDllA } : wantsA ? { primaryGnu: gnuA } : {}),
+            ...(wantsA && wantsDllA ? { aliasGnu: gnuA } : {})
+        };
+    }
+    genericDllImportLibraryFlags(ref, targetType, dllPath, config) {
+        if (targetType !== 'Dynamic Link Library')
+            return [];
+        const outputs = this.genericDllImportOutputs(ref, dllPath, config);
+        return outputs.primaryGnu ? [`-Wl,--out-implib,${outputs.primaryGnu}`] : [];
+    }
+    materializeGenericGnuImportAlias(ref, dllPath, config) {
+        const outputs = this.genericDllImportOutputs(ref, dllPath, config);
+        if (!outputs.primaryGnu || !outputs.aliasGnu || !fs.existsSync(outputs.primaryGnu))
+            return;
+        try {
+            fs.copyFileSync(outputs.primaryGnu, outputs.aliasGnu);
+            this.output.appendLine(`[Qt/C++] DLL import library (GNU alias): ${outputs.aliasGnu}`);
+        }
+        catch (error) {
+            this.output.appendLine(`[Qt/C++] Warning: unable to create GNU import-library alias: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    async generateGenericWindowsImportLibraryIfRequested(ref, dllPath, config) {
+        const outputLibrary = this.genericDllImportOutputs(ref, dllPath, config).windowsLib;
+        if (!outputLibrary)
+            return;
+        if (!this.importLibraries) {
+            this.output.appendLine('[Qt/C++] Warning: Windows .lib generation service is unavailable.');
+            return;
+        }
+        const result = await this.importLibraries.generateBuiltDllImportLibrary(ref, dllPath, outputLibrary);
+        this.output.appendLine(`[Qt/C++] DLL import library (.lib): ${result.ok ? outputLibrary : `not generated — ${result.message}`}`);
     }
     diagnoseLinkedLibraries(libraryPaths, objectPaths, config) {
         const messages = [];
@@ -1357,7 +1505,17 @@ class QpmBuildService {
         if (configured) {
             return (0, pathUtils_1.normalizeRuntimePath)(configured);
         }
-        const extension = targetType === 'Dynamic Link Library' ? '.dll' : targetType === 'Static Library' ? '.a' : '.exe';
+        let extension = targetType === 'Dynamic Link Library' ? '.dll' : targetType === 'Static Library' ? '.a' : '.exe';
+        if (targetType === 'Static Library') {
+            const format = this.projectSettings.getSettings(ref, this.buildMode).staticLibraryFormat;
+            if (format === 'windows-lib')
+                extension = '.lib';
+            else if (format === 'auto') {
+                const base = path.basename(resolveExecutableFromPath(this.getCompilerConfiguration().archiverPath || 'ar')).toLowerCase();
+                if (base === 'lib' || base === 'lib.exe' || base === 'llvm-lib' || base === 'llvm-lib.exe')
+                    extension = '.lib';
+            }
+        }
         return path.join(path.dirname(ref.absolutePath), this.getCompilerConfiguration().outputDirectory || 'build', `${ref.name}${extension}`);
     }
     objectPathForSource(sourcePath, projectPath, objectDirectory) {
@@ -2393,6 +2551,9 @@ function inferRequestedArchitecture(compilerPath, flags) {
         return { id: 'arm64', label: 'ARM64', reason: `compiler path ${resolved}` };
     }
     return undefined;
+}
+function installationSafeArchiver(executable) {
+    return resolveExecutableFromPath(executable || 'ar');
 }
 function resolveExecutableFromPath(executable) {
     if (executable.includes('/') || executable.includes('\\')) {

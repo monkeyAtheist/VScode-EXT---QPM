@@ -586,6 +586,16 @@ class QpmWorkspaceService {
         this.parser.removeProjectFromWorkspace(this.workspace.path, projectRef.index);
         this.refresh();
     }
+    async addFilePaths(projectRef, filePaths, folderOverride = '') {
+        if (!projectRef?.exists || filePaths.length === 0)
+            return 0;
+        const normalized = [...new Set(filePaths.map((entry) => path.resolve(entry)))];
+        const count = (0, qtProjectManifest_1.isQtProjectManifestPath)(projectRef.absolutePath)
+            ? this.qtProjects.addFiles(projectRef.absolutePath, normalized)
+            : this.parser.addFilesToProject(projectRef.absolutePath, normalized, folderOverride || undefined);
+        this.refresh();
+        return count;
+    }
     async addFiles(projectRef, folderOverride) {
         const ref = projectRef ?? this.activeProjectRef;
         if (!ref?.exists) {

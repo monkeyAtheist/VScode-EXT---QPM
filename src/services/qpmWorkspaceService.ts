@@ -599,6 +599,16 @@ export class QpmWorkspaceService implements vscode.Disposable {
     this.refresh();
   }
 
+  async addFilePaths(projectRef: QpmWorkspaceProjectRef, filePaths: string[], folderOverride = ''): Promise<number> {
+    if (!projectRef?.exists || filePaths.length === 0) return 0;
+    const normalized = [...new Set(filePaths.map((entry) => path.resolve(entry)))];
+    const count = isQtProjectManifestPath(projectRef.absolutePath)
+      ? this.qtProjects.addFiles(projectRef.absolutePath, normalized)
+      : this.parser.addFilesToProject(projectRef.absolutePath, normalized, folderOverride || undefined);
+    this.refresh();
+    return count;
+  }
+
   async addFiles(projectRef?: QpmWorkspaceProjectRef, folderOverride?: string): Promise<void> {
     const ref = projectRef ?? this.activeProjectRef;
     if (!ref?.exists) {

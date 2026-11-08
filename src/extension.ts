@@ -15,9 +15,11 @@ import { activate as activateQpmLibraryExplorer } from './jcLibEmbedded';
 import { ensureBundledCppLibraryPack } from './services/qpmLibraryPackService';
 import { QpmTemplateService } from './services/qpmTemplateService';
 import { QpmProjectSettingsService } from './services/qpmProjectSettingsService';
+import { QpmImportLibraryService } from './services/qpmImportLibraryService';
 import { QpmSdlService } from './services/qpmSdlService';
 import { BuildSettingsPanel } from './views/buildSettingsPanel';
 import { QtProjectSettingsPanel } from './views/qtProjectSettingsPanel';
+import { LibraryToolsPanel } from './views/libraryToolsPanel';
 import { QuickActionsView } from './views/quickActionsView';
 import { QpmCompletionProvider, QpmSourceSymbol, QpmSymbolService, isSourceOrHeader } from './services/qpmSymbolService';
 import { QpmFunctionPanelService } from './services/qpmFunctionPanelService';
@@ -74,12 +76,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const workspaces = new QpmWorkspaceService(context, parser, installations, templates, sdl, qtProjects, output);
   const qtDesignerWidgets = new QpmQtDesignerWidgetService(workspaces, qtInstallations, qtProjects, output);
   const projectSettings = new QpmProjectSettingsService(workspaces, parser, output);
+  const importLibraries = new QpmImportLibraryService(workspaces, projectSettings, installations, output, qtInstallations);
+  const libraryTools = new LibraryToolsPanel(workspaces);
   const qtTools = new QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new QpmQmlLanguageService(workspaces, qtInstallations, output);
   const qtPython = new QpmQtPythonService(workspaces, output, programOutput);
   const qtDependencies = new QpmQtDependencyService(workspaces, output);
   const instrumentProfiles = new QpmInstrumentProfileService(context.extensionPath, workspaces, output);
-  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, programOutput, qtPython, qtDependencies, buildTrace);
+  const builds = new QpmBuildService(parser, workspaces, qtInstallations, projectSettings, undefined, output, programOutput, qtPython, qtDependencies, buildTrace, importLibraries);
   const debugging = new QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -256,6 +260,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     home,
     buildSettings,
     qtProjectSettings,
+    importLibraries,
+    libraryTools,
     sdl,
     quickActions,
     quickActionsRegistration,
@@ -725,7 +731,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.moveFileToFolder', (node?: FileNode) => node ? workspaces.moveFileToFolder(node.ref, node.file) : undefined),
     register('qpm.compileFile', (node?: FileNode) => node ? builds.compileFile(node.file.absolutePath, node.ref) : undefined),
     register('qpm.generatePrototypes', (node?: FileNode) => node ? workspaces.generatePrototypes(node.ref, node.file) : undefined),
-    register('qpm.prepareDllImportLibraryGeneration', (node?: FileNode) => node ? builds.prepareDllImportLibraryGeneration(node.file.absolutePath) : undefined),
+    register('qpm.prepareDllImportLibraryGeneration', (node?: FileNode) => importLibraries.generateFromHeaderSelection(node, treeView.selection)),
+    register('qpm.generateImportLibraryFromHeaders', (node?: FileNode) => importLibraries.generateFromHeaderSelection(node, treeView.selection)),
+    register('qpm.generateImportLibraryFromDll', (node?: FileNode) => importLibraries.generateFromDll(node?.file.absolutePath, node?.ref)),
+    register('qpm.extractDllDefinitionFile', (node?: FileNode) => importLibraries.extractDefinitionFromDll(node?.file.absolutePath, node?.ref)),
+    register('qpm.openImportLibraryReport', () => importLibraries.openReport()),
+    register('qpm.analyzeDll', (node?: FileNode) => libraryTools.showDllAnalyzer(node?.ref, node?.file.absolutePath)),
+    register('qpm.analyzeLibrary', (node?: FileNode) => libraryTools.showLibraryAnalyzer(node?.ref, node?.file.absolutePath)),
     register('qpm.refreshFileSymbols', () => fileSymbolsProvider.refresh()),
     register('qpm.revealFileSymbol', (symbol?: QpmSourceSymbol) => symbol ? fileSymbolsProvider.reveal(symbol) : undefined),
     register('qpm.copyFileSymbol', (symbol?: QpmSourceSymbol) => fileSymbolsProvider.copySymbol(symbol)),

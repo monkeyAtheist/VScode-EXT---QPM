@@ -40,6 +40,7 @@ const PATH_BROWSE_FIELDS: Record<string, { kind: BrowseFieldKind; relative?: boo
   sourceDirectory: { kind: 'folder', relative: true },
   projectFile: { kind: 'file', relative: true },
   precompiledHeader: { kind: 'file', relative: true },
+  importLibraryGeneratorPath: { kind: 'file' },
   workingDirectory: { kind: 'folder', relative: true },
   externalProcessPath: { kind: 'file' },
   platformSysroot: { kind: 'folder' },
@@ -518,6 +519,7 @@ const SETTINGS_PAGES = [
   { id: 'overview', label: 'Overview', description: 'Project status and the most common QPM actions.' },
   { id: 'project', label: 'Project', description: 'Target identity, language settings and project file summary.' },
   { id: 'build', label: 'Build', description: 'Qt kit, modules, backend, compiler, linker and build-step configuration.' },
+  { id: 'libraries', label: 'Libraries', description: 'Static/import-library formats, Windows .lib generation and binary analyzers.' },
   { id: 'run', label: 'Run & Deploy', description: 'Local execution and standalone runtime deployment.' },
   { id: 'debug', label: 'Debug & Diagnostics', description: 'Native/QML debugging, profiling and diagnostics.' },
   { id: 'qt', label: 'Qt & Languages', description: 'QML language tooling and Qt for Python / PySide6.' },
@@ -1077,6 +1079,8 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     buildProfile.unityBuild = payload.unityBuild === true;
     buildProfile.useResponseFiles = payload.useResponseFiles === true;
     buildProfile.linkage = normalizeQtLinkageMode(payload.linkage);
+    buildProfile.staticLibraryFormat = normalizeQtStaticLibraryFormat(payload.staticLibraryFormat);
+    buildProfile.dllImportLibraryFormat = normalizeQtDllImportLibraryFormat(payload.dllImportLibraryFormat);
     buildProfile.defines = normalizeList(payload.variantDefines);
     buildProfile.compilerFlags = normalizeList(payload.compilerFlags);
     buildProfile.linkerFlags = normalizeList(payload.linkerFlags);
@@ -1248,6 +1252,11 @@ export class QtProjectSettingsPanel implements vscode.Disposable {
     projectSettings.preBuildActions = normalizeList(payload.preBuildActions);
     projectSettings.customBuildActions = normalizeList(payload.customBuildActions);
     projectSettings.postBuildActions = normalizeList(payload.postBuildActions);
+    projectSettings.importLibraries.generator = normalizeImportLibraryGenerator(payload.importLibraryGenerator);
+    projectSettings.importLibraries.generatorPath = String(payload.importLibraryGeneratorPath ?? '').trim();
+    projectSettings.importLibraries.architecture = normalizeImportLibraryArchitecture(payload.importLibraryArchitecture);
+    projectSettings.importLibraries.outputDirectory = String(payload.importLibraryOutputDirectory ?? 'lib').trim() || 'lib';
+    projectSettings.importLibraries.keepDefinitionFile = payload.importLibraryKeepDefinitionFile === true;
     for (const mode of this.variant === 'release' ? ['release', 'release64'] as QpmBuildMode[] : ['debug', 'debug64'] as QpmBuildMode[]) {
       this.settings.setSettings(ref, cloneProjectSettings(projectSettings), mode);
     }
@@ -1475,6 +1484,33 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   <div class="settings-subsection"><h3>Preprocessor</h3><div class="fields">${area('Variant defines', 'variantDefines', buildVariant.defines, true)}</div></div>
   <div class="settings-subsection"><h3>Compiler</h3><div class="fields">${area('Compiler flags', 'compilerFlags', buildVariant.compilerFlags, true)}</div></div>
   <div class="settings-subsection"><h3>Linker</h3><div class="fields">${area('Linker flags', 'linkerFlags', buildVariant.linkerFlags, true)}</div></div>
+</section>
+<section id="section-library-formats" data-settings-section data-settings-page="libraries" data-settings-title="Library output formats" class="card wide"><h2>${sectionHeading('compiler','Library output formats')}</h2>
+  <div class="fields">
+    ${manifest.kind === 'static-library'
+      ? selectField('Static library format (Direct backend)', 'staticLibraryFormat', `<option value="auto" ${buildProfile.staticLibraryFormat === 'auto' ? 'selected' : ''}>Automatic</option><option value="gnu-a" ${buildProfile.staticLibraryFormat === 'gnu-a' ? 'selected' : ''}>GNU / LLVM archive (.a)</option><option value="windows-lib" ${buildProfile.staticLibraryFormat === 'windows-lib' ? 'selected' : ''}>Windows COFF static library (.lib)</option>`)
+      : `<input type="hidden" id="staticLibraryFormat" value="${escapeAttribute(buildProfile.staticLibraryFormat)}">`}
+    ${manifest.kind === 'shared-library'
+      ? selectField('DLL import-library outputs (Direct backend)', 'dllImportLibraryFormat', `<option value="auto" ${buildProfile.dllImportLibraryFormat === 'auto' ? 'selected' : ''}>Automatic</option><option value="gnu-dll-a" ${buildProfile.dllImportLibraryFormat === 'gnu-dll-a' ? 'selected' : ''}>GNU import library (.dll.a)</option><option value="gnu-a" ${buildProfile.dllImportLibraryFormat === 'gnu-a' ? 'selected' : ''}>GNU legacy import library (.a)</option><option value="windows-lib" ${buildProfile.dllImportLibraryFormat === 'windows-lib' ? 'selected' : ''}>Windows import library (.lib)</option><option value="gnu-both" ${buildProfile.dllImportLibraryFormat === 'gnu-both' ? 'selected' : ''}>GNU .dll.a + .a</option><option value="both" ${buildProfile.dllImportLibraryFormat === 'both' ? 'selected' : ''}>GNU .dll.a + Windows .lib</option><option value="gnu-a-windows-lib" ${buildProfile.dllImportLibraryFormat === 'gnu-a-windows-lib' ? 'selected' : ''}>GNU .a + Windows .lib</option><option value="all" ${buildProfile.dllImportLibraryFormat === 'all' ? 'selected' : ''}>All: .dll.a + .a + .lib</option><option value="none" ${buildProfile.dllImportLibraryFormat === 'none' ? 'selected' : ''}>No import library</option>`)
+      : `<input type="hidden" id="dllImportLibraryFormat" value="${escapeAttribute(buildProfile.dllImportLibraryFormat)}">`}
+  </div>
+  ${manifest.kind !== 'static-library' && manifest.kind !== 'shared-library' ? '<p class="muted">This target is an application/test target, so no library artifact-format selector applies. The import-library generation and analyzers below remain available for external SDK libraries.</p>' : ''}
+  <p class="muted">These format selectors affect QPM's Direct backend. qmake and CMake keep authority over their own target/import-library generation. A Windows .lib static archive requires lib.exe or llvm-lib; a DLL .lib is generated from the built DLL export table.</p>
+</section>
+<section id="section-import-library-generation" data-settings-section data-settings-page="libraries" data-settings-title="Windows import-library generation" class="card wide"><h2>${sectionHeading('compiler','Windows import-library generation')}</h2>
+  <div class="fields">
+    ${selectField('Generator', 'importLibraryGenerator', `<option value="auto" ${projectSettings.importLibraries.generator === 'auto' ? 'selected' : ''}>Automatic</option><option value="gnu-dlltool" ${projectSettings.importLibraries.generator === 'gnu-dlltool' ? 'selected' : ''}>GNU dlltool</option><option value="llvm-dlltool" ${projectSettings.importLibraries.generator === 'llvm-dlltool' ? 'selected' : ''}>LLVM llvm-dlltool</option><option value="msvc-lib" ${projectSettings.importLibraries.generator === 'msvc-lib' ? 'selected' : ''}>Microsoft lib.exe</option><option value="llvm-lib" ${projectSettings.importLibraries.generator === 'llvm-lib' ? 'selected' : ''}>LLVM llvm-lib</option>`)}
+    ${field('Generator executable override', 'importLibraryGeneratorPath', projectSettings.importLibraries.generatorPath)}
+    ${selectField('Header target architecture', 'importLibraryArchitecture', `<option value="auto" ${projectSettings.importLibraries.architecture === 'auto' ? 'selected' : ''}>Automatic</option><option value="x86" ${projectSettings.importLibraries.architecture === 'x86' ? 'selected' : ''}>x86 / 32-bit</option><option value="x64" ${projectSettings.importLibraries.architecture === 'x64' ? 'selected' : ''}>x64 / 64-bit</option><option value="arm64" ${projectSettings.importLibraries.architecture === 'arm64' ? 'selected' : ''}>ARM64</option>`)}
+    ${field('Default output directory', 'importLibraryOutputDirectory', projectSettings.importLibraries.outputDirectory)}
+  </div>
+  <div class="checks">${check('importLibraryKeepDefinitionFile','Keep generated .def file',projectSettings.importLibraries.keepDefinitionFile)}</div>
+  <div class="actions" style="margin-top:12px"><button type="button" class="secondary" data-run-command="qpm.generateImportLibraryFromHeaders">Generate .lib from Header(s)...</button><button type="button" class="secondary" data-run-command="qpm.generateImportLibraryFromDll">Generate .lib from DLL...</button><button type="button" class="secondary" data-run-command="qpm.extractDllDefinitionFile">Extract DLL exports (.def)...</button><button type="button" class="secondary" data-run-command="qpm.openImportLibraryReport">Open last report</button></div>
+  <p class="muted">Header generation is intentionally conservative for C++ decorated names. DLL generation reads the real PE export table and preserves exported decorated names.</p>
+</section>
+<section id="section-library-analyzers" data-settings-section data-settings-page="libraries" data-settings-title="DLL and archive analyzers" class="card wide"><h2>${sectionHeading('compiler','DLL / .lib / .a analyzers')}</h2>
+  <p class="muted">Inspect PE metadata, exports/imports, resources and PDB CodeView information for DLLs; inspect archive members, COFF/ELF/LLVM bitcode symbols, import-object descriptors and referenced runtime DLL names for .lib/.a archives.</p>
+  <div class="actions"><button type="button" class="secondary" data-run-command="qpm.analyzeDll">Open DLL Analyzer...</button><button type="button" class="secondary" data-run-command="qpm.analyzeLibrary">Open .a / .lib Analyzer...</button></div>
 </section>
 <section id="section-run" data-settings-section data-settings-page="run" data-settings-title="Run profile" class="card wide"><h2>${sectionHeading('run','Run')}</h2><div class="fields">
   ${field('Command-line arguments', 'runArguments', runArguments, true)}
@@ -2079,6 +2115,7 @@ const activatePage = (pageId, scrollToTop = false) => {
     if (first) first.scrollIntoView({ behavior:'smooth', block:'start' });
   }
 };
+document.querySelectorAll('[data-run-command]').forEach((button) => button.addEventListener('click', () => { vscode.postMessage({ type:'runCommand', command:button.dataset.runCommand }); }));
 pageButtons.forEach((button) => button.addEventListener('click', () => activatePage(button.dataset.settingsPageTarget, true)));
 on('sectionNav', 'change', () => { const target = byId(sectionNav.value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
 on('settingsFilter', 'input', applySettingsFilter);
@@ -2094,7 +2131,8 @@ on('save', 'click', () => {
   vscode.postMessage({
     type:'save',
     name:value('name'), targetName:value('targetName'), kind:value('kind'), cppStandard:value('cppStandard'), buildArchitecture:value('buildArchitecture'), buildSystem:value('buildSystem'), parallelJobs:value('parallelJobs'),
-    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'), linkage:value('linkage'),
+    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'), linkage:value('linkage'), staticLibraryFormat:value('staticLibraryFormat'), dllImportLibraryFormat:value('dllImportLibraryFormat'),
+    importLibraryGenerator:value('importLibraryGenerator'), importLibraryGeneratorPath:value('importLibraryGeneratorPath'), importLibraryArchitecture:value('importLibraryArchitecture'), importLibraryOutputDirectory:value('importLibraryOutputDirectory'), importLibraryKeepDefinitionFile:checked('importLibraryKeepDefinitionFile'),
     autoMoc:checked('autoMoc'), autoUic:checked('autoUic'), autoRcc:checked('autoRcc'), generateProjectFiles:checked('generateProjectFiles'), unityBuild:checked('unityBuild'), useResponseFiles:checked('useResponseFiles'), autoDeploy:checked('autoDeploy'), deployTranslations:checked('deployTranslations'), deployOutputDirectory:value('deployOutputDirectory'), deployCleanOutput:checked('deployCleanOutput'), deployCompilerRuntime:checked('deployCompilerRuntime'), deployVerifyStandalone:checked('deployVerifyStandalone'),
     modules:[...document.querySelectorAll('input[name="qtModule"]:checked')].map((input) => input.value),
     defines:value('defines'), includeDirectories:value('includeDirectories'), libraryDirectories:value('libraryDirectories'), libraries:value('libraries'),
@@ -2140,6 +2178,24 @@ function requiredModulesForKind(kind: QtProjectKind): string[] {
     case 'quick-test-application': return ['Core', 'Gui', 'Qml', 'Quick', 'QuickTest', 'Test'];
     default: return ['Core'];
   }
+}
+
+function normalizeQtStaticLibraryFormat(value: unknown): 'auto' | 'gnu-a' | 'windows-lib' {
+  return value === 'gnu-a' || value === 'windows-lib' ? value : 'auto';
+}
+
+function normalizeQtDllImportLibraryFormat(value: unknown): 'auto' | 'gnu-a' | 'gnu-dll-a' | 'windows-lib' | 'gnu-both' | 'gnu-a-windows-lib' | 'both' | 'all' | 'none' {
+  const allowed = ['auto','gnu-a','gnu-dll-a','windows-lib','gnu-both','gnu-a-windows-lib','both','all','none'];
+  return typeof value === 'string' && allowed.includes(value) ? value as any : 'auto';
+}
+
+function normalizeImportLibraryGenerator(value: unknown): 'auto' | 'msvc-lib' | 'llvm-lib' | 'llvm-dlltool' | 'gnu-dlltool' {
+  const allowed = ['auto','msvc-lib','llvm-lib','llvm-dlltool','gnu-dlltool'];
+  return typeof value === 'string' && allowed.includes(value) ? value as any : 'auto';
+}
+
+function normalizeImportLibraryArchitecture(value: unknown): 'auto' | 'x86' | 'x64' | 'arm64' {
+  return value === 'x86' || value === 'x64' || value === 'arm64' ? value : 'auto';
 }
 
 function normalizeQtLinkageMode(value: unknown): 'dynamic' | 'static-runtime' | 'static-qt' {

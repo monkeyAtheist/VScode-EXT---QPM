@@ -80,7 +80,7 @@ exports.hasManagedWindowIcon = hasManagedWindowIcon;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 exports.QT_PROJECT_SUFFIX = '.qtproject.json';
-exports.QT_PROJECT_SCHEMA_VERSION = 19;
+exports.QT_PROJECT_SCHEMA_VERSION = 20;
 const FILE_KEYS = ['sources', 'headers', 'forms', 'resources', 'qml', 'python', 'translations', 'other'];
 function isQtProjectManifestPath(filePath) {
     return filePath.toLowerCase().endsWith(exports.QT_PROJECT_SUFFIX);
@@ -353,8 +353,8 @@ function createDefaultProfiles(qtInstallation) {
     return {
         kits: [{ id: kitId, name: 'Desktop Qt', ...(qtInstallation ? { qtInstallation } : {}), architecture: 'auto', debuggerType: 'auto', deviceType: 'desktop' }],
         builds: [
-            { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' },
-            { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' }
+            { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic', staticLibraryFormat: 'auto', dllImportLibraryFormat: 'auto' },
+            { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic', staticLibraryFormat: 'auto', dllImportLibraryFormat: 'auto' }
         ],
         runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {}, outputMode: 'integrated-terminal' }],
         deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: 'dist', cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
@@ -820,7 +820,9 @@ function normalizeBuildProfile(raw, fallbackVariant, defaultKitId, fallback) {
         precompiledHeader: normalizeOptionalRelativePath(optionalString(value.precompiledHeader)),
         unityBuild: booleanValue(value.unityBuild, fallback.unityBuild),
         useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles),
-        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage)
+        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage),
+        staticLibraryFormat: normalizeQtStaticLibraryFormat(value.staticLibraryFormat, fallback.staticLibraryFormat),
+        dllImportLibraryFormat: normalizeQtDllImportLibraryFormat(value.dllImportLibraryFormat, fallback.dllImportLibraryFormat)
     };
 }
 function normalizeRunProfile(raw, fallbackId, buildProfileId) {
@@ -1096,6 +1098,13 @@ function normalizeKind(value, manifestPath) {
     if (typeof value === 'string' && allowed.includes(value))
         return value;
     throw new Error(`Invalid Qt project manifest ${manifestPath}: unsupported kind ${String(value)}.`);
+}
+function normalizeQtStaticLibraryFormat(value, fallback = 'auto') {
+    return value === 'gnu-a' || value === 'windows-lib' || value === 'auto' ? value : fallback;
+}
+function normalizeQtDllImportLibraryFormat(value, fallback = 'auto') {
+    const allowed = new Set(['auto', 'gnu-a', 'gnu-dll-a', 'windows-lib', 'gnu-both', 'gnu-a-windows-lib', 'both', 'all', 'none']);
+    return allowed.has(value) ? value : fallback;
 }
 function defaultTestingConfiguration(kind) {
     const framework = kind === 'test-application'

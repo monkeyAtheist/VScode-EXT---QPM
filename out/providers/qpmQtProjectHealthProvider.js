@@ -165,6 +165,17 @@ Generated: ${buildProfile.generatedDirectory}
 Kit profile: ${buildProfile.kitId}
 Tool: ${backendTool ?? 'not resolved'}
 Parallel jobs: ${buildProfile.parallelJobs > 0 ? buildProfile.parallelJobs : 'automatic'}`, buildProfile.system === 'direct' ? 'qpm.editBuildSettings' : 'qpm.configureQtBackend'));
+            if (manifest.kind === 'static-library') {
+                const requested = buildProfile.staticLibraryFormat;
+                const archiver = installation?.toolchain.archiverPath ?? '';
+                const archiverBase = path.basename(archiver).toLowerCase();
+                const compatibleLibArchiver = archiverBase === 'lib' || archiverBase === 'lib.exe' || archiverBase === 'llvm-lib' || archiverBase === 'llvm-lib.exe';
+                const severity = buildProfile.system === 'direct' && requested === 'windows-lib' && !compatibleLibArchiver ? 'warning' : 'ok';
+                items.push(health('library-format', 'Static library output', requested, severity, `Backend: ${buildProfile.system}\nRequested format: ${requested}\nArchiver: ${archiver || 'automatic'}\nDirect backend honors the QPM format selector; qmake/CMake use their native generator/toolchain output rules.`, 'qpm.editBuildSettings'));
+            }
+            else if (manifest.kind === 'shared-library') {
+                items.push(health('library-format', 'DLL import-library outputs', buildProfile.dllImportLibraryFormat, 'ok', `Backend: ${buildProfile.system}\nRequested outputs: ${buildProfile.dllImportLibraryFormat}\nDirect backend can produce GNU .dll.a/.a and optionally a Windows .lib generated from the linked DLL export table. qmake/CMake retain authority over their own import-library artifacts.`, 'qpm.editBuildSettings'));
+            }
             items.push(health('files', 'Project files', missingFiles.length ? `${missingFiles.length} missing / ${allFiles.length}` : `${allFiles.length} files available`, missingFiles.length ? 'error' : 'ok', missingFiles.length ? missingFiles.join('\n') : 'All manifest files exist.', 'qpm.refresh'));
             const cppConfigPath = path.join(projectRoot, '.vscode', 'c_cpp_properties.json');
             const compileDbPath = path.join(projectRoot, 'compile_commands.json');

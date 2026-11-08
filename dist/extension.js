@@ -1896,7 +1896,7 @@ var require_qtProjectManifest = __commonJS({
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
     exports2.QT_PROJECT_SUFFIX = ".qtproject.json";
-    exports2.QT_PROJECT_SCHEMA_VERSION = 19;
+    exports2.QT_PROJECT_SCHEMA_VERSION = 20;
     var FILE_KEYS = ["sources", "headers", "forms", "resources", "qml", "python", "translations", "other"];
     function isQtProjectManifestPath(filePath) {
       return filePath.toLowerCase().endsWith(exports2.QT_PROJECT_SUFFIX);
@@ -2165,8 +2165,8 @@ var require_qtProjectManifest = __commonJS({
       return {
         kits: [{ id: kitId, name: "Desktop Qt", ...qtInstallation ? { qtInstallation } : {}, architecture: "auto", debuggerType: "auto", deviceType: "desktop" }],
         builds: [
-          { id: debugId, name: "Debug", variant: "debug", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: [], compilerFlags: ["-O0", "-g"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" },
-          { id: releaseId, name: "Release", variant: "release", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: ["QT_NO_DEBUG"], compilerFlags: ["-O2"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic" }
+          { id: debugId, name: "Debug", variant: "debug", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: [], compilerFlags: ["-O0", "-g"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic", staticLibraryFormat: "auto", dllImportLibraryFormat: "auto" },
+          { id: releaseId, name: "Release", variant: "release", kitId, system: "direct", cppStandard: "c++17", outputDirectory: "build", generatedDirectory: "generated", defines: ["QT_NO_DEBUG"], compilerFlags: ["-O2"], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: ".", projectFile: "", cmakeConfigurePreset: "", cmakeBuildPreset: "", generateProjectFiles: true, precompiledHeader: "", unityBuild: false, useResponseFiles: true, linkage: "dynamic", staticLibraryFormat: "auto", dllImportLibraryFormat: "auto" }
         ],
         runs: [{ id: "default-run", name: "Desktop Run", buildProfileId: debugId, arguments: "", workingDirectory: "", environment: {}, outputMode: "integrated-terminal" }],
         deploys: [{ id: "desktop-deploy", name: "Desktop Deploy", buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: "dist", cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
@@ -2632,7 +2632,9 @@ var require_qtProjectManifest = __commonJS({
         precompiledHeader: normalizeOptionalRelativePath(optionalString(value.precompiledHeader)),
         unityBuild: booleanValue(value.unityBuild, fallback.unityBuild),
         useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles),
-        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage)
+        linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage),
+        staticLibraryFormat: normalizeQtStaticLibraryFormat(value.staticLibraryFormat, fallback.staticLibraryFormat),
+        dllImportLibraryFormat: normalizeQtDllImportLibraryFormat(value.dllImportLibraryFormat, fallback.dllImportLibraryFormat)
       };
     }
     function normalizeRunProfile(raw, fallbackId, buildProfileId) {
@@ -2924,6 +2926,13 @@ var require_qtProjectManifest = __commonJS({
       if (typeof value === "string" && allowed.includes(value))
         return value;
       throw new Error(`Invalid Qt project manifest ${manifestPath}: unsupported kind ${String(value)}.`);
+    }
+    function normalizeQtStaticLibraryFormat(value, fallback = "auto") {
+      return value === "gnu-a" || value === "windows-lib" || value === "auto" ? value : fallback;
+    }
+    function normalizeQtDllImportLibraryFormat(value, fallback = "auto") {
+      const allowed = /* @__PURE__ */ new Set(["auto", "gnu-a", "gnu-dll-a", "windows-lib", "gnu-both", "gnu-a-windows-lib", "both", "all", "none"]);
+      return allowed.has(value) ? value : fallback;
     }
     function defaultTestingConfiguration(kind) {
       const framework = kind === "test-application" ? "qttest" : kind === "quick-test-application" ? "qtquicktest" : "auto";
@@ -4228,7 +4237,8 @@ Generated Qt artifact \u2014 changes may be overwritten on the next build.`;
       const kind = file.type === "CSource" ? "source" : extension === ".ui" ? "form" : extension === ".qrc" ? "resource" : extension === ".qml" || extension === ".js" || extension === ".mjs" ? "qml" : extension === ".py" || extension === ".pyi" ? "python" : extension === ".ts" || extension === ".qm" ? "translation" : isPanel(file) ? "panel" : isFunctionPanel(file) ? "functionPanel" : file.type === "Include" ? "header" : file.type === "Library" ? "library" : "other";
       const build = file.excluded ? "excluded" : "included";
       const obj = file.type === "CSource" ? file.compileIntoObjectFile ? "objOn" : "objOff" : "objNA";
-      return `qpmFile.${kind}.${build}.${obj}`;
+      const extensionTag = extension ? `.ext-${extension.slice(1).replace(/[^a-z0-9]+/g, "-")}` : "";
+      return `qpmFile.${kind}.${build}.${obj}${extensionTag}`;
     }
     function statusDescription(file) {
       const parts = [];
@@ -6469,6 +6479,9 @@ var require_qpmQtDirectBuildService = __commonJS({
         precompiledHeaderCopyPath = path2.join(generatedDirectory, "qpm_precompiled_header.h");
         precompiledHeaderOutputPath = `${precompiledHeaderCopyPath}.gch`;
       }
+      const defaultTargetPath = (0, qtProjectManifest_12.qtTargetPath)(manifestPath, mode, manifest);
+      const targetPath = manifest.kind === "static-library" && buildProfile.staticLibraryFormat === "windows-lib" ? changeExtension(defaultTargetPath, ".lib") : defaultTargetPath;
+      const dllOutputs = resolveDirectDllImportOutputs(manifest.kind, buildProfile.dllImportLibraryFormat, targetPath);
       return {
         manifestPath,
         manifest,
@@ -6476,8 +6489,10 @@ var require_qpmQtDirectBuildService = __commonJS({
         installation,
         mode,
         projectDirectory,
-        targetPath: (0, qtProjectManifest_12.qtTargetPath)(manifestPath, mode, manifest),
-        importLibraryPath: (0, qtProjectManifest_12.qtImportLibraryPath)(manifestPath, mode, manifest),
+        targetPath,
+        importLibraryPath: dllOutputs.primaryGnuPath,
+        gnuImportLibraryAliasPath: dllOutputs.gnuAliasPath,
+        windowsImportLibraryPath: dllOutputs.windowsLibPath,
         objectDirectory,
         generatedDirectory,
         sourceFiles: files.sources,
@@ -6505,6 +6520,28 @@ var require_qpmQtDirectBuildService = __commonJS({
         warnings,
         autoDetectedModules
       };
+    }
+    function changeExtension(filePath, extension) {
+      return path2.join(path2.dirname(filePath), `${path2.basename(filePath, path2.extname(filePath))}${extension}`);
+    }
+    function resolveDirectDllImportOutputs(kind, format, dllPath) {
+      if (kind !== "shared-library" || process.platform !== "win32")
+        return {};
+      const effective = format === "auto" ? "gnu-dll-a" : format;
+      if (effective === "none")
+        return {};
+      const directory = path2.dirname(dllPath);
+      const stem = path2.basename(dllPath, path2.extname(dllPath));
+      const gnuBase = stem.toLowerCase().startsWith("lib") ? stem : `lib${stem}`;
+      const gnuDllA = path2.join(directory, `${gnuBase}.dll.a`);
+      const gnuA = path2.join(directory, `${gnuBase}.a`);
+      const windowsLib = path2.join(directory, `${stem}.lib`);
+      const wantsGnuDllA = effective === "gnu-dll-a" || effective === "gnu-both" || effective === "both" || effective === "all";
+      const wantsGnuA = effective === "gnu-a" || effective === "gnu-both" || effective === "gnu-a-windows-lib" || effective === "all";
+      const wantsWindowsLib = effective === "windows-lib" || effective === "gnu-a-windows-lib" || effective === "both" || effective === "all";
+      const primaryGnuPath = wantsGnuDllA ? gnuDllA : wantsGnuA ? gnuA : void 0;
+      const gnuAliasPath = wantsGnuDllA && wantsGnuA ? gnuA : void 0;
+      return { primaryGnuPath, gnuAliasPath, windowsLibPath: wantsWindowsLib ? windowsLib : void 0 };
     }
     function qtCompileArguments(plan, sourcePath, objectPath) {
       const dependencyPath = qtDependencyPathForObject(objectPath);
@@ -7397,6 +7434,21 @@ Generated: ${buildProfile.generatedDirectory}
 Kit profile: ${buildProfile.kitId}
 Tool: ${backendTool ?? "not resolved"}
 Parallel jobs: ${buildProfile.parallelJobs > 0 ? buildProfile.parallelJobs : "automatic"}`, buildProfile.system === "direct" ? "qpm.editBuildSettings" : "qpm.configureQtBackend"));
+          if (manifest.kind === "static-library") {
+            const requested = buildProfile.staticLibraryFormat;
+            const archiver = installation?.toolchain.archiverPath ?? "";
+            const archiverBase = path2.basename(archiver).toLowerCase();
+            const compatibleLibArchiver = archiverBase === "lib" || archiverBase === "lib.exe" || archiverBase === "llvm-lib" || archiverBase === "llvm-lib.exe";
+            const severity = buildProfile.system === "direct" && requested === "windows-lib" && !compatibleLibArchiver ? "warning" : "ok";
+            items.push(health("library-format", "Static library output", requested, severity, `Backend: ${buildProfile.system}
+Requested format: ${requested}
+Archiver: ${archiver || "automatic"}
+Direct backend honors the QPM format selector; qmake/CMake use their native generator/toolchain output rules.`, "qpm.editBuildSettings"));
+          } else if (manifest.kind === "shared-library") {
+            items.push(health("library-format", "DLL import-library outputs", buildProfile.dllImportLibraryFormat, "ok", `Backend: ${buildProfile.system}
+Requested outputs: ${buildProfile.dllImportLibraryFormat}
+Direct backend can produce GNU .dll.a/.a and optionally a Windows .lib generated from the linked DLL export table. qmake/CMake retain authority over their own import-library artifacts.`, "qpm.editBuildSettings"));
+          }
           items.push(health("files", "Project files", missingFiles.length ? `${missingFiles.length} missing / ${allFiles.length}` : `${allFiles.length} files available`, missingFiles.length ? "error" : "ok", missingFiles.length ? missingFiles.join("\n") : "All manifest files exist.", "qpm.refresh"));
           const cppConfigPath = path2.join(projectRoot, ".vscode", "c_cpp_properties.json");
           const compileDbPath = path2.join(projectRoot, "compile_commands.json");
@@ -10011,6 +10063,7 @@ var require_qpmBuildService = __commonJS({
       qtPython;
       qtDependencies;
       buildTrace;
+      importLibraries;
       qtBackends;
       launchedApplications = /* @__PURE__ */ new Map();
       buildDiagnostics = vscode2.languages.createDiagnosticCollection("qpm-build");
@@ -10021,7 +10074,7 @@ var require_qpmBuildService = __commonJS({
       buildWarnings = 0;
       failedPhase = "";
       firstBuildError;
-      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace) {
+      constructor(parser, workspaces, qtInstallations, projectSettings, _breakpoints, output, programOutput, qtPython, qtDependencies, buildTrace, importLibraries) {
         this.parser = parser;
         this.workspaces = workspaces;
         this.qtInstallations = qtInstallations;
@@ -10031,6 +10084,7 @@ var require_qpmBuildService = __commonJS({
         this.qtPython = qtPython;
         this.qtDependencies = qtDependencies;
         this.buildTrace = buildTrace;
+        this.importLibraries = importLibraries;
         this.qtBackends = new qpmQtBuildBackendService_1.QpmQtBuildBackendService(output);
       }
       dispose() {
@@ -10276,8 +10330,22 @@ var require_qpmBuildService = __commonJS({
           return;
         }
         const candidates = /* @__PURE__ */ new Set([artifacts.targetPath]);
-        if (path2.extname(artifacts.targetPath).toLowerCase() === ".exe")
+        const targetExtension = path2.extname(artifacts.targetPath).toLowerCase();
+        if (targetExtension === ".exe")
           candidates.add(replaceExtension(artifacts.targetPath, ".pdb"));
+        if (targetExtension === ".dll") {
+          const directory = path2.dirname(artifacts.targetPath);
+          const stem = path2.basename(artifacts.targetPath, ".dll");
+          const gnuStem = stem.toLowerCase().startsWith("lib") ? stem : `lib${stem}`;
+          for (const candidate of [
+            path2.join(directory, `${gnuStem}.dll.a`),
+            path2.join(directory, `${gnuStem}.a`),
+            path2.join(directory, `${stem}.lib`),
+            path2.join(directory, `${stem}.def`),
+            path2.join(directory, `${stem}.exp`)
+          ])
+            candidates.add(candidate);
+        }
         let removed = 0;
         for (const candidate of candidates) {
           if (!fs.existsSync(candidate))
@@ -11058,8 +11126,10 @@ var require_qpmBuildService = __commonJS({
         this.output.appendLine("");
         const objectFiles = [...sourceObjectFiles, ...plan.additionalObjectFiles];
         if (manifest.kind === "static-library") {
-          const archiver = installation.toolchain.archiverPath || "ar";
-          const archived = await this.spawnTool(archiver, ["rcs", plan.targetPath, ...objectFiles], plan.projectDirectory, `Archive ${path2.basename(plan.targetPath)}`);
+          const archiveCommand = this.resolveQtDirectStaticLibraryCommand(plan, objectFiles);
+          if (!archiveCommand)
+            return false;
+          const archived = await this.spawnTool(archiveCommand.executable, archiveCommand.args, plan.projectDirectory, `Archive ${path2.basename(plan.targetPath)}`);
           return archived && this.validateProducedFile(plan.targetPath, "archive output");
         }
         const rawLinkArguments = (0, qpmQtDirectBuildService_1.qtLinkArguments)(plan, objectFiles);
@@ -11086,12 +11156,66 @@ var require_qpmBuildService = __commonJS({
           return false;
         if (plan.importLibraryPath && !this.validateProducedFile(plan.importLibraryPath, "import library output"))
           return false;
+        this.materializeQtDirectGnuImportAlias(plan);
+        await this.generateQtDirectWindowsImportLibrary(ref, plan);
         return true;
+      }
+      resolveQtDirectStaticLibraryCommand(plan, objectFiles) {
+        if (path2.extname(plan.targetPath).toLowerCase() !== ".lib") {
+          let executable2 = installationSafeArchiver(plan.installation.toolchain.archiverPath || "ar");
+          const base = path2.basename(executable2).toLowerCase();
+          if (base === "lib" || base === "lib.exe" || base === "llvm-lib" || base === "llvm-lib.exe") {
+            executable2 = resolveExecutableFromPath("llvm-ar");
+            if (executable2 === "llvm-ar" && !fs.existsSync(executable2))
+              executable2 = resolveExecutableFromPath("ar");
+          }
+          return { executable: executable2, args: ["rcs", plan.targetPath, ...objectFiles] };
+        }
+        const candidates = [plan.installation.toolchain.archiverPath || "", "llvm-lib", "lib"].filter(Boolean).map(resolveExecutableFromPath);
+        const executable = candidates.find((candidate) => {
+          const base = path2.basename(candidate).toLowerCase();
+          return (base === "lib" || base === "lib.exe" || base === "llvm-lib" || base === "llvm-lib.exe") && fs.existsSync(candidate);
+        });
+        if (!executable) {
+          const message = "Static .lib output requires Microsoft lib.exe or LLVM llvm-lib. Select a compatible librarian or choose GNU/LLVM .a.";
+          this.output.appendLine(`[Qt/C++] ${message}`);
+          vscode2.window.showErrorMessage(message);
+          return void 0;
+        }
+        return { executable, args: ["/NOLOGO", `/OUT:${plan.targetPath}`, ...objectFiles] };
+      }
+      materializeQtDirectGnuImportAlias(plan) {
+        if (!plan.gnuImportLibraryAliasPath || !plan.importLibraryPath)
+          return;
+        if (!fs.existsSync(plan.importLibraryPath)) {
+          this.output.appendLine(`[Qt/C++] Warning: requested GNU import-library alias was not created because ${plan.importLibraryPath} is missing.`);
+          return;
+        }
+        try {
+          fs.copyFileSync(plan.importLibraryPath, plan.gnuImportLibraryAliasPath);
+          this.output.appendLine(`[Qt/C++] DLL import library (GNU alias): ${plan.gnuImportLibraryAliasPath}`);
+        } catch (error) {
+          this.output.appendLine(`[Qt/C++] Warning: unable to create GNU import-library alias: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      async generateQtDirectWindowsImportLibrary(ref, plan) {
+        if (!plan.windowsImportLibraryPath || plan.manifest.kind !== "shared-library")
+          return;
+        if (!this.importLibraries) {
+          this.output.appendLine("[Qt/C++] Warning: Windows .lib generation service is unavailable; the DLL itself was built successfully.");
+          return;
+        }
+        const result = await this.importLibraries.generateBuiltDllImportLibrary(ref, plan.targetPath, plan.windowsImportLibraryPath);
+        this.output.appendLine(`[Qt/C++] DLL import library (.lib): ${result.ok ? plan.windowsImportLibraryPath : `not generated \u2014 ${result.message}`}`);
+        if (!result.ok)
+          vscode2.window.showWarningMessage(`DLL built, but Windows import library was not generated: ${result.message}`);
       }
       async linkArtifacts(ref, targetType, artifacts, files, config) {
         if (targetType === "Static Library") {
-          const args2 = ["rcs", artifacts.targetPath, ...artifacts.objectFiles];
-          return await this.spawnTool(config.archiverPath || "ar", args2, path2.dirname(ref.absolutePath), `Archive ${path2.basename(artifacts.targetPath)}`);
+          const archiveCommand = this.resolveGenericStaticLibraryCommand(ref, artifacts.targetPath, artifacts.objectFiles, config);
+          if (!archiveCommand)
+            return false;
+          return await this.spawnTool(archiveCommand.executable, archiveCommand.args, path2.dirname(ref.absolutePath), `Archive ${path2.basename(artifacts.targetPath)}`);
         }
         const fileLibraries = files.filter((file) => !file.excluded && isLibrary(file.absolutePath)).map((file) => file.absolutePath);
         const diagnostics = this.diagnoseLinkedLibraries(fileLibraries, artifacts.objectFiles, config);
@@ -11118,6 +11242,7 @@ var require_qpmBuildService = __commonJS({
           ...this.modeFlags(config),
           ...this.runtimeLinkFlags(config, targetType, sdlPlan),
           ...targetType === "Dynamic Link Library" ? ["-shared"] : [],
+          ...this.genericDllImportLibraryFlags(ref, targetType, artifacts.targetPath, config),
           ...artifacts.objectFiles,
           ...fileLibraries,
           ...config.libraryPaths.flatMap((value) => ["-L", resolveAgainstProject(value, ref.absolutePath)]),
@@ -11129,10 +11254,89 @@ var require_qpmBuildService = __commonJS({
         ];
         const success = await this.spawnTool(config.cppCompilerPath || "g++", args, path2.dirname(ref.absolutePath), `Link ${path2.basename(artifacts.targetPath)}`);
         if (success) {
+          if (targetType === "Dynamic Link Library") {
+            this.materializeGenericGnuImportAlias(ref, artifacts.targetPath, config);
+            await this.generateGenericWindowsImportLibraryIfRequested(ref, artifacts.targetPath, config);
+          }
           this.deployToolchainRuntimeDlls(artifacts.targetPath, config);
           this.deploySdlRuntimeDlls(artifacts.targetPath, sdlPlan);
         }
         return success;
+      }
+      resolveGenericStaticLibraryCommand(ref, targetPath, objectFiles, config) {
+        if (path2.extname(targetPath).toLowerCase() === ".lib") {
+          const candidates = [config.archiverPath || "", "llvm-lib", "lib"].filter(Boolean).map(resolveExecutableFromPath);
+          const executable2 = candidates.find((candidate) => {
+            const base2 = path2.basename(candidate).toLowerCase();
+            return (base2 === "lib" || base2 === "lib.exe" || base2 === "llvm-lib" || base2 === "llvm-lib.exe") && fs.existsSync(candidate);
+          });
+          if (!executable2) {
+            vscode2.window.showErrorMessage("Static .lib build requires lib.exe or llvm-lib. Choose GNU .a or configure a compatible librarian.");
+            return void 0;
+          }
+          return { executable: executable2, args: ["/NOLOGO", `/OUT:${targetPath}`, ...objectFiles] };
+        }
+        let executable = resolveExecutableFromPath(config.archiverPath || "ar");
+        const base = path2.basename(executable).toLowerCase();
+        if (base === "lib" || base === "lib.exe" || base === "llvm-lib" || base === "llvm-lib.exe")
+          executable = resolveExecutableFromPath("ar");
+        return { executable, args: ["rcs", targetPath, ...objectFiles] };
+      }
+      resolveGenericDllImportLibraryFormat(ref, config) {
+        const requested = this.projectSettings.getSettings(ref, this.buildMode).dllImportLibraryFormat;
+        if (requested !== "auto")
+          return requested;
+        const compiler = path2.basename(resolveExecutableFromPath(config.cppCompilerPath || "g++")).toLowerCase();
+        return compiler === "cl.exe" || compiler === "cl" || compiler.includes("clang-cl") ? "windows-lib" : "gnu-dll-a";
+      }
+      genericDllImportOutputs(ref, dllPath, config) {
+        const format = this.resolveGenericDllImportLibraryFormat(ref, config);
+        if (format === "none")
+          return {};
+        const directory = path2.dirname(dllPath);
+        const stem = path2.basename(dllPath, path2.extname(dllPath));
+        const gnuStem = stem.toLowerCase().startsWith("lib") ? stem : `lib${stem}`;
+        const gnuA = path2.join(directory, `${gnuStem}.a`);
+        const gnuDllA = path2.join(directory, `${gnuStem}.dll.a`);
+        const windowsLib = path2.join(directory, `${stem}.lib`);
+        const wantsA = ["gnu-a", "gnu-both", "gnu-a-windows-lib", "all"].includes(format);
+        const wantsDllA = ["gnu-dll-a", "gnu-both", "both", "all"].includes(format);
+        const wantsLib = ["windows-lib", "gnu-a-windows-lib", "both", "all"].includes(format);
+        return {
+          ...wantsA ? { gnuA } : {},
+          ...wantsDllA ? { gnuDllA } : {},
+          ...wantsLib ? { windowsLib } : {},
+          ...wantsDllA ? { primaryGnu: gnuDllA } : wantsA ? { primaryGnu: gnuA } : {},
+          ...wantsA && wantsDllA ? { aliasGnu: gnuA } : {}
+        };
+      }
+      genericDllImportLibraryFlags(ref, targetType, dllPath, config) {
+        if (targetType !== "Dynamic Link Library")
+          return [];
+        const outputs = this.genericDllImportOutputs(ref, dllPath, config);
+        return outputs.primaryGnu ? [`-Wl,--out-implib,${outputs.primaryGnu}`] : [];
+      }
+      materializeGenericGnuImportAlias(ref, dllPath, config) {
+        const outputs = this.genericDllImportOutputs(ref, dllPath, config);
+        if (!outputs.primaryGnu || !outputs.aliasGnu || !fs.existsSync(outputs.primaryGnu))
+          return;
+        try {
+          fs.copyFileSync(outputs.primaryGnu, outputs.aliasGnu);
+          this.output.appendLine(`[Qt/C++] DLL import library (GNU alias): ${outputs.aliasGnu}`);
+        } catch (error) {
+          this.output.appendLine(`[Qt/C++] Warning: unable to create GNU import-library alias: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      async generateGenericWindowsImportLibraryIfRequested(ref, dllPath, config) {
+        const outputLibrary = this.genericDllImportOutputs(ref, dllPath, config).windowsLib;
+        if (!outputLibrary)
+          return;
+        if (!this.importLibraries) {
+          this.output.appendLine("[Qt/C++] Warning: Windows .lib generation service is unavailable.");
+          return;
+        }
+        const result = await this.importLibraries.generateBuiltDllImportLibrary(ref, dllPath, outputLibrary);
+        this.output.appendLine(`[Qt/C++] DLL import library (.lib): ${result.ok ? outputLibrary : `not generated \u2014 ${result.message}`}`);
       }
       diagnoseLinkedLibraries(libraryPaths, objectPaths, config) {
         const messages = [];
@@ -11248,7 +11452,17 @@ var require_qpmBuildService = __commonJS({
         if (configured) {
           return (0, pathUtils_1.normalizeRuntimePath)(configured);
         }
-        const extension = targetType === "Dynamic Link Library" ? ".dll" : targetType === "Static Library" ? ".a" : ".exe";
+        let extension = targetType === "Dynamic Link Library" ? ".dll" : targetType === "Static Library" ? ".a" : ".exe";
+        if (targetType === "Static Library") {
+          const format = this.projectSettings.getSettings(ref, this.buildMode).staticLibraryFormat;
+          if (format === "windows-lib")
+            extension = ".lib";
+          else if (format === "auto") {
+            const base = path2.basename(resolveExecutableFromPath(this.getCompilerConfiguration().archiverPath || "ar")).toLowerCase();
+            if (base === "lib" || base === "lib.exe" || base === "llvm-lib" || base === "llvm-lib.exe")
+              extension = ".lib";
+          }
+        }
         return path2.join(path2.dirname(ref.absolutePath), this.getCompilerConfiguration().outputDirectory || "build", `${ref.name}${extension}`);
       }
       objectPathForSource(sourcePath, projectPath, objectDirectory) {
@@ -12240,6 +12454,9 @@ var require_qpmBuildService = __commonJS({
         return { id: "arm64", label: "ARM64", reason: `compiler path ${resolved}` };
       }
       return void 0;
+    }
+    function installationSafeArchiver(executable) {
+      return resolveExecutableFromPath(executable || "ar");
     }
     function resolveExecutableFromPath(executable) {
       if (executable.includes("/") || executable.includes("\\")) {
@@ -15322,6 +15539,14 @@ var require_qpmWorkspaceService = __commonJS({
         }
         this.parser.removeProjectFromWorkspace(this.workspace.path, projectRef.index);
         this.refresh();
+      }
+      async addFilePaths(projectRef, filePaths, folderOverride = "") {
+        if (!projectRef?.exists || filePaths.length === 0)
+          return 0;
+        const normalized = [...new Set(filePaths.map((entry) => path2.resolve(entry)))];
+        const count = (0, qtProjectManifest_12.isQtProjectManifestPath)(projectRef.absolutePath) ? this.qtProjects.addFiles(projectRef.absolutePath, normalized) : this.parser.addFilesToProject(projectRef.absolutePath, normalized, folderOverride || void 0);
+        this.refresh();
+        return count;
       }
       async addFiles(projectRef, folderOverride) {
         const ref = projectRef ?? this.activeProjectRef;
@@ -50675,12 +50900,19 @@ var require_qpmProjectSettingsService = __commonJS({
       };
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.QpmProjectSettingsService = void 0;
+    exports2.QpmProjectSettingsService = exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION = void 0;
     var fs = __importStar2(require("fs"));
     var path2 = __importStar2(require("path"));
     var child_process_1 = require("child_process");
     var vscode2 = __importStar2(require("vscode"));
     var qtProjectManifest_12 = require_qtProjectManifest();
+    exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION = {
+      generator: "auto",
+      generatorPath: "",
+      architecture: "auto",
+      outputDirectory: "lib",
+      keepDefinitionFile: true
+    };
     var EMPTY_RUN_SETTINGS = {
       arguments: "",
       workingDirectory: "",
@@ -50700,6 +50932,9 @@ var require_qpmProjectSettingsService = __commonJS({
       getConfigurationPath() {
         const root = this.getConfigurationRoot();
         return root ? path2.join(root, ".vscode", "qpm-build.json") : void 0;
+      }
+      getQpmConfigurationValue(key, fallback) {
+        return vscode2.workspace.getConfiguration("qpm").get(key, fallback);
       }
       getSettings(projectRef, mode = this.buildMode) {
         const store = this.loadStore();
@@ -50884,6 +51119,9 @@ var require_qpmProjectSettingsService = __commonJS({
     exports2.QpmProjectSettingsService = QpmProjectSettingsService;
     function normalizeSettings(value, fallbackRun, nativeActions, nativeBuildActions = false) {
       return {
+        staticLibraryFormat: normalizeStaticLibraryFormat(value?.staticLibraryFormat),
+        dllImportLibraryFormat: normalizeDllImportLibraryFormat(value?.dllImportLibraryFormat),
+        importLibraries: normalizeImportLibraryConfiguration(value?.importLibraries),
         preBuildActions: normalizeActions(nativeActions?.preBuildActions ?? value?.preBuildActions),
         customBuildActions: normalizeActions(nativeActions?.customBuildActions ?? value?.customBuildActions),
         postBuildActions: normalizeActions(nativeActions?.postBuildActions ?? value?.postBuildActions),
@@ -50903,6 +51141,984 @@ var require_qpmProjectSettingsService = __commonJS({
     }
     function normalizeActions(value) {
       return Array.isArray(value) ? value.map(String).map((entry) => entry.trim()).filter(Boolean) : [];
+    }
+    function normalizeStaticLibraryFormat(value) {
+      return value === "gnu-a" || value === "windows-lib" ? value : "auto";
+    }
+    function normalizeDllImportLibraryFormat(value) {
+      const allowed = /* @__PURE__ */ new Set(["auto", "gnu-a", "gnu-dll-a", "windows-lib", "gnu-both", "gnu-a-windows-lib", "both", "all", "none"]);
+      return allowed.has(value) ? value : "auto";
+    }
+    function normalizeImportLibraryConfiguration(value) {
+      const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      const generators = /* @__PURE__ */ new Set(["auto", "msvc-lib", "llvm-lib", "llvm-dlltool", "gnu-dlltool"]);
+      const architectures = /* @__PURE__ */ new Set(["auto", "x86", "x64", "arm64"]);
+      return {
+        generator: generators.has(raw.generator) ? raw.generator : exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generator,
+        generatorPath: String(raw.generatorPath ?? exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generatorPath).trim(),
+        architecture: architectures.has(raw.architecture) ? raw.architecture : exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.architecture,
+        outputDirectory: String(raw.outputDirectory ?? exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory).trim() || exports2.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory,
+        keepDefinitionFile: raw.keepDefinitionFile !== false
+      };
+    }
+  }
+});
+
+// out/services/qpmImportLibraryService.js
+var require_qpmImportLibraryService = __commonJS({
+  "out/services/qpmImportLibraryService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.QpmImportLibraryService = void 0;
+    exports2.collectHeaderImportSymbols = collectHeaderImportSymbols;
+    exports2.parsePeExports = parsePeExports;
+    exports2.renderModuleDefinition = renderModuleDefinition;
+    exports2.buildImportLibraryInvocation = buildImportLibraryInvocation;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var child_process_1 = require("child_process");
+    var vscode2 = __importStar2(require("vscode"));
+    var qtProjectManifest_12 = require_qtProjectManifest();
+    var qpmProjectSettingsService_12 = require_qpmProjectSettingsService();
+    var qpmSymbolService_12 = require_qpmSymbolService();
+    var QpmImportLibraryService = class {
+      workspaces;
+      settings;
+      installations;
+      output;
+      qtInstallations;
+      lastReportPath;
+      dllPanel;
+      dllBatchRows = [];
+      dllBatchRef;
+      dllRowSequence = 0;
+      constructor(workspaces, settings, installations, output, qtInstallations) {
+        this.workspaces = workspaces;
+        this.settings = settings;
+        this.installations = installations;
+        this.output = output;
+        this.qtInstallations = qtInstallations;
+      }
+      dispose() {
+        this.dllPanel?.dispose();
+      }
+      async generateFromHeaderSelection(clicked, selection = []) {
+        const candidates = [clicked, ...selection].filter((value) => !!value && typeof value === "object" && value.kind === "file").filter((node) => isHeaderPath(node.file.absolutePath));
+        const unique = dedupePaths(candidates.map((node) => node.file.absolutePath));
+        const ref = clicked?.ref ?? candidates[0]?.ref ?? this.workspaces.activeProjectRef;
+        await this.generateFromHeaders(unique.length ? unique : void 0, ref);
+      }
+      async generateFromHeaders(headerPaths, projectRef) {
+        const ref = projectRef ?? this.workspaces.activeProjectRef;
+        if (!ref?.exists) {
+          vscode2.window.showErrorMessage("No existing Qt/C++ project is selected.");
+          return;
+        }
+        let headers = dedupePaths(headerPaths ?? []);
+        if (!headers.length) {
+          const chosen = await vscode2.window.showOpenDialog({
+            title: "Select one or more C/C++ headers for import-library generation",
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: true,
+            defaultUri: vscode2.Uri.file(path2.dirname(ref.absolutePath)),
+            filters: { "C/C++ headers": ["h", "hh", "hpp", "hxx"], "All files": ["*"] }
+          });
+          if (!chosen?.length)
+            return;
+          headers = dedupePaths(chosen.map((uri) => uri.fsPath).filter(isHeaderPath));
+        }
+        if (!headers.length) {
+          vscode2.window.showErrorMessage("No C/C++ header was selected.");
+          return;
+        }
+        const discovered = [];
+        const warnings = [];
+        for (const headerPath of headers) {
+          if (!fs.existsSync(headerPath)) {
+            warnings.push(`Header not found: ${headerPath}`);
+            continue;
+          }
+          const extraction = collectHeaderImportSymbols(fs.readFileSync(headerPath, "utf8"), headerPath);
+          discovered.push(...extraction.symbols);
+          warnings.push(...extraction.warnings);
+        }
+        const deduped = dedupeHeaderSymbols(discovered);
+        if (!deduped.length) {
+          vscode2.window.showErrorMessage("No importable free-function declarations were detected in the selected header(s).");
+          return;
+        }
+        const selected = await vscode2.window.showQuickPick(deduped.map((symbol) => ({
+          label: symbol.name,
+          description: `${path2.basename(symbol.filePath)}:${symbol.line + 1}`,
+          detail: symbol.signature,
+          picked: true,
+          symbol
+        })), {
+          title: `Select exported symbols for the import library (${deduped.length} detected)`,
+          placeHolder: "Header-based generation assumes the DLL exports these exact symbol names.",
+          canPickMany: true,
+          ignoreFocusOut: true
+        });
+        if (!selected?.length)
+          return;
+        const projectSettings = this.settings.getSettings(ref);
+        const dllNameInput = await vscode2.window.showInputBox({
+          title: "Runtime DLL name",
+          prompt: "Name of the DLL that will satisfy these imports at runtime. The DLL itself is not created.",
+          value: `${sanitizeBaseName(ref.name)}.dll`,
+          validateInput: (value) => value.trim() ? void 0 : "Enter a DLL file name."
+        });
+        if (dllNameInput === void 0)
+          return;
+        const dllName = ensureDllExtension(path2.basename(dllNameInput.trim()));
+        const architecture = resolveConfiguredArchitecture(projectSettings.importLibraries.architecture, this.settings.getQpmConfigurationValue("buildMode", "debug"), this.activeCompilerPath());
+        const outputLibrary = await this.chooseOutputLibraryPath(ref, projectSettings.importLibraries, path2.parse(dllName).name);
+        if (!outputLibrary)
+          return;
+        const defPath = changeExtension(outputLibrary, ".def");
+        const names = selected.map((item) => item.symbol.name);
+        fs.mkdirSync(path2.dirname(outputLibrary), { recursive: true });
+        fs.writeFileSync(defPath, renderModuleDefinition(dllName, names.map((name) => ({ name }))), "utf8");
+        warnings.push("Header-based generation creates an import library, not a static library implementation. The matching DLL is still required at runtime.");
+        if (headers.some((entry) => /\.(?:hpp|hxx|hh)$/i.test(entry))) {
+          warnings.push('C++ symbol decoration cannot be inferred reliably from headers. Prefer DLL-based generation for C++ exports or APIs without extern "C" names.');
+        }
+        const generator = await this.resolveGeneratorSafely(ref, projectSettings.importLibraries);
+        if (!generator)
+          return;
+        await this.finishGeneration({
+          inputLabel: headers.map((entry) => path2.basename(entry)).join(", "),
+          outputLibrary,
+          definitionFile: defPath,
+          architecture,
+          dllName,
+          exportCount: names.length,
+          warnings,
+          generator
+        }, ref, projectSettings.importLibraries);
+      }
+      async generateFromDll(dllPath, projectRef) {
+        const ref = projectRef ?? this.workspaces.activeProjectRef;
+        if (!ref?.exists) {
+          vscode2.window.showErrorMessage("No existing Qt/C++ project is selected.");
+          return;
+        }
+        await this.openDllBatchPanel(dllPath ? [dllPath] : [], ref);
+      }
+      async openDllBatchPanel(initialPaths, ref) {
+        this.dllBatchRef = ref;
+        if (!this.dllPanel) {
+          this.dllPanel = vscode2.window.createWebviewPanel("qpm.importLibraryDllBatch", "QPM DLL Import Libraries", vscode2.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+          this.dllPanel.onDidDispose(() => {
+            this.dllPanel = void 0;
+            this.dllBatchRows = [];
+            this.dllBatchRef = void 0;
+          });
+          this.dllPanel.webview.onDidReceiveMessage((message) => void this.handleDllPanelMessage(message));
+        }
+        this.dllPanel.title = `DLL \u2192 Import Libraries \u2014 ${ref.name}`;
+        if (initialPaths.length) {
+          for (const filePath of dedupePaths(initialPaths)) {
+            if (!this.dllBatchRows.some((row) => samePath(row.dllPath, filePath)))
+              this.dllBatchRows.push(this.createDllBatchRow(filePath, ref));
+          }
+        }
+        this.dllPanel.webview.html = this.renderDllBatchPanel();
+        this.dllPanel.reveal(vscode2.ViewColumn.Active);
+      }
+      createDllBatchRow(filePath, ref) {
+        const id = `dll-${++this.dllRowSequence}`;
+        const config = this.settings.getSettings(ref).importLibraries;
+        const row = {
+          id,
+          dllPath: path2.resolve(filePath),
+          outputLibrary: this.uniqueBatchOutputPath(ref, config, path2.parse(filePath).name)
+        };
+        this.refreshDllBatchRow(row);
+        return row;
+      }
+      refreshDllBatchRow(row) {
+        row.exports = void 0;
+        row.error = void 0;
+        if (!row.dllPath || !fs.existsSync(row.dllPath) || path2.extname(row.dllPath).toLowerCase() !== ".dll") {
+          row.error = row.dllPath ? `DLL not found or invalid path: ${row.dllPath}` : "No DLL selected.";
+          return;
+        }
+        try {
+          row.exports = parsePeExports(fs.readFileSync(row.dllPath));
+        } catch (error) {
+          row.error = error instanceof Error ? error.message : String(error);
+        }
+      }
+      async handleDllPanelMessage(message) {
+        const panel = this.dllPanel;
+        const ref = this.dllBatchRef;
+        if (!panel || !ref?.exists)
+          return;
+        const type = String(message?.type ?? "");
+        if (type === "addDll") {
+          const chosen = await vscode2.window.showOpenDialog({
+            title: "Add one or more DLL files",
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: true,
+            defaultUri: vscode2.Uri.file(path2.dirname(ref.absolutePath)),
+            filters: { "Windows DLL": ["dll"], "All files": ["*"] }
+          });
+          for (const uri of chosen ?? [])
+            if (!this.dllBatchRows.some((row) => samePath(row.dllPath, uri.fsPath)))
+              this.dllBatchRows.push(this.createDllBatchRow(uri.fsPath, ref));
+          await this.pushDllBatchState();
+          return;
+        }
+        if (type === "browseDll") {
+          const row = this.dllBatchRows.find((entry) => entry.id === String(message.id ?? ""));
+          if (!row)
+            return;
+          const chosen = await vscode2.window.showOpenDialog({
+            title: "Select DLL",
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            defaultUri: vscode2.Uri.file(fs.existsSync(row.dllPath) ? row.dllPath : path2.dirname(ref.absolutePath)),
+            filters: { "Windows DLL": ["dll"], "All files": ["*"] }
+          });
+          if (chosen?.[0]) {
+            row.dllPath = chosen[0].fsPath;
+            row.outputLibrary = this.uniqueBatchOutputPath(ref, this.settings.getSettings(ref).importLibraries, path2.parse(row.dllPath).name, row.id);
+            this.refreshDllBatchRow(row);
+            await this.pushDllBatchState();
+          }
+          return;
+        }
+        if (type === "browseOutput") {
+          const row = this.dllBatchRows.find((entry) => entry.id === String(message.id ?? ""));
+          if (!row)
+            return;
+          const chosen = await vscode2.window.showSaveDialog({ title: "Save Windows import library", defaultUri: vscode2.Uri.file(row.outputLibrary), filters: { "Windows import library": ["lib"] } });
+          if (chosen) {
+            row.outputLibrary = chosen.fsPath;
+            await this.pushDllBatchState();
+          }
+          return;
+        }
+        if (type === "removeDll") {
+          this.dllBatchRows = this.dllBatchRows.filter((entry) => entry.id !== String(message.id ?? ""));
+          await this.pushDllBatchState();
+          return;
+        }
+        if (type === "generateBatch") {
+          await this.generateDllBatch(Array.isArray(message.rows) ? message.rows : []);
+          return;
+        }
+      }
+      async pushDllBatchState() {
+        await this.dllPanel?.webview.postMessage({ type: "state", state: this.serializeDllBatchState() });
+      }
+      serializeDllBatchState() {
+        return {
+          rows: this.dllBatchRows.map((row) => ({
+            id: row.id,
+            dllPath: row.dllPath,
+            outputLibrary: row.outputLibrary,
+            error: row.error,
+            architecture: row.exports?.architecture,
+            dllName: row.exports?.dllName,
+            ordinalOnlyCount: row.exports?.ordinalOnlyCount ?? 0,
+            symbols: (row.exports?.symbols ?? []).map((symbol) => ({ name: symbol.name, ordinal: symbol.ordinal, rva: symbol.rva, forwarder: symbol.forwarder }))
+          }))
+        };
+      }
+      renderDllBatchPanel() {
+        const initialState = safeScriptJson(this.serializeDllBatchState());
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>
+      body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:18px;max-width:1300px;margin:auto}.top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:6px 11px;border-radius:3px;cursor:pointer}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}.row{border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);border-radius:6px;padding:12px;margin:10px 0}.row-head{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:end}.field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;color:var(--vscode-descriptionForeground)}input{background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);padding:6px 8px}.meta{margin:8px 0;color:var(--vscode-descriptionForeground);font-size:12px}.error{color:var(--vscode-errorForeground)}.exports{max-height:280px;overflow:auto;border-top:1px solid var(--vscode-panel-border);margin-top:9px;padding-top:8px}.export{display:grid;grid-template-columns:auto minmax(180px,1fr) 110px 110px;gap:8px;align-items:center;padding:3px 2px;font-family:var(--vscode-editor-font-family);font-size:12px}.export small{color:var(--vscode-descriptionForeground)}.export-tools{display:flex;gap:6px;align-items:center;margin-bottom:7px}.export-tools input{flex:1}.notice{border-left:3px solid var(--vscode-textLink-foreground);padding:8px 10px;background:var(--vscode-textBlockQuote-background);margin:10px 0;color:var(--vscode-descriptionForeground)}.empty{padding:28px;border:1px dashed var(--vscode-panel-border);text-align:center;color:var(--vscode-descriptionForeground)}
+    </style></head><body><div class="top"><div><h2>DLL import-library batch</h2><div class="notice">Add one or more DLLs. QPM generates <strong>one .lib per DLL</strong>; each row has its own source browser, output browser and export selection.</div></div><div class="actions"><button id="add">+ Add DLL(s)\u2026</button><button id="generate">Generate selected .lib files</button></div></div><div id="rows"></div><script>
+      const vscode=acquireVsCodeApi();let state=${initialState};const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+      function render(){const host=document.getElementById('rows');if(!state.rows.length){host.innerHTML='<div class="empty">No DLL selected. Use <strong>+ Add DLL(s)\u2026</strong>.</div>';return;}host.innerHTML=state.rows.map(r=>{const symbols=r.symbols||[];return '<div class="row" data-row="'+esc(r.id)+'"><div class="row-head"><div class="field"><label>DLL file</label><input class="dll-path" value="'+esc(r.dllPath)+'" readonly></div><button data-browse-dll="'+esc(r.id)+'" class="secondary">Browse\u2026</button><button data-remove="'+esc(r.id)+'" class="secondary">Remove</button></div><div class="row-head" style="margin-top:7px"><div class="field"><label>Output import library</label><input class="out-path" value="'+esc(r.outputLibrary)+'" readonly></div><button data-browse-out="'+esc(r.id)+'" class="secondary">Browse\u2026</button><span></span></div>'+(r.error?'<div class="meta error">'+esc(r.error)+'</div>':'<div class="meta">'+esc(r.architecture||'unknown')+' \xB7 '+symbols.length+' named export(s)'+(r.ordinalOnlyCount?' \xB7 '+r.ordinalOnlyCount+' ordinal-only skipped':'')+'</div>')+(symbols.length?'<div class="exports"><div class="export-tools"><input data-filter="'+esc(r.id)+'" placeholder="Filter exports\u2026"><button data-all="'+esc(r.id)+'" class="secondary">All</button><button data-none="'+esc(r.id)+'" class="secondary">None</button></div><div data-export-list="'+esc(r.id)+'">'+symbols.map(s=>'<label class="export" data-name="'+esc(s.name.toLowerCase())+'"><input type="checkbox" data-export-row="'+esc(r.id)+'" value="'+esc(s.name)+'" checked><span>'+esc(s.name)+'</span><small>ordinal '+s.ordinal+'</small><small>RVA 0x'+Number(s.rva).toString(16).toUpperCase()+'</small></label>').join('')+'</div></div>':'')+'</div>';}).join('');wire();}
+      function wire(){document.querySelectorAll('[data-browse-dll]').forEach(b=>b.onclick=()=>vscode.postMessage({type:'browseDll',id:b.dataset.browseDll}));document.querySelectorAll('[data-browse-out]').forEach(b=>b.onclick=()=>vscode.postMessage({type:'browseOutput',id:b.dataset.browseOut}));document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>vscode.postMessage({type:'removeDll',id:b.dataset.remove}));document.querySelectorAll('[data-all]').forEach(b=>b.onclick=()=>document.querySelectorAll('[data-export-row="'+b.dataset.all+'"]').forEach(x=>x.checked=true));document.querySelectorAll('[data-none]').forEach(b=>b.onclick=()=>document.querySelectorAll('[data-export-row="'+b.dataset.none+'"]').forEach(x=>x.checked=false));document.querySelectorAll('[data-filter]').forEach(f=>f.oninput=()=>{const q=f.value.toLowerCase();document.querySelectorAll('[data-export-list="'+f.dataset.filter+'"] .export').forEach(x=>x.style.display=!q||x.dataset.name.includes(q)?'':'none');});}
+      document.getElementById('add').onclick=()=>vscode.postMessage({type:'addDll'});document.getElementById('generate').onclick=()=>{const rows=state.rows.map(r=>({id:r.id,dllPath:r.dllPath,outputLibrary:r.outputLibrary,selected:[...document.querySelectorAll('[data-export-row="'+r.id+'"]:checked')].map(x=>x.value)}));vscode.postMessage({type:'generateBatch',rows});};window.addEventListener('message',e=>{if(e.data?.type==='state'){state=e.data.state;render();}});render();
+    </script></body></html>`;
+      }
+      uniqueBatchOutputPath(ref, config, baseName, excludeId) {
+        const directory = this.resolveOutputDirectory(ref, config);
+        const clean = sanitizeBaseName(baseName);
+        let candidate = path2.join(directory, `${clean}.lib`);
+        let suffix = 2;
+        const used = () => this.dllBatchRows.some((row) => row.id !== excludeId && samePath(row.outputLibrary, candidate));
+        while (used())
+          candidate = path2.join(directory, `${clean}_${suffix++}.lib`);
+        return candidate;
+      }
+      async generateDllBatch(requestRows) {
+        const ref = this.dllBatchRef;
+        if (!ref?.exists)
+          return;
+        const config = this.settings.getSettings(ref).importLibraries;
+        const generator = await this.resolveGeneratorSafely(ref, config);
+        if (!generator)
+          return;
+        const results = [];
+        const generated = [];
+        for (const request of requestRows) {
+          const row = this.dllBatchRows.find((entry) => entry.id === String(request?.id ?? ""));
+          if (!row?.exports || row.error) {
+            results.push({ dllPath: row?.dllPath ?? "", outputLibrary: row?.outputLibrary ?? "", ok: false, exportCount: 0, message: row?.error ?? "DLL row is invalid." });
+            continue;
+          }
+          const selectedNames = new Set(Array.isArray(request?.selected) ? request.selected.map(String) : []);
+          const selected = row.exports.symbols.filter((symbol) => selectedNames.has(symbol.name));
+          const outputLibrary = String(request?.outputLibrary ?? row.outputLibrary).trim();
+          if (!selected.length || !outputLibrary) {
+            results.push({ dllPath: row.dllPath, outputLibrary, ok: false, exportCount: selected.length, message: !selected.length ? "No exports selected." : "No output library selected." });
+            continue;
+          }
+          const defPath = changeExtension(outputLibrary, ".def");
+          fs.mkdirSync(path2.dirname(outputLibrary), { recursive: true });
+          fs.writeFileSync(defPath, renderModuleDefinition(path2.basename(row.dllPath), selected), "utf8");
+          const warnings = [];
+          if (row.exports.ordinalOnlyCount)
+            warnings.push(`${row.exports.ordinalOnlyCount} ordinal-only export(s) were skipped because they have no linkable name.`);
+          warnings.push("PE export tables do not identify exported data versus functions. Review the generated .def and add DATA where required for exported data objects.");
+          const generation = { inputLabel: row.dllPath, outputLibrary, definitionFile: defPath, architecture: row.exports.architecture, dllName: path2.basename(row.dllPath), exportCount: selected.length, warnings, generator };
+          const executed = await this.executeGeneration(generation, config, false);
+          results.push({ dllPath: row.dllPath, outputLibrary, ok: executed.ok, exportCount: selected.length, message: executed.message });
+          if (executed.ok)
+            generated.push(outputLibrary);
+        }
+        const report = this.writeBatchReport(ref, results, generator);
+        this.lastReportPath = report;
+        const failures = results.filter((entry) => !entry.ok).length;
+        const action = generated.length ? await vscode2.window.showInformationMessage(`${generated.length} import librar${generated.length === 1 ? "y" : "ies"} generated${failures ? `; ${failures} failed/skipped` : ""}.`, "Add generated .lib files to project", "Open report") : await vscode2.window.showWarningMessage(`No import library was generated${failures ? `; ${failures} row(s) failed/skipped` : ""}.`, "Open report");
+        if (action === "Add generated .lib files to project" && generated.length)
+          await this.workspaces.addFilePaths(ref, generated, "Libraries");
+        else if (action === "Open report")
+          await this.openReport();
+      }
+      async generateBuiltDllImportLibrary(projectRef, dllPath, outputLibrary) {
+        const ref = projectRef;
+        if (!ref?.exists || !fs.existsSync(dllPath))
+          return { ok: false, message: "Built DLL was not found." };
+        let exports3;
+        try {
+          exports3 = parsePeExports(fs.readFileSync(dllPath));
+        } catch (error) {
+          return { ok: false, message: `Unable to read built DLL exports: ${error instanceof Error ? error.message : String(error)}` };
+        }
+        if (!exports3.symbols.length)
+          return { ok: false, message: "The built DLL has no named exports; a named import library cannot be generated automatically." };
+        const config = this.settings.getSettings(ref).importLibraries;
+        const generator = this.resolveGeneratorWithoutPrompt(ref, config);
+        if (!generator)
+          return { ok: false, message: "No configured/compatible .lib generator (lib.exe, llvm-lib, llvm-dlltool or dlltool) was found." };
+        const defPath = changeExtension(outputLibrary, ".def");
+        fs.mkdirSync(path2.dirname(outputLibrary), { recursive: true });
+        fs.writeFileSync(defPath, renderModuleDefinition(path2.basename(dllPath), exports3.symbols), "utf8");
+        const result = {
+          inputLabel: dllPath,
+          outputLibrary,
+          definitionFile: defPath,
+          architecture: exports3.architecture,
+          dllName: path2.basename(dllPath),
+          exportCount: exports3.symbols.length,
+          warnings: [
+            "This .lib is an import library for the built DLL; the DLL remains required at runtime.",
+            "C++ ABI compatibility depends on the exported decorated names and the consuming toolchain."
+          ],
+          generator
+        };
+        const executed = await this.executeGeneration(result, config, false);
+        return { ok: executed.ok, message: executed.message };
+      }
+      async extractDefinitionFromDll(dllPath, projectRef) {
+        const ref = projectRef ?? this.workspaces.activeProjectRef;
+        if (!ref?.exists) {
+          vscode2.window.showErrorMessage("No existing Qt/C++ project is selected.");
+          return;
+        }
+        let input = dllPath;
+        if (!input) {
+          const chosen = await vscode2.window.showOpenDialog({ title: "Select DLL", canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: { "Windows DLL": ["dll"] } });
+          input = chosen?.[0]?.fsPath;
+        }
+        if (!input)
+          return;
+        let exports3;
+        try {
+          exports3 = parsePeExports(fs.readFileSync(input));
+        } catch (error) {
+          vscode2.window.showErrorMessage(`Unable to read DLL exports: ${error instanceof Error ? error.message : String(error)}`);
+          return;
+        }
+        const target = await vscode2.window.showSaveDialog({
+          title: "Save module-definition file",
+          defaultUri: vscode2.Uri.file(path2.join(this.resolveOutputDirectory(ref, this.settings.getSettings(ref).importLibraries), `${path2.parse(input).name}.def`)),
+          filters: { "Module definition": ["def"] }
+        });
+        if (!target)
+          return;
+        fs.mkdirSync(path2.dirname(target.fsPath), { recursive: true });
+        fs.writeFileSync(target.fsPath, renderModuleDefinition(path2.basename(input), exports3.symbols), "utf8");
+        vscode2.window.showInformationMessage(`DLL exports written to ${target.fsPath}`);
+      }
+      async openReport() {
+        const ref = this.workspaces.activeProjectRef;
+        const report = this.lastReportPath ?? (ref ? this.reportPath(ref) : void 0);
+        if (!report || !fs.existsSync(report)) {
+          vscode2.window.showInformationMessage("No import-library generation report is available yet.");
+          return;
+        }
+        await vscode2.window.showTextDocument(await vscode2.workspace.openTextDocument(vscode2.Uri.file(report)), { preview: false });
+      }
+      async finishGeneration(result, ref, config) {
+        const executed = await this.executeGeneration(result, config, true, ref);
+        if (!executed.ok) {
+          vscode2.window.showErrorMessage(`Import-library generation failed. See ${executed.report ?? "the QPM output channel"}.`);
+          return;
+        }
+        const action = await vscode2.window.showInformationMessage(`Import library generated: ${result.outputLibrary}`, "Add to project", "Open report", "Reveal in Explorer");
+        if (action === "Add to project")
+          await this.workspaces.addFilePaths(ref, [result.outputLibrary], "Libraries");
+        else if (action === "Open report")
+          await this.openReport();
+        else if (action === "Reveal in Explorer")
+          await vscode2.commands.executeCommand("revealFileInOS", vscode2.Uri.file(result.outputLibrary));
+      }
+      async executeGeneration(result, config, writeReport, ref) {
+        this.output.show(true);
+        this.output.appendLine(`[QPM Import Library] ${result.inputLabel}`);
+        this.output.appendLine(`[QPM Import Library] DLL: ${result.dllName}`);
+        this.output.appendLine(`[QPM Import Library] Architecture: ${result.architecture}`);
+        this.output.appendLine(`[QPM Import Library] Generator: ${result.generator.label} (${result.generator.executable})`);
+        this.output.appendLine(`[QPM Import Library] Definition: ${result.definitionFile}`);
+        this.output.appendLine(`[QPM Import Library] Output: ${result.outputLibrary}`);
+        const invocation = buildImportLibraryInvocation(result.generator, result.definitionFile, result.outputLibrary, result.dllName, result.architecture);
+        const processResult = await runProcess(invocation.executable, invocation.args, invocation.cwd, (line) => this.output.appendLine(line));
+        const ok = processResult.ok && fs.existsSync(result.outputLibrary);
+        const message = processResult.stderr || processResult.stdout || (ok ? "Generation completed successfully." : `Generator exited with code ${processResult.code}.`);
+        let report;
+        if (writeReport && ref) {
+          report = this.writeReport(ref, result, ok, message);
+          this.lastReportPath = report;
+        }
+        if (!ok)
+          return { ok, message, report };
+        const expPath = changeExtension(result.outputLibrary, ".exp");
+        if (fs.existsSync(expPath)) {
+          try {
+            fs.unlinkSync(expPath);
+          } catch {
+          }
+        }
+        if (!config.keepDefinitionFile) {
+          try {
+            fs.unlinkSync(result.definitionFile);
+          } catch {
+          }
+        }
+        return { ok, message, report };
+      }
+      writeBatchReport(ref, entries, generator) {
+        const reportPath = this.reportPath(ref);
+        fs.mkdirSync(path2.dirname(reportPath), { recursive: true });
+        const lines = ["# QPM DLL Import Library Batch", "", `- Generator: \`${generator.label}\``, `- Generator executable: \`${generator.executable}\``, `- DLL count: ${entries.length}`, "", "| Status | DLL | Exports | Output | Message |", "| --- | --- | ---: | --- | --- |"];
+        for (const entry of entries)
+          lines.push(`| ${entry.ok ? "SUCCESS" : "FAILED"} | \`${entry.dllPath}\` | ${entry.exportCount} | \`${entry.outputLibrary}\` | ${entry.message.replace(/\r?\n/g, " ").replace(/\|/g, "\\|").trim()} |`);
+        lines.push("");
+        fs.writeFileSync(reportPath, lines.join("\n"), "utf8");
+        return reportPath;
+      }
+      async chooseOutputLibraryPath(ref, config, baseName) {
+        const directory = this.resolveOutputDirectory(ref, config);
+        fs.mkdirSync(directory, { recursive: true });
+        const chosen = await vscode2.window.showSaveDialog({
+          title: "Save Windows import library",
+          defaultUri: vscode2.Uri.file(path2.join(directory, `${sanitizeBaseName(baseName)}.lib`)),
+          filters: { "Windows import library": ["lib"] }
+        });
+        return chosen?.fsPath;
+      }
+      resolveOutputDirectory(ref, config) {
+        const projectDir = path2.dirname(ref.absolutePath);
+        const raw = String(config.outputDirectory || qpmProjectSettingsService_12.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory).replace(/\$\{projectDir\}/g, projectDir).replace(/\$\{projectName\}/g, ref.name);
+        return path2.isAbsolute(raw) ? path2.normalize(raw) : path2.resolve(projectDir, raw);
+      }
+      resolveGeneratorWithoutPrompt(ref, config) {
+        const requested = config.generator || "auto";
+        if (config.generatorPath.trim()) {
+          const rawGeneratorPath = config.generatorPath.trim();
+          const explicitPath = path2.isAbsolute(rawGeneratorPath) ? path2.normalize(rawGeneratorPath) : path2.resolve(path2.dirname(ref.absolutePath), rawGeneratorPath);
+          if (fs.existsSync(explicitPath)) {
+            const kind = requested === "auto" ? inferGeneratorKind(explicitPath) : requested;
+            return { kind, executable: explicitPath, label: generatorLabel(kind) };
+          }
+        }
+        const installation = this.installations.getActiveInstallation(this.workspaces.currentWorkspace?.qpmDir, true);
+        const compiler = this.activeCompilerPath();
+        let qtKitBin = "";
+        let qtArchiverDir = "";
+        const activeRef = this.workspaces.activeProjectRef;
+        if (activeRef?.exists && (0, qtProjectManifest_12.isQtProjectManifestPath)(activeRef.absolutePath) && this.qtInstallations) {
+          try {
+            const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(activeRef.absolutePath);
+            const kit = this.qtInstallations.getActive((0, qtProjectManifest_12.getQtInstallationPreference)(manifest));
+            qtKitBin = kit?.binDir ?? "";
+            qtArchiverDir = kit?.toolchain.archiverPath ? path2.dirname(kit.toolchain.archiverPath) : "";
+          } catch {
+          }
+        }
+        const dirs = dedupePaths([
+          compiler ? path2.dirname(compiler) : "",
+          qtArchiverDir,
+          qtKitBin,
+          installation?.cppCompilerExe ? path2.dirname(installation.cppCompilerExe) : "",
+          installation?.cCompilerExe ? path2.dirname(installation.cCompilerExe) : "",
+          installation?.root ?? "",
+          ...(process.env.PATH || "").split(path2.delimiter)
+        ].filter(Boolean));
+        const preferred = requested === "auto" ? preferredGeneratorKinds(compiler || installation?.root || "") : [requested];
+        for (const kind of preferred) {
+          const executable = findGeneratorExecutable(kind, dirs, compiler);
+          if (executable)
+            return { kind, executable, label: generatorLabel(kind) };
+        }
+        return void 0;
+      }
+      async resolveGeneratorSafely(ref, config) {
+        try {
+          return await this.resolveGenerator(ref, config);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/cancel/i.test(message))
+            vscode2.window.showErrorMessage(message);
+          return void 0;
+        }
+      }
+      async resolveGenerator(ref, config) {
+        const requested = config.generator || "auto";
+        if (config.generatorPath.trim()) {
+          const rawGeneratorPath = config.generatorPath.trim();
+          const explicitPath = path2.isAbsolute(rawGeneratorPath) ? path2.normalize(rawGeneratorPath) : path2.resolve(path2.dirname(ref.absolutePath), rawGeneratorPath);
+          if (fs.existsSync(explicitPath)) {
+            return { kind: requested === "auto" ? inferGeneratorKind(explicitPath) : requested, executable: explicitPath, label: generatorLabel(requested === "auto" ? inferGeneratorKind(explicitPath) : requested) };
+          }
+        }
+        const installation = this.installations.getActiveInstallation(this.workspaces.currentWorkspace?.qpmDir, true);
+        const compiler = this.activeCompilerPath();
+        let qtKitBin = "";
+        let qtArchiverDir = "";
+        const activeRef = this.workspaces.activeProjectRef;
+        if (activeRef?.exists && (0, qtProjectManifest_12.isQtProjectManifestPath)(activeRef.absolutePath) && this.qtInstallations) {
+          try {
+            const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(activeRef.absolutePath);
+            const kit = this.qtInstallations.getActive((0, qtProjectManifest_12.getQtInstallationPreference)(manifest));
+            qtKitBin = kit?.binDir ?? "";
+            qtArchiverDir = kit?.toolchain.archiverPath ? path2.dirname(kit.toolchain.archiverPath) : "";
+          } catch {
+          }
+        }
+        const dirs = dedupePaths([
+          compiler ? path2.dirname(compiler) : "",
+          qtArchiverDir,
+          qtKitBin,
+          installation?.cppCompilerExe ? path2.dirname(installation.cppCompilerExe) : "",
+          installation?.cCompilerExe ? path2.dirname(installation.cCompilerExe) : "",
+          installation?.root ?? "",
+          ...(process.env.PATH || "").split(path2.delimiter)
+        ].filter(Boolean));
+        const preferred = requested === "auto" ? preferredGeneratorKinds(compiler || installation?.root || "") : [requested];
+        for (const kind2 of preferred) {
+          const executable = findGeneratorExecutable(kind2, dirs, compiler);
+          if (executable)
+            return { kind: kind2, executable, label: generatorLabel(kind2) };
+        }
+        const answer = await vscode2.window.showWarningMessage("No compatible import-library generator was detected automatically. Select lib.exe, llvm-lib, llvm-dlltool or dlltool manually?", "Select generator");
+        if (answer !== "Select generator")
+          throw new Error("No import-library generator was found.");
+        const chosen = await vscode2.window.showOpenDialog({ title: "Select import-library generator", canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: { "Executable": ["exe"], "All files": ["*"] } });
+        if (!chosen?.[0])
+          throw new Error("Import-library generator selection was cancelled.");
+        const kind = requested === "auto" ? inferGeneratorKind(chosen[0].fsPath) : requested;
+        return { kind, executable: chosen[0].fsPath, label: generatorLabel(kind) };
+      }
+      activeCompilerPath() {
+        const ref = this.workspaces.activeProjectRef;
+        if (ref?.exists && (0, qtProjectManifest_12.isQtProjectManifestPath)(ref.absolutePath) && this.qtInstallations) {
+          try {
+            const manifest = (0, qtProjectManifest_12.readQtProjectManifest)(ref.absolutePath);
+            const kit = this.qtInstallations.getActive((0, qtProjectManifest_12.getQtInstallationPreference)(manifest));
+            if (kit?.toolchain.cppCompilerPath)
+              return kit.toolchain.cppCompilerPath;
+            if (kit?.toolchain.cCompilerPath)
+              return kit.toolchain.cCompilerPath;
+          } catch {
+          }
+        }
+        return this.settings.getQpmConfigurationValue("cppCompilerPath", "") || this.settings.getQpmConfigurationValue("cCompilerPath", "") || this.installations.getActiveInstallation(this.workspaces.currentWorkspace?.qpmDir, true)?.cppCompilerExe || this.installations.getActiveInstallation(this.workspaces.currentWorkspace?.qpmDir, true)?.cCompilerExe || "";
+      }
+      reportPath(ref) {
+        return path2.join(path2.dirname(ref.absolutePath), ".qpm", "import-libraries", "last-report.md");
+      }
+      writeReport(ref, result, success, toolOutput) {
+        const reportPath = this.reportPath(ref);
+        fs.mkdirSync(path2.dirname(reportPath), { recursive: true });
+        const warnings = result.warnings.length ? result.warnings.map((entry) => `- ${entry}`).join("\n") : "- None";
+        const text = `# QPM Import Library Generation
+
+- Status: **${success ? "SUCCESS" : "FAILED"}**
+- Input: \`${result.inputLabel}\`
+- Runtime DLL: \`${result.dllName}\`
+- Architecture: \`${result.architecture}\`
+- Export count: ${result.exportCount}
+- Generator: \`${result.generator.label}\`
+- Generator executable: \`${result.generator.executable}\`
+- Output library: \`${result.outputLibrary}\`
+- Definition file: \`${result.definitionFile}\`
+
+## Warnings
+
+${warnings}
+
+## Tool output
+
+\`\`\`text
+${toolOutput.trim()}
+\`\`\`
+`;
+        fs.writeFileSync(reportPath, text, "utf8");
+        return reportPath;
+      }
+    };
+    exports2.QpmImportLibraryService = QpmImportLibraryService;
+    function collectHeaderImportSymbols(source, filePath) {
+      const parsed = (0, qpmSymbolService_12.scanCFunctions)(source, filePath);
+      const symbols = [];
+      const warnings = [];
+      const duplicateNames = /* @__PURE__ */ new Map();
+      for (const symbol of parsed) {
+        const declaration = symbol.declaration || symbol.signature;
+        const qualified = symbol.qualifiedName || symbol.name;
+        if (symbol.kind !== vscode2.SymbolKind.Function)
+          continue;
+        if (qualified.includes("::") || !/^[A-Za-z_]\w*$/.test(symbol.name))
+          continue;
+        if (/^\s*static\b/.test(declaration))
+          continue;
+        duplicateNames.set(symbol.name, (duplicateNames.get(symbol.name) ?? 0) + 1);
+        symbols.push({ name: symbol.name, signature: symbol.signature, filePath, line: symbol.line });
+      }
+      for (const [name, count] of duplicateNames) {
+        if (count > 1)
+          warnings.push(`Header contains ${count} declarations named ${name}; an import library stores one external symbol name, so overload decoration cannot be inferred from the header alone.`);
+      }
+      return { symbols: dedupeHeaderSymbols(symbols), warnings };
+    }
+    function parsePeExports(buffer) {
+      if (buffer.length < 256 || buffer.toString("ascii", 0, 2) !== "MZ")
+        throw new Error("File is not a PE image (missing MZ header).");
+      const peOffset = buffer.readUInt32LE(60);
+      if (peOffset <= 0 || peOffset + 24 > buffer.length || buffer.toString("ascii", peOffset, peOffset + 4) !== "PE\0\0")
+        throw new Error("Invalid PE signature.");
+      const machine = buffer.readUInt16LE(peOffset + 4);
+      const architecture = machineToImportArchitecture(machine);
+      if (!architecture)
+        throw new Error(`Unsupported PE machine type 0x${machine.toString(16)}.`);
+      const sectionCount = buffer.readUInt16LE(peOffset + 6);
+      const optionalSize = buffer.readUInt16LE(peOffset + 20);
+      const optionalOffset = peOffset + 24;
+      if (optionalOffset + optionalSize > buffer.length)
+        throw new Error("Truncated PE optional header.");
+      const magic = buffer.readUInt16LE(optionalOffset);
+      const dataDirectoryOffset = magic === 523 ? optionalOffset + 112 : magic === 267 ? optionalOffset + 96 : -1;
+      const numberOfDirectoriesOffset = magic === 523 ? optionalOffset + 108 : magic === 267 ? optionalOffset + 92 : -1;
+      if (dataDirectoryOffset < 0 || numberOfDirectoriesOffset < 0 || numberOfDirectoriesOffset + 4 > buffer.length)
+        throw new Error("Unsupported PE optional-header format.");
+      const numberOfDirectories = buffer.readUInt32LE(numberOfDirectoriesOffset);
+      if (numberOfDirectories < 1)
+        return { architecture, symbols: [], ordinalOnlyCount: 0 };
+      if (dataDirectoryOffset + 8 > buffer.length)
+        throw new Error("Truncated PE data directory.");
+      const exportRva = buffer.readUInt32LE(dataDirectoryOffset);
+      const exportSize = buffer.readUInt32LE(dataDirectoryOffset + 4);
+      if (!exportRva || !exportSize)
+        return { architecture, symbols: [], ordinalOnlyCount: 0 };
+      const sizeOfHeaders = buffer.readUInt32LE(optionalOffset + 60);
+      const sectionOffset = optionalOffset + optionalSize;
+      const sections = [];
+      for (let index = 0; index < sectionCount; index += 1) {
+        const offset = sectionOffset + index * 40;
+        if (offset + 40 > buffer.length)
+          break;
+        sections.push({
+          virtualSize: buffer.readUInt32LE(offset + 8),
+          virtualAddress: buffer.readUInt32LE(offset + 12),
+          rawSize: buffer.readUInt32LE(offset + 16),
+          rawPointer: buffer.readUInt32LE(offset + 20)
+        });
+      }
+      const rvaToOffset = (rva) => {
+        if (rva < sizeOfHeaders && rva < buffer.length)
+          return rva;
+        for (const section of sections) {
+          const span = Math.max(section.virtualSize, section.rawSize);
+          if (rva >= section.virtualAddress && rva < section.virtualAddress + span) {
+            const offset = section.rawPointer + (rva - section.virtualAddress);
+            if (offset >= 0 && offset < buffer.length)
+              return offset;
+          }
+        }
+        throw new Error(`Unable to map PE RVA 0x${rva.toString(16)}.`);
+      };
+      const exportOffset = rvaToOffset(exportRva);
+      if (exportOffset + 40 > buffer.length)
+        throw new Error("Truncated PE export directory.");
+      const nameRva = buffer.readUInt32LE(exportOffset + 12);
+      const ordinalBase = buffer.readUInt32LE(exportOffset + 16);
+      const functionCount = buffer.readUInt32LE(exportOffset + 20);
+      const nameCount = buffer.readUInt32LE(exportOffset + 24);
+      const functionsOffset = rvaToOffset(buffer.readUInt32LE(exportOffset + 28));
+      const namesOffset = nameCount ? rvaToOffset(buffer.readUInt32LE(exportOffset + 32)) : 0;
+      const ordinalsOffset = nameCount ? rvaToOffset(buffer.readUInt32LE(exportOffset + 36)) : 0;
+      const dllName = nameRva ? readCString(buffer, rvaToOffset(nameRva)) : void 0;
+      const symbols = [];
+      const namedFunctionIndexes = /* @__PURE__ */ new Set();
+      for (let index = 0; index < nameCount; index += 1) {
+        if (namesOffset + index * 4 + 4 > buffer.length || ordinalsOffset + index * 2 + 2 > buffer.length)
+          break;
+        const symbolNameRva = buffer.readUInt32LE(namesOffset + index * 4);
+        const functionIndex = buffer.readUInt16LE(ordinalsOffset + index * 2);
+        if (functionIndex >= functionCount || functionsOffset + functionIndex * 4 + 4 > buffer.length)
+          continue;
+        const functionRva = buffer.readUInt32LE(functionsOffset + functionIndex * 4);
+        const symbolName = readCString(buffer, rvaToOffset(symbolNameRva));
+        if (!symbolName)
+          continue;
+        namedFunctionIndexes.add(functionIndex);
+        const forwarded = functionRva >= exportRva && functionRva < exportRva + exportSize;
+        symbols.push({
+          name: symbolName,
+          ordinal: ordinalBase + functionIndex,
+          rva: functionRva,
+          forwarder: forwarded ? readCString(buffer, rvaToOffset(functionRva)) : void 0
+        });
+      }
+      let ordinalOnlyCount = 0;
+      for (let functionIndex = 0; functionIndex < functionCount; functionIndex += 1) {
+        if (namedFunctionIndexes.has(functionIndex) || functionsOffset + functionIndex * 4 + 4 > buffer.length)
+          continue;
+        if (buffer.readUInt32LE(functionsOffset + functionIndex * 4) !== 0)
+          ordinalOnlyCount += 1;
+      }
+      symbols.sort((a, b) => a.ordinal - b.ordinal || a.name.localeCompare(b.name));
+      return { architecture, dllName, symbols, ordinalOnlyCount };
+    }
+    function renderModuleDefinition(dllName, exports3) {
+      const lines = [`LIBRARY "${path2.basename(dllName).replace(/"/g, "")}"`, "EXPORTS"];
+      const seen = /* @__PURE__ */ new Set();
+      for (const symbol of exports3) {
+        const name = String(symbol.name || "").trim();
+        if (!name || seen.has(name))
+          continue;
+        seen.add(name);
+        lines.push(`    ${name}${symbol.ordinal ? ` @${symbol.ordinal}` : ""}`);
+      }
+      lines.push("");
+      return lines.join("\n");
+    }
+    function buildImportLibraryInvocation(tool, defPath, outputLibrary, dllName, architecture) {
+      const cwd = path2.dirname(outputLibrary);
+      if (tool.kind === "msvc-lib" || tool.kind === "llvm-lib") {
+        return {
+          executable: tool.executable,
+          args: ["/NOLOGO", `/DEF:${defPath}`, `/OUT:${outputLibrary}`, `/MACHINE:${msvcMachine(architecture)}`],
+          cwd
+        };
+      }
+      return {
+        executable: tool.executable,
+        args: ["-d", defPath, "-l", outputLibrary, "-D", path2.basename(dllName), "-m", dlltoolMachine(architecture)],
+        cwd
+      };
+    }
+    function resolveConfiguredArchitecture(configured, buildMode, compilerPath) {
+      if (configured !== "auto")
+        return configured;
+      const lower = compilerPath.toLowerCase().replace(/\\/g, "/");
+      if (/aarch64|arm64/.test(lower))
+        return "arm64";
+      return buildMode === "debug64" || buildMode === "release64" ? "x64" : "x86";
+    }
+    function preferredGeneratorKinds(compilerPath) {
+      const lower = compilerPath.toLowerCase();
+      if (/clang-cl|visual studio|\\cl\.exe$|\/cl\.exe$/.test(lower))
+        return ["msvc-lib", "llvm-lib", "llvm-dlltool", "gnu-dlltool"];
+      if (/clang/.test(lower))
+        return ["llvm-dlltool", "llvm-lib", "gnu-dlltool", "msvc-lib"];
+      return ["gnu-dlltool", "llvm-dlltool", "msvc-lib", "llvm-lib"];
+    }
+    function findGeneratorExecutable(kind, dirs, compilerPath) {
+      const compilerBase = path2.basename(compilerPath || "").replace(/(?:gcc|g\+\+|clang\+\+|clang)(?:\.exe)?$/i, "");
+      const names = kind === "msvc-lib" ? ["lib.exe", "lib"] : kind === "llvm-lib" ? ["llvm-lib.exe", "llvm-lib"] : kind === "llvm-dlltool" ? ["llvm-dlltool.exe", "llvm-dlltool"] : [`${compilerBase}dlltool.exe`, `${compilerBase}dlltool`, "dlltool.exe", "dlltool", "x86_64-w64-mingw32-dlltool.exe", "i686-w64-mingw32-dlltool.exe"];
+      for (const dir of dirs) {
+        if (!dir)
+          continue;
+        for (const name of names) {
+          const candidate = path2.join(dir, name);
+          if (fs.existsSync(candidate))
+            return candidate;
+        }
+      }
+      return void 0;
+    }
+    function inferGeneratorKind(executable) {
+      const name = path2.basename(executable).toLowerCase();
+      if (name.startsWith("llvm-lib"))
+        return "llvm-lib";
+      if (name.includes("llvm-dlltool"))
+        return "llvm-dlltool";
+      if (name === "lib.exe" || name === "lib")
+        return "msvc-lib";
+      return "gnu-dlltool";
+    }
+    function generatorLabel(kind) {
+      switch (kind) {
+        case "msvc-lib":
+          return "Microsoft LIB";
+        case "llvm-lib":
+          return "LLVM llvm-lib";
+        case "llvm-dlltool":
+          return "LLVM llvm-dlltool";
+        case "gnu-dlltool":
+          return "GNU dlltool";
+      }
+    }
+    function msvcMachine(architecture) {
+      return architecture === "x86" ? "X86" : architecture === "arm64" ? "ARM64" : "X64";
+    }
+    function dlltoolMachine(architecture) {
+      return architecture === "x86" ? "i386" : architecture === "arm64" ? "arm64" : "i386:x86-64";
+    }
+    function machineToImportArchitecture(machine) {
+      if (machine === 332)
+        return "x86";
+      if (machine === 34404)
+        return "x64";
+      if (machine === 43620)
+        return "arm64";
+      return void 0;
+    }
+    function readCString(buffer, offset) {
+      if (offset < 0 || offset >= buffer.length)
+        return "";
+      let end = offset;
+      while (end < buffer.length && buffer[end] !== 0)
+        end += 1;
+      return buffer.toString("utf8", offset, end);
+    }
+    function dedupeHeaderSymbols(symbols) {
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const symbol of symbols) {
+        if (seen.has(symbol.name))
+          continue;
+        seen.add(symbol.name);
+        result.push(symbol);
+      }
+      return result.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    function dedupePaths(values) {
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const value of values) {
+        if (!value)
+          continue;
+        const normalized = path2.resolve(value);
+        const key = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push(normalized);
+        }
+      }
+      return result;
+    }
+    function isHeaderPath(filePath) {
+      return /\.(?:h|hh|hpp|hxx)$/i.test(filePath);
+    }
+    function sanitizeBaseName(value) {
+      return String(value || "library").replace(/\.(?:dll|lib)$/i, "").replace(/[^A-Za-z0-9_.-]+/g, "_") || "library";
+    }
+    function ensureDllExtension(value) {
+      return /\.dll$/i.test(value) ? value : `${value}.dll`;
+    }
+    function changeExtension(filePath, extension) {
+      return path2.join(path2.dirname(filePath), `${path2.parse(filePath).name}${extension}`);
+    }
+    function samePath(a, b) {
+      const left = path2.resolve(a || "");
+      const right = path2.resolve(b || "");
+      return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+    }
+    function safeScriptJson(value) {
+      return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+    }
+    async function runProcess(executable, args, cwd, log) {
+      return await new Promise((resolve) => {
+        const child = (0, child_process_1.spawn)(executable, args, { cwd, windowsHide: true, shell: false });
+        let stdout = "";
+        let stderr = "";
+        child.stdout?.on("data", (data) => {
+          const text = data.toString();
+          stdout += text;
+          for (const line of text.split(/\r?\n/).filter(Boolean))
+            log(`[tool] ${line}`);
+        });
+        child.stderr?.on("data", (data) => {
+          const text = data.toString();
+          stderr += text;
+          for (const line of text.split(/\r?\n/).filter(Boolean))
+            log(`[tool:stderr] ${line}`);
+        });
+        child.on("error", (error) => resolve({ ok: false, code: null, stdout, stderr: `${stderr}${error.message}` }));
+        child.on("close", (code) => resolve({ ok: code === 0, code, stdout, stderr }));
+      });
     }
   }
 });
@@ -51794,6 +53010,7 @@ var require_qtProjectSettingsPanel = __commonJS({
       sourceDirectory: { kind: "folder", relative: true },
       projectFile: { kind: "file", relative: true },
       precompiledHeader: { kind: "file", relative: true },
+      importLibraryGeneratorPath: { kind: "file" },
       workingDirectory: { kind: "folder", relative: true },
       externalProcessPath: { kind: "file" },
       platformSysroot: { kind: "folder" },
@@ -52264,6 +53481,7 @@ var require_qtProjectSettingsPanel = __commonJS({
       { id: "overview", label: "Overview", description: "Project status and the most common QPM actions." },
       { id: "project", label: "Project", description: "Target identity, language settings and project file summary." },
       { id: "build", label: "Build", description: "Qt kit, modules, backend, compiler, linker and build-step configuration." },
+      { id: "libraries", label: "Libraries", description: "Static/import-library formats, Windows .lib generation and binary analyzers." },
       { id: "run", label: "Run & Deploy", description: "Local execution and standalone runtime deployment." },
       { id: "debug", label: "Debug & Diagnostics", description: "Native/QML debugging, profiling and diagnostics." },
       { id: "qt", label: "Qt & Languages", description: "QML language tooling and Qt for Python / PySide6." },
@@ -52808,6 +54026,8 @@ var require_qtProjectSettingsPanel = __commonJS({
         buildProfile.unityBuild = payload.unityBuild === true;
         buildProfile.useResponseFiles = payload.useResponseFiles === true;
         buildProfile.linkage = normalizeQtLinkageMode(payload.linkage);
+        buildProfile.staticLibraryFormat = normalizeQtStaticLibraryFormat(payload.staticLibraryFormat);
+        buildProfile.dllImportLibraryFormat = normalizeQtDllImportLibraryFormat(payload.dllImportLibraryFormat);
         buildProfile.defines = normalizeList(payload.variantDefines);
         buildProfile.compilerFlags = normalizeList(payload.compilerFlags);
         buildProfile.linkerFlags = normalizeList(payload.linkerFlags);
@@ -52973,6 +54193,11 @@ var require_qtProjectSettingsPanel = __commonJS({
         projectSettings.preBuildActions = normalizeList(payload.preBuildActions);
         projectSettings.customBuildActions = normalizeList(payload.customBuildActions);
         projectSettings.postBuildActions = normalizeList(payload.postBuildActions);
+        projectSettings.importLibraries.generator = normalizeImportLibraryGenerator(payload.importLibraryGenerator);
+        projectSettings.importLibraries.generatorPath = String(payload.importLibraryGeneratorPath ?? "").trim();
+        projectSettings.importLibraries.architecture = normalizeImportLibraryArchitecture(payload.importLibraryArchitecture);
+        projectSettings.importLibraries.outputDirectory = String(payload.importLibraryOutputDirectory ?? "lib").trim() || "lib";
+        projectSettings.importLibraries.keepDefinitionFile = payload.importLibraryKeepDefinitionFile === true;
         for (const mode of this.variant === "release" ? ["release", "release64"] : ["debug", "debug64"]) {
           this.settings.setSettings(ref, cloneProjectSettings(projectSettings), mode);
         }
@@ -53169,6 +54394,29 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   <div class="settings-subsection"><h3>Preprocessor</h3><div class="fields">${area("Variant defines", "variantDefines", buildVariant.defines, true)}</div></div>
   <div class="settings-subsection"><h3>Compiler</h3><div class="fields">${area("Compiler flags", "compilerFlags", buildVariant.compilerFlags, true)}</div></div>
   <div class="settings-subsection"><h3>Linker</h3><div class="fields">${area("Linker flags", "linkerFlags", buildVariant.linkerFlags, true)}</div></div>
+</section>
+<section id="section-library-formats" data-settings-section data-settings-page="libraries" data-settings-title="Library output formats" class="card wide"><h2>${sectionHeading("compiler", "Library output formats")}</h2>
+  <div class="fields">
+    ${manifest.kind === "static-library" ? selectField("Static library format (Direct backend)", "staticLibraryFormat", `<option value="auto" ${buildProfile.staticLibraryFormat === "auto" ? "selected" : ""}>Automatic</option><option value="gnu-a" ${buildProfile.staticLibraryFormat === "gnu-a" ? "selected" : ""}>GNU / LLVM archive (.a)</option><option value="windows-lib" ${buildProfile.staticLibraryFormat === "windows-lib" ? "selected" : ""}>Windows COFF static library (.lib)</option>`) : `<input type="hidden" id="staticLibraryFormat" value="${escapeAttribute(buildProfile.staticLibraryFormat)}">`}
+    ${manifest.kind === "shared-library" ? selectField("DLL import-library outputs (Direct backend)", "dllImportLibraryFormat", `<option value="auto" ${buildProfile.dllImportLibraryFormat === "auto" ? "selected" : ""}>Automatic</option><option value="gnu-dll-a" ${buildProfile.dllImportLibraryFormat === "gnu-dll-a" ? "selected" : ""}>GNU import library (.dll.a)</option><option value="gnu-a" ${buildProfile.dllImportLibraryFormat === "gnu-a" ? "selected" : ""}>GNU legacy import library (.a)</option><option value="windows-lib" ${buildProfile.dllImportLibraryFormat === "windows-lib" ? "selected" : ""}>Windows import library (.lib)</option><option value="gnu-both" ${buildProfile.dllImportLibraryFormat === "gnu-both" ? "selected" : ""}>GNU .dll.a + .a</option><option value="both" ${buildProfile.dllImportLibraryFormat === "both" ? "selected" : ""}>GNU .dll.a + Windows .lib</option><option value="gnu-a-windows-lib" ${buildProfile.dllImportLibraryFormat === "gnu-a-windows-lib" ? "selected" : ""}>GNU .a + Windows .lib</option><option value="all" ${buildProfile.dllImportLibraryFormat === "all" ? "selected" : ""}>All: .dll.a + .a + .lib</option><option value="none" ${buildProfile.dllImportLibraryFormat === "none" ? "selected" : ""}>No import library</option>`) : `<input type="hidden" id="dllImportLibraryFormat" value="${escapeAttribute(buildProfile.dllImportLibraryFormat)}">`}
+  </div>
+  ${manifest.kind !== "static-library" && manifest.kind !== "shared-library" ? '<p class="muted">This target is an application/test target, so no library artifact-format selector applies. The import-library generation and analyzers below remain available for external SDK libraries.</p>' : ""}
+  <p class="muted">These format selectors affect QPM's Direct backend. qmake and CMake keep authority over their own target/import-library generation. A Windows .lib static archive requires lib.exe or llvm-lib; a DLL .lib is generated from the built DLL export table.</p>
+</section>
+<section id="section-import-library-generation" data-settings-section data-settings-page="libraries" data-settings-title="Windows import-library generation" class="card wide"><h2>${sectionHeading("compiler", "Windows import-library generation")}</h2>
+  <div class="fields">
+    ${selectField("Generator", "importLibraryGenerator", `<option value="auto" ${projectSettings.importLibraries.generator === "auto" ? "selected" : ""}>Automatic</option><option value="gnu-dlltool" ${projectSettings.importLibraries.generator === "gnu-dlltool" ? "selected" : ""}>GNU dlltool</option><option value="llvm-dlltool" ${projectSettings.importLibraries.generator === "llvm-dlltool" ? "selected" : ""}>LLVM llvm-dlltool</option><option value="msvc-lib" ${projectSettings.importLibraries.generator === "msvc-lib" ? "selected" : ""}>Microsoft lib.exe</option><option value="llvm-lib" ${projectSettings.importLibraries.generator === "llvm-lib" ? "selected" : ""}>LLVM llvm-lib</option>`)}
+    ${field("Generator executable override", "importLibraryGeneratorPath", projectSettings.importLibraries.generatorPath)}
+    ${selectField("Header target architecture", "importLibraryArchitecture", `<option value="auto" ${projectSettings.importLibraries.architecture === "auto" ? "selected" : ""}>Automatic</option><option value="x86" ${projectSettings.importLibraries.architecture === "x86" ? "selected" : ""}>x86 / 32-bit</option><option value="x64" ${projectSettings.importLibraries.architecture === "x64" ? "selected" : ""}>x64 / 64-bit</option><option value="arm64" ${projectSettings.importLibraries.architecture === "arm64" ? "selected" : ""}>ARM64</option>`)}
+    ${field("Default output directory", "importLibraryOutputDirectory", projectSettings.importLibraries.outputDirectory)}
+  </div>
+  <div class="checks">${check("importLibraryKeepDefinitionFile", "Keep generated .def file", projectSettings.importLibraries.keepDefinitionFile)}</div>
+  <div class="actions" style="margin-top:12px"><button type="button" class="secondary" data-run-command="qpm.generateImportLibraryFromHeaders">Generate .lib from Header(s)...</button><button type="button" class="secondary" data-run-command="qpm.generateImportLibraryFromDll">Generate .lib from DLL...</button><button type="button" class="secondary" data-run-command="qpm.extractDllDefinitionFile">Extract DLL exports (.def)...</button><button type="button" class="secondary" data-run-command="qpm.openImportLibraryReport">Open last report</button></div>
+  <p class="muted">Header generation is intentionally conservative for C++ decorated names. DLL generation reads the real PE export table and preserves exported decorated names.</p>
+</section>
+<section id="section-library-analyzers" data-settings-section data-settings-page="libraries" data-settings-title="DLL and archive analyzers" class="card wide"><h2>${sectionHeading("compiler", "DLL / .lib / .a analyzers")}</h2>
+  <p class="muted">Inspect PE metadata, exports/imports, resources and PDB CodeView information for DLLs; inspect archive members, COFF/ELF/LLVM bitcode symbols, import-object descriptors and referenced runtime DLL names for .lib/.a archives.</p>
+  <div class="actions"><button type="button" class="secondary" data-run-command="qpm.analyzeDll">Open DLL Analyzer...</button><button type="button" class="secondary" data-run-command="qpm.analyzeLibrary">Open .a / .lib Analyzer...</button></div>
 </section>
 <section id="section-run" data-settings-section data-settings-page="run" data-settings-title="Run profile" class="card wide"><h2>${sectionHeading("run", "Run")}</h2><div class="fields">
   ${field("Command-line arguments", "runArguments", runArguments, true)}
@@ -53773,6 +55021,7 @@ const activatePage = (pageId, scrollToTop = false) => {
     if (first) first.scrollIntoView({ behavior:'smooth', block:'start' });
   }
 };
+document.querySelectorAll('[data-run-command]').forEach((button) => button.addEventListener('click', () => { vscode.postMessage({ type:'runCommand', command:button.dataset.runCommand }); }));
 pageButtons.forEach((button) => button.addEventListener('click', () => activatePage(button.dataset.settingsPageTarget, true)));
 on('sectionNav', 'change', () => { const target = byId(sectionNav.value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
 on('settingsFilter', 'input', applySettingsFilter);
@@ -53788,7 +55037,8 @@ on('save', 'click', () => {
   vscode.postMessage({
     type:'save',
     name:value('name'), targetName:value('targetName'), kind:value('kind'), cppStandard:value('cppStandard'), buildArchitecture:value('buildArchitecture'), buildSystem:value('buildSystem'), parallelJobs:value('parallelJobs'),
-    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'), linkage:value('linkage'),
+    outputDirectory:value('outputDirectory'), generatedDirectory:value('generatedDirectory'), majorVersion:value('majorVersion'), linkage:value('linkage'), staticLibraryFormat:value('staticLibraryFormat'), dllImportLibraryFormat:value('dllImportLibraryFormat'),
+    importLibraryGenerator:value('importLibraryGenerator'), importLibraryGeneratorPath:value('importLibraryGeneratorPath'), importLibraryArchitecture:value('importLibraryArchitecture'), importLibraryOutputDirectory:value('importLibraryOutputDirectory'), importLibraryKeepDefinitionFile:checked('importLibraryKeepDefinitionFile'),
     autoMoc:checked('autoMoc'), autoUic:checked('autoUic'), autoRcc:checked('autoRcc'), generateProjectFiles:checked('generateProjectFiles'), unityBuild:checked('unityBuild'), useResponseFiles:checked('useResponseFiles'), autoDeploy:checked('autoDeploy'), deployTranslations:checked('deployTranslations'), deployOutputDirectory:value('deployOutputDirectory'), deployCleanOutput:checked('deployCleanOutput'), deployCompilerRuntime:checked('deployCompilerRuntime'), deployVerifyStandalone:checked('deployVerifyStandalone'),
     modules:[...document.querySelectorAll('input[name="qtModule"]:checked')].map((input) => input.value),
     defines:value('defines'), includeDirectories:value('includeDirectories'), libraryDirectories:value('libraryDirectories'), libraries:value('libraries'),
@@ -53839,6 +55089,20 @@ on('save', 'click', () => {
         default:
           return ["Core"];
       }
+    }
+    function normalizeQtStaticLibraryFormat(value) {
+      return value === "gnu-a" || value === "windows-lib" ? value : "auto";
+    }
+    function normalizeQtDllImportLibraryFormat(value) {
+      const allowed = ["auto", "gnu-a", "gnu-dll-a", "windows-lib", "gnu-both", "gnu-a-windows-lib", "both", "all", "none"];
+      return typeof value === "string" && allowed.includes(value) ? value : "auto";
+    }
+    function normalizeImportLibraryGenerator(value) {
+      const allowed = ["auto", "msvc-lib", "llvm-lib", "llvm-dlltool", "gnu-dlltool"];
+      return typeof value === "string" && allowed.includes(value) ? value : "auto";
+    }
+    function normalizeImportLibraryArchitecture(value) {
+      return value === "x86" || value === "x64" || value === "arm64" ? value : "auto";
     }
     function normalizeQtLinkageMode(value) {
       return value === "static-runtime" || value === "static-qt" ? value : "dynamic";
@@ -54228,6 +55492,1131 @@ on('save', 'click', () => {
       for (let index = 0; index < 32; index += 1)
         value += alphabet[Math.floor(Math.random() * alphabet.length)];
       return value;
+    }
+  }
+});
+
+// out/services/qpmDllAnalyzerService.js
+var require_qpmDllAnalyzerService = __commonJS({
+  "out/services/qpmDllAnalyzerService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.analyzeDllFile = analyzeDllFile;
+    exports2.renderDllAnalysisMarkdown = renderDllAnalysisMarkdown;
+    var crypto = __importStar2(require("crypto"));
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var qpmImportLibraryService_12 = require_qpmImportLibraryService();
+    function analyzeDllFile(filePath) {
+      const resolved = path2.resolve(filePath);
+      const buffer = fs.readFileSync(resolved);
+      const context = parsePeContext(buffer);
+      const exports3 = (0, qpmImportLibraryService_12.parsePeExports)(buffer);
+      const machine = buffer.readUInt16LE(context.fileHeader);
+      const timestamp = buffer.readUInt32LE(context.fileHeader + 4);
+      const fileCharacteristics = buffer.readUInt16LE(context.fileHeader + 18);
+      const entryPointRva = buffer.readUInt32LE(context.optionalOffset + 16);
+      const imageBase = context.pe32Plus ? `0x${buffer.readBigUInt64LE(context.optionalOffset + 24).toString(16).toUpperCase()}` : `0x${buffer.readUInt32LE(context.optionalOffset + 28).toString(16).toUpperCase()}`;
+      const sizeOfImage = buffer.readUInt32LE(context.optionalOffset + 56);
+      const checksum = buffer.readUInt32LE(context.optionalOffset + 64);
+      const subsystem = buffer.readUInt16LE(context.optionalOffset + 68);
+      const dllCharacteristics = buffer.readUInt16LE(context.optionalOffset + 70);
+      const certificate = context.directory(4);
+      const clr = context.directory(14);
+      return {
+        filePath: resolved,
+        fileName: path2.basename(resolved),
+        fileSize: buffer.length,
+        sha256: crypto.createHash("sha256").update(buffer).digest("hex"),
+        architecture: exports3.architecture,
+        peFormat: context.pe32Plus ? "PE32+" : "PE32",
+        machine,
+        machineLabel: machineLabel(machine),
+        timestamp,
+        timestampIso: timestamp ? new Date(timestamp * 1e3).toISOString() : void 0,
+        imageBase,
+        entryPointRva,
+        sizeOfImage,
+        checksum,
+        subsystem,
+        subsystemLabel: subsystemLabel(subsystem),
+        fileCharacteristics: decodeFlags(fileCharacteristics, FILE_CHARACTERISTICS),
+        dllCharacteristics: decodeFlags(dllCharacteristics, DLL_CHARACTERISTICS),
+        authenticodePresent: certificate.rva > 0 && certificate.size > 0,
+        authenticodeSize: certificate.size,
+        dotNet: clr.rva > 0 && clr.size > 0,
+        version: parseVersionInfo(context),
+        debug: parseDebugInfo(context),
+        exports: exports3.symbols,
+        ordinalOnlyExportCount: exports3.ordinalOnlyCount,
+        imports: parseImports(context),
+        sections: context.sections.map(({ rawPointer: _rawPointer, ...section }) => section),
+        resources: parseResourceTypes(context)
+      };
+    }
+    function renderDllAnalysisMarkdown(analysis) {
+      const v = analysis.version;
+      const versionStrings = Object.entries(v.strings).sort(([a], [b]) => a.localeCompare(b));
+      const lines = [
+        "# QPM DLL Analyzer",
+        "",
+        `- File: \`${analysis.filePath}\``,
+        `- Size: ${analysis.fileSize} bytes`,
+        `- SHA-256: \`${analysis.sha256}\``,
+        `- Architecture: **${analysis.architecture}** (${analysis.machineLabel}, 0x${analysis.machine.toString(16).toUpperCase()})`,
+        `- PE format: ${analysis.peFormat}`,
+        `- Link timestamp: ${analysis.timestampIso ?? "not set"}`,
+        `- Image base: ${analysis.imageBase}`,
+        `- Entry point RVA: 0x${analysis.entryPointRva.toString(16).toUpperCase()}`,
+        `- Image size: ${analysis.sizeOfImage} bytes`,
+        `- Subsystem: ${analysis.subsystemLabel}`,
+        `- Authenticode certificate table: ${analysis.authenticodePresent ? `present (${analysis.authenticodeSize} bytes)` : "not present"}`,
+        `- .NET/CLR header: ${analysis.dotNet ? "present" : "not present"}`,
+        "",
+        "## Version information",
+        "",
+        `- File version: ${v.fileVersion ?? "not available"}`,
+        `- Product version: ${v.productVersion ?? "not available"}`,
+        `- File revision: ${versionRevision(v.fileVersion) ?? "not available"}`
+      ];
+      for (const [key, value] of versionStrings)
+        lines.push(`- ${key}: ${value}`);
+      lines.push("", "## Exports", "", "| Ordinal | RVA | Name | Forwarder |", "| ---: | ---: | --- | --- |");
+      for (const symbol of analysis.exports)
+        lines.push(`| ${symbol.ordinal} | 0x${symbol.rva.toString(16).toUpperCase()} | \`${escapeMarkdownCell(symbol.name)}\` | ${symbol.forwarder ? `\`${escapeMarkdownCell(symbol.forwarder)}\`` : ""} |`);
+      if (!analysis.exports.length)
+        lines.push("| | | _No named exports_ | |");
+      if (analysis.ordinalOnlyExportCount)
+        lines.push("", `Ordinal-only exports: ${analysis.ordinalOnlyExportCount}`);
+      lines.push("", "## Imports", "");
+      for (const module3 of analysis.imports) {
+        lines.push(`### ${module3.dll}`, "");
+        if (!module3.symbols.length)
+          lines.push("_No decoded symbols._", "");
+        else
+          for (const symbol of module3.symbols)
+            lines.push(`- ${symbol.name ? `\`${escapeMarkdownCell(symbol.name)}\`` : `ordinal ${symbol.ordinal}`}${symbol.hint !== void 0 ? ` (hint ${symbol.hint})` : ""}`);
+        lines.push("");
+      }
+      if (!analysis.imports.length)
+        lines.push("_No imports._", "");
+      lines.push("## Sections", "", "| Name | RVA | Virtual size | Raw size | Characteristics |", "| --- | ---: | ---: | ---: | ---: |");
+      for (const section of analysis.sections)
+        lines.push(`| ${section.name} | 0x${section.virtualAddress.toString(16).toUpperCase()} | ${section.virtualSize} | ${section.rawSize} | 0x${section.characteristics.toString(16).toUpperCase()} |`);
+      lines.push("", "## Resources", "");
+      if (!analysis.resources.length)
+        lines.push("_No resource directory._");
+      else
+        for (const resource of analysis.resources)
+          lines.push(`- ${resource.name ?? resourceTypeName(resource.id)}${resource.id !== void 0 ? ` (${resource.id})` : ""}: ${resource.count} entr${resource.count === 1 ? "y" : "ies"}`);
+      if (analysis.debug.pdbPath || analysis.debug.pdbGuid) {
+        lines.push("", "## Debug / PDB", "");
+        if (analysis.debug.pdbPath)
+          lines.push(`- PDB path: \`${analysis.debug.pdbPath}\``);
+        if (analysis.debug.pdbGuid)
+          lines.push(`- PDB GUID: \`${analysis.debug.pdbGuid}\``);
+        if (analysis.debug.pdbAge !== void 0)
+          lines.push(`- PDB age: ${analysis.debug.pdbAge}`);
+      }
+      lines.push("");
+      return lines.join("\n");
+    }
+    function parsePeContext(buffer) {
+      if (buffer.length < 256 || buffer.toString("ascii", 0, 2) !== "MZ")
+        throw new Error("File is not a PE image (missing MZ header).");
+      const peOffset = buffer.readUInt32LE(60);
+      if (peOffset <= 0 || peOffset + 24 > buffer.length || buffer.toString("ascii", peOffset, peOffset + 4) !== "PE\0\0")
+        throw new Error("Invalid PE signature.");
+      const fileHeader = peOffset + 4;
+      const sectionCount = buffer.readUInt16LE(fileHeader + 2);
+      const optionalSize = buffer.readUInt16LE(fileHeader + 16);
+      const optionalOffset = fileHeader + 20;
+      if (optionalOffset + optionalSize > buffer.length)
+        throw new Error("Truncated PE optional header.");
+      const magic = buffer.readUInt16LE(optionalOffset);
+      const pe32Plus = magic === 523;
+      if (!pe32Plus && magic !== 267)
+        throw new Error(`Unsupported PE optional-header magic 0x${magic.toString(16)}.`);
+      const numberOfDirectories = buffer.readUInt32LE(optionalOffset + (pe32Plus ? 108 : 92));
+      const dataDirectoryOffset = optionalOffset + (pe32Plus ? 112 : 96);
+      const sizeOfHeaders = buffer.readUInt32LE(optionalOffset + 60);
+      const sectionOffset = optionalOffset + optionalSize;
+      const sections = [];
+      for (let index = 0; index < sectionCount; index += 1) {
+        const offset = sectionOffset + index * 40;
+        if (offset + 40 > buffer.length)
+          throw new Error("Truncated PE section table.");
+        sections.push({
+          name: readSectionName(buffer, offset),
+          virtualSize: buffer.readUInt32LE(offset + 8),
+          virtualAddress: buffer.readUInt32LE(offset + 12),
+          rawSize: buffer.readUInt32LE(offset + 16),
+          rawPointer: buffer.readUInt32LE(offset + 20),
+          characteristics: buffer.readUInt32LE(offset + 36)
+        });
+      }
+      const rvaToOffset = (rva) => {
+        if (rva < sizeOfHeaders && rva < buffer.length)
+          return rva;
+        for (const section of sections) {
+          const span = Math.max(section.virtualSize, section.rawSize);
+          if (rva >= section.virtualAddress && rva < section.virtualAddress + span) {
+            const offset = section.rawPointer + (rva - section.virtualAddress);
+            if (offset >= 0 && offset < buffer.length)
+              return offset;
+          }
+        }
+        throw new Error(`Unable to map PE RVA 0x${rva.toString(16)}.`);
+      };
+      const directory = (index) => {
+        if (index < 0 || index >= numberOfDirectories || dataDirectoryOffset + index * 8 + 8 > buffer.length)
+          return { rva: 0, size: 0 };
+        return { rva: buffer.readUInt32LE(dataDirectoryOffset + index * 8), size: buffer.readUInt32LE(dataDirectoryOffset + index * 8 + 4) };
+      };
+      return { buffer, peOffset, fileHeader, optionalOffset, optionalSize, magic, pe32Plus, numberOfDirectories, dataDirectoryOffset, sizeOfHeaders, sections, rvaToOffset, directory };
+    }
+    function parseImports(context) {
+      const dir = context.directory(1);
+      if (!dir.rva || !dir.size)
+        return [];
+      let offset;
+      try {
+        offset = context.rvaToOffset(dir.rva);
+      } catch {
+        return [];
+      }
+      const modules = [];
+      const thunkSize = context.pe32Plus ? 8 : 4;
+      const ordinalMask = context.pe32Plus ? 0x8000000000000000n : 0x80000000n;
+      for (let index = 0; index < 4096; index += 1) {
+        const descriptor = offset + index * 20;
+        if (descriptor + 20 > context.buffer.length)
+          break;
+        const originalThunk = context.buffer.readUInt32LE(descriptor);
+        const nameRva = context.buffer.readUInt32LE(descriptor + 12);
+        const firstThunk = context.buffer.readUInt32LE(descriptor + 16);
+        if (!originalThunk && !nameRva && !firstThunk)
+          break;
+        if (!nameRva)
+          continue;
+        let dll = "";
+        try {
+          dll = readCString(context.buffer, context.rvaToOffset(nameRva));
+        } catch {
+          dll = `<invalid-name-rva-0x${nameRva.toString(16)}>`;
+        }
+        const symbols = [];
+        const thunkRva = originalThunk || firstThunk;
+        if (thunkRva) {
+          try {
+            const thunkOffset = context.rvaToOffset(thunkRva);
+            for (let slot = 0; slot < 65536; slot += 1) {
+              const entryOffset = thunkOffset + slot * thunkSize;
+              if (entryOffset + thunkSize > context.buffer.length)
+                break;
+              const raw = context.pe32Plus ? context.buffer.readBigUInt64LE(entryOffset) : BigInt(context.buffer.readUInt32LE(entryOffset));
+              if (raw === 0n)
+                break;
+              if ((raw & ordinalMask) !== 0n) {
+                symbols.push({ ordinal: Number(raw & 0xffffn) });
+              } else {
+                const nameEntryRva = Number(raw & 0xffffffffn);
+                try {
+                  const nameOffset = context.rvaToOffset(nameEntryRva);
+                  if (nameOffset + 2 <= context.buffer.length)
+                    symbols.push({ hint: context.buffer.readUInt16LE(nameOffset), name: readCString(context.buffer, nameOffset + 2) });
+                } catch {
+                }
+              }
+            }
+          } catch {
+          }
+        }
+        modules.push({ dll, symbols });
+      }
+      return modules;
+    }
+    function parseVersionInfo(context) {
+      const result = { strings: {} };
+      const versionData = findResourceData(context, 16);
+      if (!versionData)
+        return result;
+      const { offset, size } = versionData;
+      const end = Math.min(context.buffer.length, offset + size);
+      if (offset + 6 > end)
+        return result;
+      try {
+        const root = parseVersionBlock(context.buffer, offset, end);
+        if (root.key !== "VS_VERSION_INFO")
+          return result;
+        if (root.valueLength >= 52 && root.valueOffset + 52 <= end && context.buffer.readUInt32LE(root.valueOffset) === 4277077181) {
+          const fileMs = context.buffer.readUInt32LE(root.valueOffset + 8);
+          const fileLs = context.buffer.readUInt32LE(root.valueOffset + 12);
+          const productMs = context.buffer.readUInt32LE(root.valueOffset + 16);
+          const productLs = context.buffer.readUInt32LE(root.valueOffset + 20);
+          result.fileVersion = formatVersion(fileMs, fileLs);
+          result.productVersion = formatVersion(productMs, productLs);
+        }
+        collectVersionStrings(context.buffer, root, result.strings, end);
+        result.fileVersion = result.strings.FileVersion || result.fileVersion;
+        result.productVersion = result.strings.ProductVersion || result.productVersion;
+      } catch {
+      }
+      return result;
+    }
+    function parseVersionBlock(buffer, offset, parentEnd) {
+      if (offset + 6 > parentEnd)
+        throw new Error("Truncated VERSIONINFO block.");
+      const length = buffer.readUInt16LE(offset);
+      const valueLength = buffer.readUInt16LE(offset + 2);
+      const type = buffer.readUInt16LE(offset + 4);
+      if (!length || offset + length > parentEnd)
+        throw new Error("Invalid VERSIONINFO block length.");
+      let cursor = offset + 6;
+      const chars = [];
+      while (cursor + 2 <= offset + length) {
+        const code = buffer.readUInt16LE(cursor);
+        cursor += 2;
+        if (code === 0)
+          break;
+        chars.push(code);
+      }
+      const key = String.fromCharCode(...chars);
+      const valueOffset = align4(cursor);
+      const valueBytes = type === 1 ? valueLength * 2 : valueLength;
+      const childrenOffset = align4(Math.min(offset + length, valueOffset + valueBytes));
+      return { offset, length, valueLength, type, key, valueOffset, childrenOffset, end: offset + length };
+    }
+    function collectVersionStrings(buffer, parent, out, absoluteEnd) {
+      let cursor = parent.childrenOffset;
+      while (cursor + 6 <= parent.end && cursor + 6 <= absoluteEnd) {
+        let child;
+        try {
+          child = parseVersionBlock(buffer, cursor, Math.min(parent.end, absoluteEnd));
+        } catch {
+          break;
+        }
+        if (child.type === 1 && child.valueLength > 0 && child.valueOffset < child.end && child.key && child.key !== "StringFileInfo" && child.key !== "VarFileInfo") {
+          const valueEnd = Math.min(child.end, child.valueOffset + child.valueLength * 2);
+          const value = readUtf16String(buffer, child.valueOffset, valueEnd).replace(/\0+$/, "").trim();
+          if (value)
+            out[child.key] = value;
+        }
+        collectVersionStrings(buffer, child, out, absoluteEnd);
+        cursor = align4(child.end);
+        if (child.length <= 0)
+          break;
+      }
+    }
+    function parseResourceTypes(context) {
+      const dir = context.directory(2);
+      if (!dir.rva || !dir.size)
+        return [];
+      let base;
+      try {
+        base = context.rvaToOffset(dir.rva);
+      } catch {
+        return [];
+      }
+      return readResourceDirectoryEntries(context.buffer, base, base, 0).map((entry) => ({ id: entry.id, name: entry.name, count: countResourceLeaves(context.buffer, base, entry.targetOffset, entry.isDirectory, 0) }));
+    }
+    function findResourceData(context, typeId) {
+      const dir = context.directory(2);
+      if (!dir.rva || !dir.size)
+        return void 0;
+      let base;
+      try {
+        base = context.rvaToOffset(dir.rva);
+      } catch {
+        return void 0;
+      }
+      const type = readResourceDirectoryEntries(context.buffer, base, base, 0).find((entry) => entry.id === typeId);
+      if (!type)
+        return void 0;
+      let currentOffset = type.targetOffset;
+      let isDirectory = type.isDirectory;
+      for (let depth = 0; depth < 4; depth += 1) {
+        if (!isDirectory) {
+          if (currentOffset + 16 > context.buffer.length)
+            return void 0;
+          const dataRva = context.buffer.readUInt32LE(currentOffset);
+          const size = context.buffer.readUInt32LE(currentOffset + 4);
+          try {
+            return { offset: context.rvaToOffset(dataRva), size };
+          } catch {
+            return void 0;
+          }
+        }
+        const entries = readResourceDirectoryEntries(context.buffer, base, currentOffset, depth + 1);
+        if (!entries.length)
+          return void 0;
+        currentOffset = entries[0].targetOffset;
+        isDirectory = entries[0].isDirectory;
+      }
+      return void 0;
+    }
+    function readResourceDirectoryEntries(buffer, base, directoryOffset, depth) {
+      if (depth > 8 || directoryOffset < 0 || directoryOffset + 16 > buffer.length)
+        return [];
+      const named = buffer.readUInt16LE(directoryOffset + 12);
+      const ids = buffer.readUInt16LE(directoryOffset + 14);
+      const total = Math.min(named + ids, 4096);
+      const entries = [];
+      for (let index = 0; index < total; index += 1) {
+        const off = directoryOffset + 16 + index * 8;
+        if (off + 8 > buffer.length)
+          break;
+        const nameRaw = buffer.readUInt32LE(off);
+        const targetRaw = buffer.readUInt32LE(off + 4);
+        const isName = (nameRaw & 2147483648) !== 0;
+        const targetRelative = targetRaw & 2147483647;
+        const targetOffset = base + targetRelative;
+        let name;
+        let id;
+        if (isName)
+          name = readResourceString(buffer, base + (nameRaw & 2147483647));
+        else
+          id = nameRaw & 65535;
+        entries.push({ id, name, targetOffset, isDirectory: (targetRaw & 2147483648) !== 0 });
+      }
+      return entries;
+    }
+    function countResourceLeaves(buffer, base, offset, isDirectory, depth) {
+      if (depth > 8)
+        return 0;
+      if (!isDirectory)
+        return offset + 16 <= buffer.length ? 1 : 0;
+      const entries = readResourceDirectoryEntries(buffer, base, offset, depth + 1);
+      return entries.reduce((sum, entry) => sum + countResourceLeaves(buffer, base, entry.targetOffset, entry.isDirectory, depth + 1), 0);
+    }
+    function parseDebugInfo(context) {
+      const dir = context.directory(6);
+      if (!dir.rva || dir.size < 28)
+        return {};
+      let offset;
+      try {
+        offset = context.rvaToOffset(dir.rva);
+      } catch {
+        return {};
+      }
+      const count = Math.min(Math.floor(dir.size / 28), 1024);
+      for (let index = 0; index < count; index += 1) {
+        const entry = offset + index * 28;
+        if (entry + 28 > context.buffer.length)
+          break;
+        const type = context.buffer.readUInt32LE(entry + 12);
+        const size = context.buffer.readUInt32LE(entry + 16);
+        const raw = context.buffer.readUInt32LE(entry + 24);
+        if (type !== 2 || !size || raw + Math.min(size, 24) > context.buffer.length)
+          continue;
+        if (context.buffer.toString("ascii", raw, raw + 4) === "RSDS" && raw + 24 <= context.buffer.length) {
+          return { pdbGuid: formatGuid(context.buffer.subarray(raw + 4, raw + 20)), pdbAge: context.buffer.readUInt32LE(raw + 20), pdbPath: readCString(context.buffer, raw + 24) };
+        }
+      }
+      return {};
+    }
+    function formatGuid(bytes) {
+      if (bytes.length < 16)
+        return "";
+      const d1 = bytes.readUInt32LE(0).toString(16).padStart(8, "0");
+      const d2 = bytes.readUInt16LE(4).toString(16).padStart(4, "0");
+      const d3 = bytes.readUInt16LE(6).toString(16).padStart(4, "0");
+      const d4 = bytes.subarray(8, 10).toString("hex");
+      const d5 = bytes.subarray(10, 16).toString("hex");
+      return `${d1}-${d2}-${d3}-${d4}-${d5}`.toUpperCase();
+    }
+    function readSectionName(buffer, offset) {
+      let end = offset;
+      while (end < offset + 8 && buffer[end] !== 0)
+        end += 1;
+      return buffer.toString("ascii", offset, end);
+    }
+    function readCString(buffer, offset) {
+      if (offset < 0 || offset >= buffer.length)
+        return "";
+      let end = offset;
+      while (end < buffer.length && buffer[end] !== 0)
+        end += 1;
+      return buffer.toString("utf8", offset, end);
+    }
+    function readUtf16String(buffer, start, end) {
+      const safeEnd = Math.min(buffer.length, end - (end - start) % 2);
+      return buffer.toString("utf16le", start, safeEnd).replace(/\u0000+$/g, "");
+    }
+    function readResourceString(buffer, offset) {
+      if (offset < 0 || offset + 2 > buffer.length)
+        return "";
+      const chars = buffer.readUInt16LE(offset);
+      const end = Math.min(buffer.length, offset + 2 + chars * 2);
+      return buffer.toString("utf16le", offset + 2, end);
+    }
+    function align4(value) {
+      return value + 3 & ~3;
+    }
+    function formatVersion(ms, ls) {
+      return `${ms >>> 16}.${ms & 65535}.${ls >>> 16}.${ls & 65535}`;
+    }
+    function versionRevision(value) {
+      const parts = String(value ?? "").split(".");
+      return parts.length >= 4 ? parts[3] : void 0;
+    }
+    function escapeMarkdownCell(value) {
+      return String(value).replace(/\|/g, "\\|").replace(/`/g, "\\`");
+    }
+    function decodeFlags(value, map) {
+      return map.filter(([mask]) => (value & mask) !== 0).map(([, label]) => label);
+    }
+    function machineLabel(machine) {
+      return machine === 332 ? "Intel 386" : machine === 34404 ? "AMD64" : machine === 43620 ? "ARM64" : `Machine 0x${machine.toString(16)}`;
+    }
+    function subsystemLabel(value) {
+      return { 1: "Native", 2: "Windows GUI", 3: "Windows CUI", 5: "OS/2 CUI", 7: "POSIX CUI", 9: "Windows CE GUI", 10: "EFI application", 11: "EFI boot-service driver", 12: "EFI runtime driver", 13: "EFI ROM", 14: "Xbox", 16: "Windows boot application" }[value] ?? `Subsystem ${value}`;
+    }
+    function resourceTypeName(id) {
+      return { 1: "Cursor", 2: "Bitmap", 3: "Icon", 4: "Menu", 5: "Dialog", 6: "String table", 7: "Font directory", 8: "Font", 9: "Accelerator", 10: "RCDATA", 11: "Message table", 12: "Group cursor", 14: "Group icon", 16: "Version", 17: "Dialog include", 21: "Animated cursor", 22: "Animated icon", 23: "HTML", 24: "Manifest" }[id ?? -1] ?? `Resource ${id ?? "?"}`;
+    }
+    var FILE_CHARACTERISTICS = [
+      [1, "Relocations stripped"],
+      [2, "Executable image"],
+      [4, "Line numbers stripped"],
+      [8, "Local symbols stripped"],
+      [32, "Large address aware"],
+      [256, "32-bit machine"],
+      [512, "Debug stripped"],
+      [4096, "System"],
+      [8192, "DLL"],
+      [16384, "Uniprocessor only"]
+    ];
+    var DLL_CHARACTERISTICS = [
+      [32, "High entropy VA"],
+      [64, "Dynamic base (ASLR)"],
+      [128, "Force integrity"],
+      [256, "NX compatible"],
+      [512, "No isolation"],
+      [1024, "No SEH"],
+      [2048, "No bind"],
+      [4096, "AppContainer"],
+      [8192, "WDM driver"],
+      [16384, "Control Flow Guard"],
+      [32768, "Terminal Server aware"]
+    ];
+  }
+});
+
+// out/services/qpmLibraryAnalyzerService.js
+var require_qpmLibraryAnalyzerService = __commonJS({
+  "out/services/qpmLibraryAnalyzerService.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.analyzeLibraryFile = analyzeLibraryFile;
+    exports2.renderLibraryAnalysisMarkdown = renderLibraryAnalysisMarkdown;
+    var crypto = __importStar2(require("crypto"));
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var AR_MAGIC = "!<arch>\n";
+    function analyzeLibraryFile(filePath) {
+      const resolved = path2.resolve(filePath);
+      const buffer = fs.readFileSync(resolved);
+      if (buffer.length < 8 || buffer.toString("ascii", 0, 8) !== AR_MAGIC) {
+        throw new Error("Unsupported library format: expected a GNU/COFF archive beginning with !<arch>.");
+      }
+      const stat = fs.statSync(resolved);
+      const rawMembers = parseArchiveMembers(buffer);
+      const linkerSymbols = parseArchiveLinkerSymbols(rawMembers);
+      const byOffset = new Map(rawMembers.map((member) => [member.headerOffset, member]));
+      for (const symbol of linkerSymbols) {
+        if (symbol.memberOffset !== void 0) {
+          const member = byOffset.get(symbol.memberOffset);
+          if (member && !member.symbols.includes(symbol.name))
+            member.symbols.push(symbol.name);
+        }
+      }
+      const members = rawMembers.map((member) => ({
+        name: member.name,
+        size: member.size,
+        timestamp: member.timestamp,
+        timestampIso: member.timestamp ? new Date(member.timestamp * 1e3).toISOString() : void 0,
+        kind: member.kind,
+        architecture: member.architecture,
+        machine: member.machine,
+        importDll: member.importDll,
+        importSymbol: member.importSymbol,
+        symbols: member.symbols.slice().sort((a, b) => a.localeCompare(b))
+      }));
+      const objectMembers = rawMembers.filter((member) => member.kind === "coff-object" || member.kind === "elf-object" || member.kind === "llvm-bitcode");
+      const importMembers = rawMembers.filter((member) => member.kind === "import-object");
+      const symbols = unique(linkerSymbols.map((entry) => entry.name).filter(Boolean));
+      const importDlls = unique([
+        ...importMembers.map((member) => member.importDll || "").filter(Boolean),
+        ...scanLikelyDllNames(buffer)
+      ]);
+      const architectures = unique(rawMembers.map((member) => member.architecture || "").filter(Boolean));
+      const symbolLooksLikeImport = symbols.some((symbol) => /^__imp_|^_?__IMPORT_DESCRIPTOR_|_head_/i.test(symbol));
+      const memberLooksLikeImport = rawMembers.some((member) => /(?:_head_|_iname|_nm_).*\.(?:o|obj)$/i.test(member.name));
+      const hasImportEvidence = importMembers.length > 0 || symbolLooksLikeImport || memberLooksLikeImport || /\.dll\.a$/i.test(resolved);
+      const hasStaticEvidence = objectMembers.length > 0 && !hasImportEvidence;
+      const libraryKind = hasImportEvidence && objectMembers.length > 0 && importMembers.length === 0 ? "import" : hasImportEvidence && objectMembers.length > 0 && importMembers.length > 0 ? "mixed" : hasImportEvidence ? "import" : hasStaticEvidence ? "static" : "unknown";
+      const notes = [
+        "Archive libraries do not normally contain PE VERSIONINFO at the archive level. File/product version and revision fields therefore are not intrinsic metadata for .a/.lib files.",
+        "A .lib can be either a static COFF archive or a Windows import library; QPM classifies it from member and symbol evidence rather than from the extension alone."
+      ];
+      if (/\.lib$/i.test(resolved) && libraryKind === "static" && architectures.some((arch) => /x86|x64|arm64/i.test(arch))) {
+        notes.push("This .lib looks like a static COFF archive. C++ ABI compatibility still depends on the compiler/toolchain that produced the object members.");
+      }
+      if (/\.a$/i.test(resolved) && libraryKind === "import") {
+        notes.push("This .a appears to be a MinGW/GNU-style import library; the corresponding DLL is still required at runtime.");
+      }
+      return {
+        filePath: resolved,
+        fileName: path2.basename(resolved),
+        extension: archiveExtension(resolved),
+        fileSize: buffer.length,
+        modifiedIso: stat.mtime.toISOString(),
+        sha256: crypto.createHash("sha256").update(buffer).digest("hex"),
+        archiveFormat: "GNU/COFF ar archive",
+        libraryKind,
+        architectures,
+        memberCount: rawMembers.filter((member) => member.kind !== "linker-table" && member.kind !== "longnames").length,
+        objectMemberCount: objectMembers.length,
+        importObjectCount: importMembers.length,
+        linkerSymbolCount: symbols.length,
+        symbols,
+        importDlls,
+        members,
+        notes
+      };
+    }
+    function renderLibraryAnalysisMarkdown(analysis) {
+      const lines = [
+        "# QPM Library Analyzer",
+        "",
+        `- File: \`${analysis.filePath}\``,
+        `- Extension: \`${analysis.extension}\``,
+        `- Size: ${analysis.fileSize} bytes`,
+        `- Modified: ${analysis.modifiedIso}`,
+        `- SHA-256: \`${analysis.sha256}\``,
+        `- Archive format: ${analysis.archiveFormat}`,
+        `- Classification: **${analysis.libraryKind} library**`,
+        `- Architectures: ${analysis.architectures.length ? analysis.architectures.join(", ") : "not detected"}`,
+        `- Archive members: ${analysis.memberCount}`,
+        `- Object members: ${analysis.objectMemberCount}`,
+        `- Import-object members: ${analysis.importObjectCount}`,
+        `- Linker symbols: ${analysis.linkerSymbolCount}`,
+        "",
+        "## Runtime DLL references",
+        ""
+      ];
+      if (analysis.importDlls.length)
+        analysis.importDlls.forEach((dll) => lines.push(`- \`${dll}\``));
+      else
+        lines.push("_No DLL name was detected in the archive._");
+      lines.push("", "## Linker symbols", "");
+      if (analysis.symbols.length)
+        analysis.symbols.forEach((symbol) => lines.push(`- \`${escapeMarkdown(symbol)}\``));
+      else
+        lines.push("_No archive linker symbol table was decoded._");
+      lines.push("", "## Members", "", "| Name | Kind | Architecture | Size | Import DLL | Import symbol | Symbols |", "| --- | --- | --- | ---: | --- | --- | ---: |");
+      for (const member of analysis.members) {
+        lines.push(`| \`${escapeMarkdown(member.name)}\` | ${member.kind} | ${member.architecture ?? ""} | ${member.size} | ${member.importDll ? `\`${escapeMarkdown(member.importDll)}\`` : ""} | ${member.importSymbol ? `\`${escapeMarkdown(member.importSymbol)}\`` : ""} | ${member.symbols.length} |`);
+      }
+      lines.push("", "## Notes", "");
+      analysis.notes.forEach((note) => lines.push(`- ${note}`));
+      lines.push("");
+      return lines.join("\n");
+    }
+    function parseArchiveMembers(buffer) {
+      const members = [];
+      let offset = 8;
+      let longNames = Buffer.alloc(0);
+      while (offset + 60 <= buffer.length) {
+        const headerOffset = offset;
+        const rawName = buffer.toString("ascii", offset, offset + 16).trim();
+        const timestampRaw = buffer.toString("ascii", offset + 16, offset + 28).trim();
+        const sizeRaw = buffer.toString("ascii", offset + 48, offset + 58).trim();
+        const trailer = buffer.toString("ascii", offset + 58, offset + 60);
+        if (trailer !== "`\n")
+          break;
+        const size = Number.parseInt(sizeRaw, 10);
+        if (!Number.isFinite(size) || size < 0 || offset + 60 + size > buffer.length)
+          break;
+        const timestamp = Number.parseInt(timestampRaw, 10);
+        let dataStart = offset + 60;
+        let payloadSize = size;
+        let name = rawName;
+        if (rawName.startsWith("#1/")) {
+          const nameLength = Number.parseInt(rawName.slice(3), 10) || 0;
+          if (nameLength > 0 && nameLength <= payloadSize) {
+            name = buffer.toString("utf8", dataStart, dataStart + nameLength).replace(/\0+$/, "");
+            dataStart += nameLength;
+            payloadSize -= nameLength;
+          }
+        } else if (/^\/\d+$/.test(rawName) && longNames.length) {
+          const longOffset = Number.parseInt(rawName.slice(1), 10);
+          name = readArLongName(longNames, longOffset);
+        } else if (rawName === "/" || rawName === "//" || rawName === "/SYM64/") {
+          name = rawName;
+        } else {
+          name = rawName.replace(/\/$/, "");
+        }
+        const data = buffer.subarray(dataStart, dataStart + payloadSize);
+        let info = classifyArchiveMember(name, data);
+        if (rawName === "//") {
+          longNames = Buffer.from(data);
+          info = { kind: "longnames" };
+        } else if (rawName === "/" || rawName === "/SYM64/") {
+          info = { kind: "linker-table" };
+        }
+        members.push({
+          headerOffset,
+          name,
+          size: payloadSize,
+          timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : void 0,
+          data,
+          kind: info.kind,
+          architecture: info.architecture,
+          machine: info.machine,
+          importDll: info.importDll,
+          importSymbol: info.importSymbol,
+          symbols: []
+        });
+        offset += 60 + size;
+        if (offset & 1)
+          offset += 1;
+      }
+      return members;
+    }
+    function parseArchiveLinkerSymbols(members) {
+      const symbols = [];
+      for (const member of members.filter((entry) => entry.kind === "linker-table")) {
+        const data = member.data;
+        const wide = member.name === "/SYM64/";
+        const word = wide ? 8 : 4;
+        if (data.length < word)
+          continue;
+        let count = 0;
+        try {
+          count = wide ? Number(data.readBigUInt64BE(0)) : data.readUInt32BE(0);
+        } catch {
+          continue;
+        }
+        if (!Number.isSafeInteger(count) || count < 0 || count > 2e6)
+          continue;
+        const offsetsStart = word;
+        const namesStart = offsetsStart + count * word;
+        if (namesStart > data.length)
+          continue;
+        let cursor = namesStart;
+        for (let index = 0; index < count && cursor < data.length; index += 1) {
+          let memberOffset;
+          try {
+            memberOffset = wide ? Number(data.readBigUInt64BE(offsetsStart + index * word)) : data.readUInt32BE(offsetsStart + index * word);
+          } catch {
+            memberOffset = void 0;
+          }
+          const end = data.indexOf(0, cursor);
+          const stop = end >= 0 ? end : data.length;
+          const name = data.toString("utf8", cursor, stop);
+          if (name)
+            symbols.push({ name, memberOffset });
+          cursor = stop + 1;
+        }
+        if (symbols.length)
+          break;
+      }
+      return symbols;
+    }
+    function classifyArchiveMember(name, data) {
+      if (data.length >= 20 && data.readUInt16LE(0) === 0 && data.readUInt16LE(2) === 65535) {
+        const machine = data.readUInt16LE(6);
+        const strings = readNullStrings(data.subarray(20), 2);
+        return { kind: "import-object", architecture: machineLabel(machine), machine, importSymbol: strings[0], importDll: strings[1] };
+      }
+      if (data.length >= 20) {
+        const machine = data.readUInt16LE(0);
+        if ([332, 34404, 43620, 448, 452].includes(machine)) {
+          return { kind: "coff-object", architecture: machineLabel(machine), machine };
+        }
+      }
+      if (data.length >= 20 && data[0] === 127 && data.toString("ascii", 1, 4) === "ELF") {
+        const little = data[5] !== 2;
+        const machine = little ? data.readUInt16LE(18) : data.readUInt16BE(18);
+        return { kind: "elf-object", architecture: elfMachineLabel(machine), machine };
+      }
+      if (data.length >= 4 && data[0] === 66 && data[1] === 67 && data[2] === 192 && data[3] === 222)
+        return { kind: "llvm-bitcode" };
+      if (name === "/" || name === "/SYM64/")
+        return { kind: "linker-table" };
+      if (name === "//")
+        return { kind: "longnames" };
+      if (/^\/?(?:SYMDEF|__.SYMDEF)/i.test(name))
+        return { kind: "metadata" };
+      return { kind: "unknown" };
+    }
+    function readArLongName(table, offset) {
+      if (!Number.isFinite(offset) || offset < 0 || offset >= table.length)
+        return `/<${offset}>`;
+      let end = offset;
+      while (end < table.length && table[end] !== 10 && table[end] !== 0)
+        end += 1;
+      return table.toString("utf8", offset, end).replace(/\/$/, "");
+    }
+    function readNullStrings(data, max) {
+      const result = [];
+      let cursor = 0;
+      while (result.length < max && cursor < data.length) {
+        const end = data.indexOf(0, cursor);
+        const stop = end >= 0 ? end : data.length;
+        result.push(data.toString("utf8", cursor, stop));
+        if (end < 0)
+          break;
+        cursor = end + 1;
+      }
+      return result;
+    }
+    function scanLikelyDllNames(buffer) {
+      const result = [];
+      const ascii = buffer.toString("latin1");
+      const regex = /(?:[A-Za-z0-9_.+\-]{1,100})\.dll\x00/gi;
+      let match;
+      while ((match = regex.exec(ascii)) && result.length < 256)
+        result.push(match[0].slice(0, -1));
+      return unique(result);
+    }
+    function machineLabel(machine) {
+      switch (machine) {
+        case 332:
+          return "x86";
+        case 34404:
+          return "x64";
+        case 43620:
+          return "ARM64";
+        case 448:
+        case 452:
+          return "ARM";
+        default:
+          return `COFF machine 0x${machine.toString(16).toUpperCase()}`;
+      }
+    }
+    function elfMachineLabel(machine) {
+      switch (machine) {
+        case 3:
+          return "x86";
+        case 62:
+          return "x64";
+        case 40:
+          return "ARM";
+        case 183:
+          return "ARM64";
+        case 243:
+          return "RISC-V";
+        default:
+          return `ELF machine ${machine}`;
+      }
+    }
+    function archiveExtension(filePath) {
+      const lower = filePath.toLowerCase();
+      if (lower.endsWith(".dll.a"))
+        return ".dll.a";
+      return path2.extname(filePath).toLowerCase();
+    }
+    function unique(values) {
+      const seen = /* @__PURE__ */ new Set();
+      const result = [];
+      for (const value of values) {
+        const normalized = value.trim();
+        if (!normalized)
+          continue;
+        const key = normalized.toLowerCase();
+        if (seen.has(key))
+          continue;
+        seen.add(key);
+        result.push(normalized);
+      }
+      return result;
+    }
+    function escapeMarkdown(value) {
+      return value.replace(/\|/g, "\\|").replace(/`/g, "\\`");
+    }
+  }
+});
+
+// out/views/libraryToolsPanel.js
+var require_libraryToolsPanel = __commonJS({
+  "out/views/libraryToolsPanel.js"(exports2) {
+    "use strict";
+    var __createBinding2 = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault2 = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar2 = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding2(result, mod, k[i]);
+        }
+        __setModuleDefault2(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.LibraryToolsPanel = void 0;
+    var fs = __importStar2(require("fs"));
+    var path2 = __importStar2(require("path"));
+    var vscode2 = __importStar2(require("vscode"));
+    var qpmDllAnalyzerService_1 = require_qpmDllAnalyzerService();
+    var qpmLibraryAnalyzerService_1 = require_qpmLibraryAnalyzerService();
+    var LibraryToolsPanel = class {
+      workspaces;
+      panel;
+      mode = "dll";
+      projectRef;
+      filePath = "";
+      dllAnalysis;
+      libraryAnalysis;
+      constructor(workspaces) {
+        this.workspaces = workspaces;
+      }
+      dispose() {
+        this.panel?.dispose();
+      }
+      showDllAnalyzer(projectRef, filePath) {
+        this.mode = "dll";
+        this.projectRef = projectRef ?? this.workspaces.activeProjectRef;
+        if (filePath)
+          this.analyzeDll(filePath, false);
+        this.show();
+      }
+      showLibraryAnalyzer(projectRef, filePath) {
+        this.mode = "library";
+        this.projectRef = projectRef ?? this.workspaces.activeProjectRef;
+        if (filePath)
+          this.analyzeLibrary(filePath, false);
+        this.show();
+      }
+      show() {
+        if (!this.panel) {
+          this.panel = vscode2.window.createWebviewPanel("qpm.libraryTools", "QPM Library Tools", vscode2.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+          this.panel.onDidDispose(() => {
+            this.panel = void 0;
+          });
+          this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
+        }
+        this.panel.title = this.mode === "dll" ? "QPM DLL Analyzer" : "QPM .a / .lib Analyzer";
+        this.panel.webview.html = this.render();
+        this.panel.reveal(vscode2.ViewColumn.Active);
+      }
+      async handleMessage(message) {
+        const type = String(message?.type ?? "");
+        if (type === "switch") {
+          this.mode = message.mode === "library" ? "library" : "dll";
+          this.filePath = "";
+          this.show();
+          return;
+        }
+        if (type === "browse") {
+          const library = this.mode === "library";
+          const chosen = await vscode2.window.showOpenDialog({
+            title: library ? "Select .a / .dll.a / .lib library to analyze" : "Select Windows DLL to analyze",
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            defaultUri: vscode2.Uri.file(this.defaultDirectory()),
+            filters: library ? { "Static/import libraries": ["a", "lib"], "All files": ["*"] } : { "Windows DLL": ["dll"], "All files": ["*"] }
+          });
+          if (!chosen?.[0])
+            return;
+          if (library)
+            this.analyzeLibrary(chosen[0].fsPath);
+          else
+            this.analyzeDll(chosen[0].fsPath);
+          return;
+        }
+        if (type === "analyze") {
+          const requested = String(message.path ?? "").trim();
+          if (!requested)
+            return;
+          if (this.mode === "library")
+            this.analyzeLibrary(requested);
+          else
+            this.analyzeDll(requested);
+          return;
+        }
+        if (type === "export") {
+          await this.exportReport();
+        }
+      }
+      analyzeDll(filePath, rerender = true) {
+        try {
+          this.filePath = path2.resolve(filePath);
+          this.dllAnalysis = (0, qpmDllAnalyzerService_1.analyzeDllFile)(this.filePath);
+          this.libraryAnalysis = void 0;
+        } catch (error) {
+          this.dllAnalysis = void 0;
+          vscode2.window.showErrorMessage(`Unable to analyze DLL: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (rerender)
+          this.show();
+      }
+      analyzeLibrary(filePath, rerender = true) {
+        try {
+          this.filePath = path2.resolve(filePath);
+          this.libraryAnalysis = (0, qpmLibraryAnalyzerService_1.analyzeLibraryFile)(this.filePath);
+          this.dllAnalysis = void 0;
+        } catch (error) {
+          this.libraryAnalysis = void 0;
+          vscode2.window.showErrorMessage(`Unable to analyze library: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (rerender)
+          this.show();
+      }
+      async exportReport() {
+        const analysis = this.mode === "dll" ? this.dllAnalysis : this.libraryAnalysis;
+        if (!analysis) {
+          vscode2.window.showInformationMessage("Analyze a file first.");
+          return;
+        }
+        const root = this.projectRef?.exists ? path2.dirname(this.projectRef.absolutePath) : this.defaultDirectory();
+        const base = path2.parse(analysis.fileName).name;
+        const target = await vscode2.window.showSaveDialog({
+          title: "Export QPM analyzer report",
+          defaultUri: vscode2.Uri.file(path2.join(root, ".qpm", this.mode === "dll" ? "dll-analyzer" : "library-analyzer", `${base}-analysis.md`)),
+          filters: { Markdown: ["md"], "Text files": ["txt"] }
+        });
+        if (!target)
+          return;
+        fs.mkdirSync(path2.dirname(target.fsPath), { recursive: true });
+        fs.writeFileSync(target.fsPath, this.mode === "dll" ? (0, qpmDllAnalyzerService_1.renderDllAnalysisMarkdown)(this.dllAnalysis) : (0, qpmLibraryAnalyzerService_1.renderLibraryAnalysisMarkdown)(this.libraryAnalysis), "utf8");
+        vscode2.window.showInformationMessage(`Analysis report exported: ${target.fsPath}`);
+      }
+      defaultDirectory() {
+        if (this.filePath && fs.existsSync(path2.dirname(this.filePath)))
+          return path2.dirname(this.filePath);
+        if (this.projectRef?.exists)
+          return path2.dirname(this.projectRef.absolutePath);
+        return vscode2.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      }
+      render() {
+        const active = this.mode === "dll" ? this.dllAnalysis : this.libraryAnalysis;
+        const body = this.mode === "dll" ? renderDll(this.dllAnalysis) : renderLibrary(this.libraryAnalysis);
+        return `<!doctype html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+      *{box-sizing:border-box}body{font-family:var(--vscode-font-family);background:var(--vscode-editor-background);color:var(--vscode-foreground);padding:20px;max-width:1450px;margin:auto}.tabs{display:flex;gap:6px;margin-bottom:14px}.tabs button.active{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 12px;border-radius:3px;cursor:pointer}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:end;margin-bottom:16px}.field{display:flex;flex-direction:column;gap:5px}.field input{width:100%;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:7px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin:10px 0 16px}.kv{border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);padding:9px;border-radius:4px;display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}.kv strong{font-size:11px;color:var(--vscode-descriptionForeground);text-transform:uppercase}.scroll{overflow:auto;max-height:440px;border:1px solid var(--vscode-panel-border);margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:6px;vertical-align:top}th{position:sticky;top:0;background:var(--vscode-editorWidget-background)}code{font-family:var(--vscode-editor-font-family)}.badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}.badge{border:1px solid var(--vscode-panel-border);padding:4px 7px;border-radius:12px;background:var(--vscode-editorWidget-background)}.empty{border:1px dashed var(--vscode-panel-border);padding:30px;text-align:center;color:var(--vscode-descriptionForeground)}h3{margin-top:20px}.note{color:var(--vscode-descriptionForeground)}
+    </style></head><body><div class="tabs"><button data-mode="dll" class="${this.mode === "dll" ? "active" : "secondary"}">DLL Analyzer</button><button data-mode="library" class="${this.mode === "library" ? "active" : "secondary"}">.a / .lib Analyzer</button></div><div class="toolbar"><label class="field">${this.mode === "dll" ? "DLL file" : "Library file"}<input id="path" value="${esc(this.filePath)}" placeholder="${this.mode === "dll" ? "Select a .dll file\u2026" : "Select .a, .dll.a or .lib\u2026"}"></label><button id="browse" class="secondary">Browse\u2026</button><button id="analyze">Analyze</button></div><div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button id="export" class="secondary" ${active ? "" : "disabled"}>Export report\u2026</button></div>${body}<script>const vscode=acquireVsCodeApi();document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>vscode.postMessage({type:'switch',mode:b.dataset.mode}));document.getElementById('browse').onclick=()=>vscode.postMessage({type:'browse'});document.getElementById('analyze').onclick=()=>vscode.postMessage({type:'analyze',path:document.getElementById('path').value});document.getElementById('export').onclick=()=>vscode.postMessage({type:'export'});</script></body></html>`;
+      }
+    };
+    exports2.LibraryToolsPanel = LibraryToolsPanel;
+    function renderDll(a) {
+      if (!a)
+        return '<div class="empty">Select a DLL to inspect PE architecture, versions, exports, imports/dependencies, resources, sections, certificate presence and CodeView/PDB metadata.</div>';
+      const meta = [["File", a.fileName], ["Architecture", `${a.architecture} \xB7 ${a.machineLabel}`], ["PE format", a.peFormat], ["File version", a.version.fileVersion ?? "Not available"], ["Product version", a.version.productVersion ?? "Not available"], ["Revision", a.version.fileVersion?.split(".")[3] ?? "Not available"], ["Link timestamp", a.timestampIso ?? "Not set"], ["Image base", a.imageBase], ["Entry point", `RVA 0x${a.entryPointRva.toString(16).toUpperCase()}`], ["Subsystem", a.subsystemLabel], ["File size", `${a.fileSize} bytes`], ["SHA-256", a.sha256], ["Authenticode", a.authenticodePresent ? `Certificate table present (${a.authenticodeSize} bytes)` : "No certificate table"], [".NET / CLR", a.dotNet ? "CLR header present" : "Native PE / no CLR header"]];
+      const exports3 = a.exports.map((x) => `<tr><td>${x.ordinal}</td><td><code>${esc(x.name)}</code></td><td>0x${x.rva.toString(16).toUpperCase()}</td><td>${esc(x.forwarder ?? "")}</td></tr>`).join("") || '<tr><td colspan="4">No named exports.</td></tr>';
+      const imports = a.imports.flatMap((m) => m.symbols.length ? m.symbols.map((x) => `<tr><td><code>${esc(m.dll)}</code></td><td>${x.name ? `<code>${esc(x.name)}</code>` : `ordinal ${x.ordinal ?? ""}`}</td><td>${x.hint ?? ""}</td></tr>`) : [`<tr><td><code>${esc(m.dll)}</code></td><td colspan="2">No decoded symbols</td></tr>`]).join("") || '<tr><td colspan="3">No imports.</td></tr>';
+      return `<div class="grid">${meta.map(([k, v]) => `<div class="kv"><strong>${esc(k)}</strong><span>${esc(v)}</span></div>`).join("")}</div>${Object.keys(a.version.strings).length ? `<h3>Version strings</h3><div class="grid">${Object.entries(a.version.strings).map(([k, v]) => `<div class="kv"><strong>${esc(k)}</strong><span>${esc(v)}</span></div>`).join("")}</div>` : ""}<h3>Exports (${a.exports.length}${a.ordinalOnlyExportCount ? ` + ${a.ordinalOnlyExportCount} ordinal-only` : ""})</h3><div class="scroll"><table><thead><tr><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>${exports3}</tbody></table></div><h3>Imports / dependencies (${a.imports.length} DLLs)</h3><div class="scroll"><table><thead><tr><th>DLL</th><th>Symbol</th><th>Hint</th></tr></thead><tbody>${imports}</tbody></table></div><h3>Sections</h3><div class="scroll"><table><thead><tr><th>Name</th><th>RVA</th><th>Virtual</th><th>Raw</th><th>Characteristics</th></tr></thead><tbody>${a.sections.map((x) => `<tr><td><code>${esc(x.name)}</code></td><td>0x${x.virtualAddress.toString(16).toUpperCase()}</td><td>${x.virtualSize}</td><td>${x.rawSize}</td><td>0x${x.characteristics.toString(16).toUpperCase()}</td></tr>`).join("")}</tbody></table></div><h3>Resources</h3><div class="badges">${a.resources.length ? a.resources.map((x) => `<span class="badge">${esc(x.name ?? `type ${x.id ?? "?"}`)}: ${x.count}</span>`).join("") : '<span class="note">No resources.</span>'}</div><h3>PE flags</h3><div class="badges">${[...a.fileCharacteristics, ...a.dllCharacteristics].map((x) => `<span class="badge">${esc(x)}</span>`).join("") || '<span class="note">No decoded flags.</span>'}</div>${a.debug.pdbPath || a.debug.pdbGuid ? `<h3>Debug / PDB</h3><div class="grid">${a.debug.pdbPath ? `<div class="kv"><strong>PDB path</strong><span>${esc(a.debug.pdbPath)}</span></div>` : ""}${a.debug.pdbGuid ? `<div class="kv"><strong>PDB GUID</strong><span>${esc(a.debug.pdbGuid)}</span></div>` : ""}${a.debug.pdbAge !== void 0 ? `<div class="kv"><strong>PDB age</strong><span>${a.debug.pdbAge}</span></div>` : ""}</div>` : ""}`;
+    }
+    function renderLibrary(a) {
+      if (!a)
+        return '<div class="empty">Select a GNU .a, MinGW .dll.a or Windows/LLVM .lib archive to inspect members, target architectures, linker symbols and import-library metadata.</div>';
+      const meta = [["File", a.fileName], ["Extension", a.extension], ["Classification", `${a.libraryKind} library`], ["Archive format", a.archiveFormat], ["Architectures", a.architectures.length ? a.architectures.join(", ") : "Not detected"], ["Members", String(a.memberCount)], ["Object members", String(a.objectMemberCount)], ["Import-object members", String(a.importObjectCount)], ["Linker symbols", String(a.linkerSymbolCount)], ["File size", `${a.fileSize} bytes`], ["Modified", a.modifiedIso], ["SHA-256", a.sha256]];
+      return `<div class="grid">${meta.map(([k, v]) => `<div class="kv"><strong>${esc(k)}</strong><span>${esc(v)}</span></div>`).join("")}</div><h3>Referenced runtime DLLs</h3><div class="badges">${a.importDlls.length ? a.importDlls.map((x) => `<span class="badge">${esc(x)}</span>`).join("") : '<span class="note">No DLL reference detected.</span>'}</div><h3>Linker symbols (${a.symbols.length})</h3><div class="scroll"><table><thead><tr><th>#</th><th>Symbol</th></tr></thead><tbody>${a.symbols.map((x, i) => `<tr><td>${i + 1}</td><td><code>${esc(x)}</code></td></tr>`).join("") || '<tr><td colspan="2">No symbols decoded.</td></tr>'}</tbody></table></div><h3>Archive members</h3><div class="scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Architecture</th><th>Size</th><th>Import DLL</th><th>Import symbol</th><th>Symbols</th></tr></thead><tbody>${a.members.map((x) => `<tr><td><code>${esc(x.name)}</code></td><td>${esc(x.kind)}</td><td>${esc(x.architecture ?? "")}</td><td>${x.size}</td><td>${x.importDll ? `<code>${esc(x.importDll)}</code>` : ""}</td><td>${x.importSymbol ? `<code>${esc(x.importSymbol)}</code>` : ""}</td><td>${x.symbols.length}</td></tr>`).join("")}</tbody></table></div><h3>Notes</h3><ul>${a.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    }
+    function esc(value) {
+      return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
   }
 });
@@ -90988,9 +93377,11 @@ var jcLibEmbedded_1 = require_jcLibEmbedded();
 var qpmLibraryPackService_1 = require_qpmLibraryPackService();
 var qpmTemplateService_1 = require_qpmTemplateService();
 var qpmProjectSettingsService_1 = require_qpmProjectSettingsService();
+var qpmImportLibraryService_1 = require_qpmImportLibraryService();
 var qpmSdlService_1 = require_qpmSdlService();
 var buildSettingsPanel_1 = require_buildSettingsPanel();
 var qtProjectSettingsPanel_1 = require_qtProjectSettingsPanel();
+var libraryToolsPanel_1 = require_libraryToolsPanel();
 var quickActionsView_1 = require_quickActionsView();
 var qpmSymbolService_1 = require_qpmSymbolService();
 var qpmFunctionPanelService_1 = require_qpmFunctionPanelService();
@@ -91045,12 +93436,14 @@ async function activate(context) {
   const workspaces = new qpmWorkspaceService_1.QpmWorkspaceService(context, parser, installations, templates, sdl, qtProjects, output);
   const qtDesignerWidgets = new qpmQtDesignerWidgetService_1.QpmQtDesignerWidgetService(workspaces, qtInstallations, qtProjects, output);
   const projectSettings = new qpmProjectSettingsService_1.QpmProjectSettingsService(workspaces, parser, output);
+  const importLibraries = new qpmImportLibraryService_1.QpmImportLibraryService(workspaces, projectSettings, installations, output, qtInstallations);
+  const libraryTools = new libraryToolsPanel_1.LibraryToolsPanel(workspaces);
   const qtTools = new qpmQtToolsService_1.QpmQtToolsService(workspaces, qtInstallations, output);
   const qmlLanguage = new qpmQmlLanguageService_1.QpmQmlLanguageService(workspaces, qtInstallations, output);
   const qtPython = new qpmQtPythonService_1.QpmQtPythonService(workspaces, output, programOutput);
   const qtDependencies = new qpmQtDependencyService_1.QpmQtDependencyService(workspaces, output);
   const instrumentProfiles = new qpmInstrumentProfileService_1.QpmInstrumentProfileService(context.extensionPath, workspaces, output);
-  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output, programOutput, qtPython, qtDependencies, buildTrace);
+  const builds = new qpmBuildService_1.QpmBuildService(parser, workspaces, qtInstallations, projectSettings, void 0, output, programOutput, qtPython, qtDependencies, buildTrace, importLibraries);
   const debugging = new qpmQtDebugService_1.QpmQtDebugService(workspaces, builds, qtInstallations, output);
   const android = new qpmQtAndroidService_1.QpmQtAndroidService(workspaces, qtInstallations, output);
   const apple = new qpmQtAppleService_1.QpmQtAppleService(workspaces, builds, qtInstallations, output);
@@ -91228,6 +93621,8 @@ async function activate(context) {
     home,
     buildSettings,
     qtProjectSettings,
+    importLibraries,
+    libraryTools,
     sdl,
     quickActions,
     quickActionsRegistration,
@@ -92054,7 +94449,13 @@ async function activate(context) {
     register("qpm.moveFileToFolder", (node) => node ? workspaces.moveFileToFolder(node.ref, node.file) : void 0),
     register("qpm.compileFile", (node) => node ? builds.compileFile(node.file.absolutePath, node.ref) : void 0),
     register("qpm.generatePrototypes", (node) => node ? workspaces.generatePrototypes(node.ref, node.file) : void 0),
-    register("qpm.prepareDllImportLibraryGeneration", (node) => node ? builds.prepareDllImportLibraryGeneration(node.file.absolutePath) : void 0),
+    register("qpm.prepareDllImportLibraryGeneration", (node) => importLibraries.generateFromHeaderSelection(node, treeView.selection)),
+    register("qpm.generateImportLibraryFromHeaders", (node) => importLibraries.generateFromHeaderSelection(node, treeView.selection)),
+    register("qpm.generateImportLibraryFromDll", (node) => importLibraries.generateFromDll(node?.file.absolutePath, node?.ref)),
+    register("qpm.extractDllDefinitionFile", (node) => importLibraries.extractDefinitionFromDll(node?.file.absolutePath, node?.ref)),
+    register("qpm.openImportLibraryReport", () => importLibraries.openReport()),
+    register("qpm.analyzeDll", (node) => libraryTools.showDllAnalyzer(node?.ref, node?.file.absolutePath)),
+    register("qpm.analyzeLibrary", (node) => libraryTools.showLibraryAnalyzer(node?.ref, node?.file.absolutePath)),
     register("qpm.refreshFileSymbols", () => fileSymbolsProvider.refresh()),
     register("qpm.revealFileSymbol", (symbol) => symbol ? fileSymbolsProvider.reveal(symbol) : void 0),
     register("qpm.copyFileSymbol", (symbol) => fileSymbolsProvider.copySymbol(symbol)),

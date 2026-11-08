@@ -8,10 +8,10 @@ const extension = fs.readFileSync(path.join(root, 'src', 'extension.ts'), 'utf8'
 const buildService = fs.readFileSync(path.join(root, 'src', 'services', 'qpmBuildService.ts'), 'utf8');
 const debugService = fs.readFileSync(path.join(root, 'src', 'services', 'qpmQtDebugService.ts'), 'utf8');
 
-assert(/^0\.34\.(1[2-9]|[2-9][0-9])$/.test(pkg.version), `Unexpected QPM version: ${pkg.version}`);
+assert(/^0\.(?:34\.(?:1[2-9]|[2-9][0-9])|(?:3[5-9]|[4-9][0-9])\.[0-9]+)$/.test(pkg.version), `Unexpected QPM version: ${pkg.version}`);
 const command = pkg.contributes.commands.find((entry) => entry.command === 'qpm.startQtDebugProfileWithoutBuild');
 assert(command, 'Run Debug without build command must exist');
-assert.deepStrictEqual(command.icon, { light: 'media/run-debug-light.svg', dark: 'media/run-debug-dark.svg' });
+assert.strictEqual(command.icon, '$(debug-alt)', 'Run Debug must use the native VS Code debug-alt icon');
 assert(/Run Debug Without Build/i.test(command.title));
 
 const toolbar = pkg.contributes.menus['view/title'].filter((entry) => entry.when === 'view == qpm.workspaceExplorer');

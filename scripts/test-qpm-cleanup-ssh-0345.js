@@ -61,7 +61,7 @@ assert(stats.removedLibraries >= 1);
 fs.rmSync(temp, { recursive: true, force: true });
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert(/^0\.34\.(?:[5-9]|[1-9]\d+)$/.test(pkg.version), `expected QPM >= 0.34.5, got ${pkg.version}`);
+assert(/^0\.(?:34\.(?:[5-9]|[1-9]\d+)|(?:3[5-9]|[4-9]\d)\.\d+)$/.test(pkg.version), `expected QPM >= 0.34.5, got ${pkg.version}`);
 assert(pkg.activationEvents.includes('onCommand:qpm.openSshDeviceManager'));
 assert(pkg.contributes.commands.some((x) => x.command === 'qpm.openSshDeviceManager'));
 assert((pkg.contributes.menus['view/title'] || []).some((x) => x.command === 'qpm.openSshDeviceManager' && x.when === 'view == qpm.platforms'));

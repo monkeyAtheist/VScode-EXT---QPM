@@ -7,6 +7,28 @@ import { QpmBuildMode, QpmProgramOutputMode, QpmWorkspaceProjectRef } from '../m
 import { isQtProjectManifestPath } from '../model/qtProjectManifest';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
 
+
+export type QpmStaticLibraryFormat = 'auto' | 'gnu-a' | 'windows-lib';
+export type QpmDllImportLibraryFormat = 'auto' | 'gnu-a' | 'gnu-dll-a' | 'windows-lib' | 'gnu-both' | 'gnu-a-windows-lib' | 'both' | 'all' | 'none';
+export type QpmImportLibraryArchitecture = 'auto' | 'x86' | 'x64' | 'arm64';
+export type QpmImportLibraryGenerator = 'auto' | 'msvc-lib' | 'llvm-lib' | 'llvm-dlltool' | 'gnu-dlltool';
+
+export interface QpmImportLibraryConfiguration {
+  generator: QpmImportLibraryGenerator;
+  generatorPath: string;
+  architecture: QpmImportLibraryArchitecture;
+  outputDirectory: string;
+  keepDefinitionFile: boolean;
+}
+
+export const DEFAULT_IMPORT_LIBRARY_CONFIGURATION: QpmImportLibraryConfiguration = {
+  generator: 'auto',
+  generatorPath: '',
+  architecture: 'auto',
+  outputDirectory: 'lib',
+  keepDefinitionFile: true
+};
+
 export interface QpmRunSettings {
   arguments: string;
   workingDirectory: string;
@@ -16,6 +38,9 @@ export interface QpmRunSettings {
 }
 
 export interface QpmProjectBuildSettings {
+  staticLibraryFormat: QpmStaticLibraryFormat;
+  dllImportLibraryFormat: QpmDllImportLibraryFormat;
+  importLibraries: QpmImportLibraryConfiguration;
   preBuildActions: string[];
   customBuildActions: string[];
   postBuildActions: string[];
@@ -47,6 +72,10 @@ export class QpmProjectSettingsService {
   getConfigurationPath(): string | undefined {
     const root = this.getConfigurationRoot();
     return root ? path.join(root, '.vscode', 'qpm-build.json') : undefined;
+  }
+
+  getQpmConfigurationValue<T>(key: string, fallback: T): T {
+    return vscode.workspace.getConfiguration('qpm').get<T>(key, fallback);
   }
 
   getSettings(projectRef: QpmWorkspaceProjectRef, mode: QpmBuildMode = this.buildMode): QpmProjectBuildSettings {
@@ -248,6 +277,9 @@ export class QpmProjectSettingsService {
 
 function normalizeSettings(value?: Partial<QpmProjectBuildSettings>, fallbackRun?: Partial<QpmRunSettings>, nativeActions?: Partial<QpmProjectBuildSettings>, nativeBuildActions = false): QpmProjectBuildSettings {
   return {
+    staticLibraryFormat: normalizeStaticLibraryFormat(value?.staticLibraryFormat),
+    dllImportLibraryFormat: normalizeDllImportLibraryFormat(value?.dllImportLibraryFormat),
+    importLibraries: normalizeImportLibraryConfiguration(value?.importLibraries),
     preBuildActions: normalizeActions(nativeActions?.preBuildActions ?? value?.preBuildActions),
     customBuildActions: normalizeActions(nativeActions?.customBuildActions ?? value?.customBuildActions),
     postBuildActions: normalizeActions(nativeActions?.postBuildActions ?? value?.postBuildActions),
@@ -269,4 +301,27 @@ function normalizeProgramOutputMode(value: unknown): QpmProgramOutputMode {
 
 function normalizeActions(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).map((entry) => entry.trim()).filter(Boolean) : [];
+}
+
+
+function normalizeStaticLibraryFormat(value: unknown): QpmStaticLibraryFormat {
+  return value === 'gnu-a' || value === 'windows-lib' ? value : 'auto';
+}
+
+function normalizeDllImportLibraryFormat(value: unknown): QpmDllImportLibraryFormat {
+  const allowed = new Set<QpmDllImportLibraryFormat>(['auto','gnu-a','gnu-dll-a','windows-lib','gnu-both','gnu-a-windows-lib','both','all','none']);
+  return allowed.has(value as QpmDllImportLibraryFormat) ? value as QpmDllImportLibraryFormat : 'auto';
+}
+
+function normalizeImportLibraryConfiguration(value: unknown): QpmImportLibraryConfiguration {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<QpmImportLibraryConfiguration> : {};
+  const generators = new Set<QpmImportLibraryGenerator>(['auto','msvc-lib','llvm-lib','llvm-dlltool','gnu-dlltool']);
+  const architectures = new Set<QpmImportLibraryArchitecture>(['auto','x86','x64','arm64']);
+  return {
+    generator: generators.has(raw.generator as QpmImportLibraryGenerator) ? raw.generator as QpmImportLibraryGenerator : DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generator,
+    generatorPath: String(raw.generatorPath ?? DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generatorPath).trim(),
+    architecture: architectures.has(raw.architecture as QpmImportLibraryArchitecture) ? raw.architecture as QpmImportLibraryArchitecture : DEFAULT_IMPORT_LIBRARY_CONFIGURATION.architecture,
+    outputDirectory: String(raw.outputDirectory ?? DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory).trim() || DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory,
+    keepDefinitionFile: raw.keepDefinitionFile !== false
+  };
 }

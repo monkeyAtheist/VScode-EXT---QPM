@@ -33,12 +33,19 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.QpmProjectSettingsService = void 0;
+exports.QpmProjectSettingsService = exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
+exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION = {
+    generator: 'auto',
+    generatorPath: '',
+    architecture: 'auto',
+    outputDirectory: 'lib',
+    keepDefinitionFile: true
+};
 const EMPTY_RUN_SETTINGS = {
     arguments: '',
     workingDirectory: '',
@@ -58,6 +65,9 @@ class QpmProjectSettingsService {
     getConfigurationPath() {
         const root = this.getConfigurationRoot();
         return root ? path.join(root, '.vscode', 'qpm-build.json') : undefined;
+    }
+    getQpmConfigurationValue(key, fallback) {
+        return vscode.workspace.getConfiguration('qpm').get(key, fallback);
     }
     getSettings(projectRef, mode = this.buildMode) {
         const store = this.loadStore();
@@ -243,6 +253,9 @@ class QpmProjectSettingsService {
 exports.QpmProjectSettingsService = QpmProjectSettingsService;
 function normalizeSettings(value, fallbackRun, nativeActions, nativeBuildActions = false) {
     return {
+        staticLibraryFormat: normalizeStaticLibraryFormat(value?.staticLibraryFormat),
+        dllImportLibraryFormat: normalizeDllImportLibraryFormat(value?.dllImportLibraryFormat),
+        importLibraries: normalizeImportLibraryConfiguration(value?.importLibraries),
         preBuildActions: normalizeActions(nativeActions?.preBuildActions ?? value?.preBuildActions),
         customBuildActions: normalizeActions(nativeActions?.customBuildActions ?? value?.customBuildActions),
         postBuildActions: normalizeActions(nativeActions?.postBuildActions ?? value?.postBuildActions),
@@ -262,4 +275,23 @@ function normalizeProgramOutputMode(value) {
 }
 function normalizeActions(value) {
     return Array.isArray(value) ? value.map(String).map((entry) => entry.trim()).filter(Boolean) : [];
+}
+function normalizeStaticLibraryFormat(value) {
+    return value === 'gnu-a' || value === 'windows-lib' ? value : 'auto';
+}
+function normalizeDllImportLibraryFormat(value) {
+    const allowed = new Set(['auto', 'gnu-a', 'gnu-dll-a', 'windows-lib', 'gnu-both', 'gnu-a-windows-lib', 'both', 'all', 'none']);
+    return allowed.has(value) ? value : 'auto';
+}
+function normalizeImportLibraryConfiguration(value) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const generators = new Set(['auto', 'msvc-lib', 'llvm-lib', 'llvm-dlltool', 'gnu-dlltool']);
+    const architectures = new Set(['auto', 'x86', 'x64', 'arm64']);
+    return {
+        generator: generators.has(raw.generator) ? raw.generator : exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generator,
+        generatorPath: String(raw.generatorPath ?? exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.generatorPath).trim(),
+        architecture: architectures.has(raw.architecture) ? raw.architecture : exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.architecture,
+        outputDirectory: String(raw.outputDirectory ?? exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory).trim() || exports.DEFAULT_IMPORT_LIBRARY_CONFIGURATION.outputDirectory,
+        keepDefinitionFile: raw.keepDefinitionFile !== false
+    };
 }

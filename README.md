@@ -1,3 +1,13 @@
+> QPM 0.35.0 adds a complete **Libraries** workflow: Windows import-library generation from headers or DLL exports, multi-DLL batch generation, DLL/.lib/.a analyzers, contextual library-output formats for Direct builds, and project-tree/settings integration. qmake and CMake keep authority over their native generated artifacts.
+
+## QPM 0.35.0 — Library generation and binary analyzers
+
+QPM now exposes a dedicated **Libraries** settings page and matching project-tree context actions. One or more C/C++ headers can be converted into a Windows import-library definition when their public free-function names are unambiguous; DLL-based generation is preferred for decorated C++ exports because QPM reads the real PE export table. Multiple DLLs can be processed as a batch, with one import library per runtime DLL.
+
+The DLL Analyzer reports PE architecture/format, version resources, exports/imports, sections, resources, CodeView/PDB data, certificate-table presence, CLR metadata, image information and SHA-256. The `.a/.lib` analyzer inspects archive members and symbols instead of guessing from the extension, allowing QPM to distinguish static archives from import libraries.
+
+For QPM's **Direct** backend, static-library profiles can choose `.a` or Windows `.lib`, while shared-library profiles can request `.dll.a`, `.a`, `.lib`, supported combinations, or no import library. qmake and CMake continue to control their own output artifacts; the generation/analyzer tools remain usable regardless of backend.
+
 > QPM 0.34.14 standardizes **Run Debug** on VS Code's native `debug-alt` icon; the Advanced Run picker uses the native debug-start foreground color for the no-build debug action.
 
 > QPM 0.34.12 adds a dedicated **Run Debug** action to the Qt Workspace toolbar. It starts the existing executable under the active Qt debug profile without forcing a rebuild; Build & Debug remains available separately.

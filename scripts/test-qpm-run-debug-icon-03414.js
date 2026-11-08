@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-assert.strictEqual(pkg.version, '0.34.14');
+assert(/^0\.(?:34\.(?:1[4-9]|[2-9]\d)|(?:3[5-9]|[4-9]\d)\.\d+)$/.test(pkg.version), `expected QPM >= 0.34.14, got ${pkg.version}`);
 const command = pkg.contributes.commands.find(c => c.command === 'qpm.startQtDebugProfileWithoutBuild');
 assert(command, 'Run Debug command must exist');
 assert.strictEqual(command.icon, '$(debug-alt)', 'Qt Workspace toolbar must use the native debug-alt Codicon');

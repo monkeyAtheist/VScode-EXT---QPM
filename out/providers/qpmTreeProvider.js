@@ -363,7 +363,8 @@ function contextValueForFile(file) {
                                             : 'other';
     const build = file.excluded ? 'excluded' : 'included';
     const obj = file.type === 'CSource' ? (file.compileIntoObjectFile ? 'objOn' : 'objOff') : 'objNA';
-    return `qpmFile.${kind}.${build}.${obj}`;
+    const extensionTag = extension ? `.ext-${extension.slice(1).replace(/[^a-z0-9]+/g, '-')}` : '';
+    return `qpmFile.${kind}.${build}.${obj}${extensionTag}`;
 }
 function statusDescription(file) {
     const parts = [];

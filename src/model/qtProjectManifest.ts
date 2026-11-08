@@ -3,7 +3,7 @@ import * as path from 'path';
 import { QpmBuildMode, QpmProject, QpmProjectFile, QpmWorkspace } from './types';
 
 export const QT_PROJECT_SUFFIX = '.qtproject.json';
-export const QT_PROJECT_SCHEMA_VERSION = 19;
+export const QT_PROJECT_SCHEMA_VERSION = 20;
 
 export type QtProjectKind = 'widgets-application' | 'console-application' | 'quick-application' | 'test-application' | 'quick-test-application' | 'shared-library' | 'static-library' | 'python-widgets-application' | 'python-quick-application';
 export type QtProjectLanguage = 'cpp' | 'python';
@@ -15,6 +15,10 @@ export type QtBuildSystem = 'direct' | 'qmake' | 'cmake';
 export type QtProfileArchitecture = 'auto' | 'x86' | 'x64';
 export type QtBuildVariantName = 'debug' | 'release';
 export type QtLinkageMode = 'dynamic' | 'static-runtime' | 'static-qt';
+export type QtStaticLibraryFormat = 'auto' | 'gnu-a' | 'windows-lib';
+export type QtDllImportLibraryFormat = 'auto' | 'gnu-a' | 'gnu-dll-a' | 'windows-lib' | 'gnu-both' | 'gnu-a-windows-lib' | 'both' | 'all' | 'none';
+export type QtImportLibraryArchitecture = 'auto' | 'x86' | 'x64' | 'arm64';
+export type QtImportLibraryGenerator = 'auto' | 'msvc-lib' | 'llvm-lib' | 'llvm-dlltool' | 'gnu-dlltool';
 export type QtProgramOutputMode = 'integrated-terminal' | 'output-channel' | 'detached';
 export type QtDebuggerType = 'auto' | 'gdb' | 'lldb' | 'cdb' | 'cppvsdbg';
 export type QtDeviceType = 'desktop' | 'linux-local' | 'remote-linux' | 'docker' | 'webassembly' | 'android' | 'macos' | 'ios-simulator' | 'ios-device';
@@ -83,6 +87,8 @@ export interface QtBuildProfile {
   unityBuild: boolean;
   useResponseFiles: boolean;
   linkage: QtLinkageMode;
+  staticLibraryFormat: QtStaticLibraryFormat;
+  dllImportLibraryFormat: QtDllImportLibraryFormat;
 }
 
 export interface QtRunProfile {
@@ -622,6 +628,7 @@ export interface QtProfilingConfiguration {
   };
 }
 
+
 export interface QtProjectProfiles {
   kits: QtKitProfile[];
   builds: QtBuildProfile[];
@@ -984,8 +991,8 @@ function createDefaultProfiles(qtInstallation?: string): QtProjectProfiles {
   return {
     kits: [{ id: kitId, name: 'Desktop Qt', ...(qtInstallation ? { qtInstallation } : {}), architecture: 'auto', debuggerType: 'auto', deviceType: 'desktop' }],
     builds: [
-      { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' },
-      { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic' }
+      { id: debugId, name: 'Debug', variant: 'debug', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: [], compilerFlags: ['-O0', '-g'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic', staticLibraryFormat: 'auto', dllImportLibraryFormat: 'auto' },
+      { id: releaseId, name: 'Release', variant: 'release', kitId, system: 'direct', cppStandard: 'c++17', outputDirectory: 'build', generatedDirectory: 'generated', defines: ['QT_NO_DEBUG'], compilerFlags: ['-O2'], linkerFlags: [], autoMoc: true, autoUic: true, autoRcc: true, parallelJobs: 0, configureArguments: [], buildArguments: [], cleanArguments: [], sourceDirectory: '.', projectFile: '', cmakeConfigurePreset: '', cmakeBuildPreset: '', generateProjectFiles: true, precompiledHeader: '', unityBuild: false, useResponseFiles: true, linkage: 'dynamic', staticLibraryFormat: 'auto', dllImportLibraryFormat: 'auto' }
     ],
     runs: [{ id: 'default-run', name: 'Desktop Run', buildProfileId: debugId, arguments: '', workingDirectory: '', environment: {}, outputMode: 'integrated-terminal' }],
     deploys: [{ id: 'desktop-deploy', name: 'Desktop Deploy', buildProfileId: releaseId, enabled: true, translations: false, outputDirectory: 'dist', cleanOutput: true, compilerRuntime: true, verifyStandalone: true }],
@@ -1450,7 +1457,9 @@ function normalizeBuildProfile(raw: unknown, fallbackVariant: QtBuildVariantName
     precompiledHeader: normalizeOptionalRelativePath(optionalString(value.precompiledHeader)),
     unityBuild: booleanValue(value.unityBuild, fallback.unityBuild),
     useResponseFiles: booleanValue(value.useResponseFiles, fallback.useResponseFiles),
-    linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage)
+    linkage: normalizeQtLinkageMode(value.linkage, fallback.linkage),
+    staticLibraryFormat: normalizeQtStaticLibraryFormat(value.staticLibraryFormat, fallback.staticLibraryFormat),
+    dllImportLibraryFormat: normalizeQtDllImportLibraryFormat(value.dllImportLibraryFormat, fallback.dllImportLibraryFormat)
   };
 }
 
@@ -1728,6 +1737,16 @@ function normalizeKind(value: unknown, manifestPath: string): QtProjectKind {
   throw new Error(`Invalid Qt project manifest ${manifestPath}: unsupported kind ${String(value)}.`);
 }
 
+
+
+function normalizeQtStaticLibraryFormat(value: unknown, fallback: QtStaticLibraryFormat = 'auto'): QtStaticLibraryFormat {
+  return value === 'gnu-a' || value === 'windows-lib' || value === 'auto' ? value : fallback;
+}
+
+function normalizeQtDllImportLibraryFormat(value: unknown, fallback: QtDllImportLibraryFormat = 'auto'): QtDllImportLibraryFormat {
+  const allowed = new Set<QtDllImportLibraryFormat>(['auto','gnu-a','gnu-dll-a','windows-lib','gnu-both','gnu-a-windows-lib','both','all','none']);
+  return allowed.has(value as QtDllImportLibraryFormat) ? value as QtDllImportLibraryFormat : fallback;
+}
 
 function defaultTestingConfiguration(kind: QtProjectKind): QtTestingConfiguration {
   const framework: QtTestFramework = kind === 'test-application'

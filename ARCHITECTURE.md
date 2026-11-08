@@ -563,3 +563,10 @@ The instrumentation architecture now separates producer-rate data acquisition fr
 ## Operator-aware Qt File Symbols scanner (0.34.11)
 
 `QpmSymbolService.collectFunctionBodyRanges()` recognises normal functions/methods as well as symbolic/allocation/call/subscript and conversion `operator` overloads. Their complete body ranges are excluded before the fallback declaration pattern runs. This is important because constructor-style local variables inside an operator body (for example `QPointF p(x, y);` or `Widget result(other);`) otherwise have the same superficial token shape as a function declaration. The implementation mirrors the validated JC Lib File Symbols correction.
+
+
+## Library tooling and binary inspection (0.35.0)
+
+`QpmImportLibraryService` owns header/DLL-to-import-library generation, PE export decoding, generator selection and generation reports. It is intentionally separate from `QpmBuildService`: explicit user generation works with any backend, while Direct shared-library builds may call it after linking when a Windows `.lib` output is requested.
+
+`QpmDllAnalyzerService` parses PE metadata without invoking external inspection tools. `QpmLibraryAnalyzerService` parses GNU/COFF `ar` containers and classifies `.a/.lib` files from member/symbol evidence. `LibraryToolsPanel` provides the analyzer UI. Static/DLL artifact preferences are stored per native Qt build profile (schema v20); import-library generator preferences remain in QPM project build settings. qmake/CMake output ownership is not overridden by these Direct-backend selectors.

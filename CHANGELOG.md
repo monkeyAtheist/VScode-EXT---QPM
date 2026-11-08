@@ -1,3 +1,19 @@
+## 0.35.0
+
+- Added a complete **Libraries** toolset ported from the recent CPM library workflow while preserving QPM-specific Qt backends.
+- Added **Generate Import Library (.lib) from Header(s)...** with multi-header selection, conservative C/C++ symbol filtering, architecture selection and configurable `dlltool` / `llvm-dlltool` / `lib.exe` / `llvm-lib` generators.
+- Added **Generate DLL Import Library (.lib)...** with a multi-DLL batch editor, per-DLL output paths, export filtering, real PE export-table parsing and optional `.def` retention.
+- Added **Extract DLL Exports (.def)...** and persistent generation reports under `.qpm/import-libraries/`.
+- Added a **DLL Analyzer** for architecture, PE format, VERSIONINFO, exports/imports, sections, resources, CodeView/PDB, Authenticode presence, CLR header, image metadata and SHA-256.
+- Added a **.a / .lib Analyzer** that distinguishes static/import/mixed archives from archive-member and symbol evidence and reports COFF/ELF/LLVM-bitcode members, architectures, symbols and referenced runtime DLLs.
+- Added a dedicated **Libraries** page in Qt Project Settings with generation settings and analyzer launch actions.
+- Added context-menu actions for headers, DLLs, `.a` and `.lib` files in the QPM project tree.
+- Added Direct-backend output selectors for static libraries (`Automatic`, GNU/LLVM `.a`, Windows static `.lib`) and DLL import libraries (`.dll.a`, `.a`, `.lib`, combinations, or none).
+- Direct DLL builds can materialize GNU aliases and generate a Windows `.lib` from the completed DLL export table; clean removes associated `.dll.a`, `.a`, `.lib`, `.def` and `.exp` artifacts. qmake/CMake remain authoritative over their native library artifacts.
+- Qt Project Health now reports selected static/DLL library-output formats and incompatible Direct `.lib` tool availability.
+- Qt native project schema advanced to v20 for the new per-build-profile library-output settings.
+- Added regression coverage using a synthetic PE32+ DLL and a real GCC/ar static archive; all current QPM regression scripts pass after refreshing one obsolete Run Debug icon assertion.
+
 ## 0.34.14
 
 - Replaced the custom Run Debug SVG with VS Code's native `debug-alt` Codicon, matching the **Build and debug** action exactly.

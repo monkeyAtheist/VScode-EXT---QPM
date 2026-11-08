@@ -9,7 +9,6 @@ import {
   executableIconPath,
   isReleaseBuildMode,
   qtGeneratedDirectory,
-  qtImportLibraryPath,
   qtObjectDirectory,
   qtTargetPath,
   qtBuildUsesConsoleSubsystem,
@@ -42,6 +41,8 @@ export interface QtDirectBuildPlan {
   projectDirectory: string;
   targetPath: string;
   importLibraryPath?: string;
+  gnuImportLibraryAliasPath?: string;
+  windowsImportLibraryPath?: string;
   objectDirectory: string;
   generatedDirectory: string;
   sourceFiles: string[];
@@ -280,6 +281,12 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     precompiledHeaderOutputPath = `${precompiledHeaderCopyPath}.gch`;
   }
 
+  const defaultTargetPath = qtTargetPath(manifestPath, mode, manifest);
+  const targetPath = manifest.kind === 'static-library' && buildProfile.staticLibraryFormat === 'windows-lib'
+    ? changeExtension(defaultTargetPath, '.lib')
+    : defaultTargetPath;
+  const dllOutputs = resolveDirectDllImportOutputs(manifest.kind, buildProfile.dllImportLibraryFormat, targetPath);
+
   return {
     manifestPath,
     manifest,
@@ -287,8 +294,10 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     installation,
     mode,
     projectDirectory,
-    targetPath: qtTargetPath(manifestPath, mode, manifest),
-    importLibraryPath: qtImportLibraryPath(manifestPath, mode, manifest),
+    targetPath,
+    importLibraryPath: dllOutputs.primaryGnuPath,
+    gnuImportLibraryAliasPath: dllOutputs.gnuAliasPath,
+    windowsImportLibraryPath: dllOutputs.windowsLibPath,
     objectDirectory,
     generatedDirectory,
     sourceFiles: files.sources,
@@ -316,6 +325,28 @@ export function createQtDirectBuildPlan(manifestPath: string, mode: QpmBuildMode
     warnings,
     autoDetectedModules
   };
+}
+
+function changeExtension(filePath: string, extension: string): string {
+  return path.join(path.dirname(filePath), `${path.basename(filePath, path.extname(filePath))}${extension}`);
+}
+
+function resolveDirectDllImportOutputs(kind: QtProjectManifest['kind'], format: QtBuildProfile['dllImportLibraryFormat'], dllPath: string): { primaryGnuPath?: string; gnuAliasPath?: string; windowsLibPath?: string } {
+  if (kind !== 'shared-library' || process.platform !== 'win32') return {};
+  const effective = format === 'auto' ? 'gnu-dll-a' : format;
+  if (effective === 'none') return {};
+  const directory = path.dirname(dllPath);
+  const stem = path.basename(dllPath, path.extname(dllPath));
+  const gnuBase = stem.toLowerCase().startsWith('lib') ? stem : `lib${stem}`;
+  const gnuDllA = path.join(directory, `${gnuBase}.dll.a`);
+  const gnuA = path.join(directory, `${gnuBase}.a`);
+  const windowsLib = path.join(directory, `${stem}.lib`);
+  const wantsGnuDllA = effective === 'gnu-dll-a' || effective === 'gnu-both' || effective === 'both' || effective === 'all';
+  const wantsGnuA = effective === 'gnu-a' || effective === 'gnu-both' || effective === 'gnu-a-windows-lib' || effective === 'all';
+  const wantsWindowsLib = effective === 'windows-lib' || effective === 'gnu-a-windows-lib' || effective === 'both' || effective === 'all';
+  const primaryGnuPath = wantsGnuDllA ? gnuDllA : wantsGnuA ? gnuA : undefined;
+  const gnuAliasPath = wantsGnuDllA && wantsGnuA ? gnuA : undefined;
+  return { primaryGnuPath, gnuAliasPath, windowsLibPath: wantsWindowsLib ? windowsLib : undefined };
 }
 
 export function qtCompileArguments(plan: QtDirectBuildPlan, sourcePath: string, objectPath: string): string[] {
