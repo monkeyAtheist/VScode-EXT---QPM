@@ -37,6 +37,7 @@ exports.BuildSettingsPanel = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const webviewKit_1 = require("./webviewKit");
 const pathUtils_1 = require("../utils/pathUtils");
 const ALL_BUILD_MODES = ['debug', 'release', 'debug64', 'release64'];
 const RUNTIME_SUPPORT_OPTIONS = [
@@ -101,12 +102,12 @@ class BuildSettingsPanel {
             this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
         }
         this.panel.title = `Compatibility C/C++ Build Settings — ${ref.name}`;
-        this.panel.webview.html = this.render(ref);
+        this.panel.webview.html = (0, webviewKit_1.hardenHtml)(this.render(ref), this.panel.webview, { harmonize: true });
         this.panel.reveal(vscode.ViewColumn.Active);
     }
     update() {
         if (this.panel && this.projectRef?.exists) {
-            this.panel.webview.html = this.render(this.projectRef);
+            this.panel.webview.html = (0, webviewKit_1.hardenHtml)(this.render(this.projectRef), this.panel.webview, { harmonize: true });
         }
     }
     /**

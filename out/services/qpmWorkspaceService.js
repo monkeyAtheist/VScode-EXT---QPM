@@ -43,6 +43,8 @@ const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmWorkspaceAssociation_1 = require("../utils/qpmWorkspaceAssociation");
 const LAST_WORKSPACE_KEY = 'qpm.lastWorkspace';
 const GLOBAL_LAST_WORKSPACE_KEY = 'qpm.lastWorkspace.global';
+const RECENT_WORKSPACES_KEY = 'qpm.recentWorkspaces.v1';
+const MAX_RECENT_WORKSPACES = 10;
 class QpmWorkspaceService {
     context;
     parser;
@@ -270,6 +272,7 @@ class QpmWorkspaceService {
         }
         this.writeWorkspaceAssociationMarkers();
         filePath = await this.persistLastWorkspace(filePath);
+        await this.rememberRecentWorkspace(filePath, this.workspace?.name ?? path.basename(filePath, extension));
         this.output.appendLine(`[QPM] Loaded ${extension === '.cws' ? 'workspace' : nativeManifest ? 'native Qt project' : 'compatibility project'}: ${filePath}`);
         this.changeEmitter.fire();
         if (extension === '.cws') {
@@ -280,6 +283,24 @@ class QpmWorkspaceService {
                 void vscode.window.showWarningMessage(`${path.basename(filePath)} contains ${issues.length} Qt workspace compatibility issue(s). Repair the native workspace before saving new run settings.`, 'Repair workspace', 'Ignore').then((answer) => answer === 'Repair workspace' ? this.repairNativeWorkspaceCompatibility() : undefined);
             }
         }
+    }
+    /** Last 10 workspaces/projects opened in any window (Home page). */
+    getRecentWorkspaces() {
+        const stored = this.context.globalState?.get(RECENT_WORKSPACES_KEY, []) ?? [];
+        return (Array.isArray(stored) ? stored : [])
+            .filter((entry) => entry && typeof entry.path === 'string')
+            .map((entry) => ({ path: entry.path, name: String(entry.name || path.basename(entry.path)), lastOpened: Number(entry.lastOpened) || 0, exists: fs.existsSync(entry.path) }));
+    }
+    async forgetRecentWorkspace(filePath) {
+        const kept = this.getRecentWorkspaces().filter((entry) => !sameRecentPath(entry.path, filePath)).map(({ exists: _exists, ...entry }) => entry);
+        await this.context.globalState?.update(RECENT_WORKSPACES_KEY, kept);
+        this.changeEmitter.fire();
+    }
+    async rememberRecentWorkspace(filePath, name) {
+        if (!this.context.globalState)
+            return;
+        const others = this.getRecentWorkspaces().filter((entry) => !sameRecentPath(entry.path, filePath)).map(({ exists: _exists, ...entry }) => entry);
+        await this.context.globalState.update(RECENT_WORKSPACES_KEY, [{ path: filePath, name, lastOpened: Date.now() }, ...others].slice(0, MAX_RECENT_WORKSPACES));
     }
     findAssociatedWorkspaceFromOpenFolders() {
         for (const folder of vscode.workspace.workspaceFolders ?? []) {
@@ -1015,16 +1036,20 @@ class QpmWorkspaceService {
         if (!selected) {
             return;
         }
+        this.setTargetType(ref, selected.value);
+        vscode.window.showInformationMessage(`${ref.name} target type: ${selected.label}.`);
+    }
+    /** Applies a target type without prompting (configuration picker, Home chips). */
+    setTargetType(ref, value) {
         if ((0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath)) {
             const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath);
-            manifest.kind = selected.value === 'Dynamic Link Library' ? 'shared-library' : selected.value === 'Static Library' ? 'static-library' : ['quick-application', 'console-application', 'test-application', 'quick-test-application'].includes(manifest.kind) ? manifest.kind : 'widgets-application';
+            manifest.kind = value === 'Dynamic Link Library' ? 'shared-library' : value === 'Static Library' ? 'static-library' : ['quick-application', 'console-application', 'test-application', 'quick-test-application'].includes(manifest.kind) ? manifest.kind : 'widgets-application';
             (0, qtProjectManifest_1.writeQtProjectManifest)(ref.absolutePath, manifest);
         }
         else {
-            this.parser.setTargetType(ref.absolutePath, selected.value);
+            this.parser.setTargetType(ref.absolutePath, value);
         }
         this.refresh();
-        vscode.window.showInformationMessage(`${ref.name} target type: ${selected.label}.`);
     }
     async generatePrototypes(projectRef, file) {
         if (path.extname(file.absolutePath).toLowerCase() !== '.c') {
@@ -1466,4 +1491,8 @@ function generatePrototypeHeader(source, headerName) {
     const guard = headerName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
     const body = prototypes.length ? prototypes.join('\n') : '/* No non-static function definitions were detected automatically. */';
     return `#ifndef ${guard}\n#define ${guard}\n\n#ifdef __cplusplus\nextern "C" {\n#endif\n\n${body}\n\n#ifdef __cplusplus\n}\n#endif\n\n#endif /* ${guard} */\n`;
+}
+function sameRecentPath(left, right) {
+    const normalize = (value) => path.resolve(value).replace(/[\\/]+$/, '');
+    return process.platform === 'win32' ? normalize(left).toLowerCase() === normalize(right).toLowerCase() : normalize(left) === normalize(right);
 }

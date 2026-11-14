@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ChildProcess, spawn, spawnSync } from 'child_process';
 import * as vscode from 'vscode';
+import { qpmRunSessions } from './qpmRunSessions';
 import {
   QtProjectManifest,
   QtPythonConfiguration,
@@ -330,12 +331,14 @@ export class QpmQtPythonService implements vscode.Disposable {
     const outputMode = runProfile?.outputMode ?? 'integrated-terminal';
     const commandArgs = [entryPoint, ...args];
     const rendered = [interpreter, ...commandArgs].map(renderPythonArgument).join(' ');
+    const sessions = qpmRunSessions(this.output);
     if (outputMode === 'integrated-terminal') {
-      const terminal = vscode.window.createTerminal({ name: `QPM Python — ${manifest.name}`, shellPath: interpreter, shellArgs: commandArgs, cwd, env });
+      const terminal = sessions.createRunTerminal(manifest.name, { shellPath: interpreter, shellArgs: commandArgs, cwd, env });
       terminal.show(false);
       this.output.appendLine(`[Qt/Python] Started in Integrated Terminal: ${rendered}`);
       return true;
     }
+    sessions.stopPrevious('Run');
     if (outputMode === 'output-channel') {
       this.programOutput.clear();
       this.programOutput.appendLine(`=== ${manifest.name} ===`);
@@ -345,6 +348,7 @@ export class QpmQtPythonService implements vscode.Disposable {
       this.programOutput.show(true);
       const child = spawn(interpreter, commandArgs, { cwd, env, detached: false, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
       this.trackApplication(manifestPath, child);
+      sessions.trackProcess(child);
       child.stdout?.on('data', (chunk: Buffer | string) => this.programOutput.append(chunk.toString()));
       child.stderr?.on('data', (chunk: Buffer | string) => this.programOutput.append(chunk.toString()));
       child.on('error', (error) => this.programOutput.appendLine(`\n[QPM] Unable to start process: ${error.message}`));
@@ -380,6 +384,7 @@ export class QpmQtPythonService implements vscode.Disposable {
       console: 'integratedTerminal',
       justMyCode: true
     };
+    qpmRunSessions(this.output).stopPrevious('Debug');
     const started = await vscode.debug.startDebugging(undefined, config);
     if (!started) vscode.window.showWarningMessage('Qt for Python debugging could not be started. Install/enable the Microsoft Python Debugger extension (debugpy) if necessary.');
     return started;

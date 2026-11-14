@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { hardenHtml } from './webviewKit';
 import { QpmWorkspaceProjectRef } from '../model/types';
 import { QpmWorkspaceService } from '../services/qpmWorkspaceService';
 import { QpmDllAnalysis, analyzeDllFile, renderDllAnalysisMarkdown } from '../services/qpmDllAnalyzerService';
@@ -39,7 +40,7 @@ export class LibraryToolsPanel implements vscode.Disposable {
       this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
     }
     this.panel.title = this.mode === 'dll' ? 'QPM DLL Analyzer' : 'QPM .a / .lib Analyzer';
-    this.panel.webview.html = this.render();
+    this.panel.webview.html = hardenHtml(this.render(), this.panel.webview, { harmonize: true });
     this.panel.reveal(vscode.ViewColumn.Active);
   }
 

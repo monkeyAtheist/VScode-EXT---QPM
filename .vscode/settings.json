@@ -1,3 +1,11 @@
 {
-    "qpm.buildMode": "debug"
+    "qpm.buildMode": "debug",
+    "python-envs.pythonProjects": [
+        {
+            "path": "test.py",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip",
+            "workspace": "QPM"
+        }
+    ]
 }

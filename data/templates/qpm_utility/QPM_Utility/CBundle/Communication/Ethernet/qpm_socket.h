@@ -1,86 +1,62 @@
-/**
- * @file qpm_socket.h
- * @brief QPM C TCP/UDP socket communication API.
- *
- * @details
- * This bundle is intended to be readable immediately after insertion into a
- * QPM project. The comments below summarize what the module provides, when it
- * is useful and how to start using the public API.
- *
- * @par Main features
- * - initializes and shuts down the socket library where required;
- * - opens TCP clients, TCP servers and UDP sockets;
- * - accepts TCP clients and exchanges byte or text payloads;
- * - provides endpoint helpers for UDP send/receive operations.
- *
- * @par Typical applications
- * - Ethernet-connected instruments, PLCs, embedded boards and simulators;
- * - local TCP servers for test automation;
- * - UDP telemetry or command channels.
- *
- * @par Usage notes
- * - On Windows, link with ws2_32; QPM adds it automatically when this bundle is inserted.
- * - TCP is stream-oriented: add your own delimiter or length field for packets.
- * - Use the timeout functions to avoid blocking a test sequence indefinitely.
- *
- * @par Example of use
- * @code{.c}
- * #include "qpm_socket.h"
- * 
- * QpmSocket socketObj;
- * QpmSocket_InitLibrary();
- * QpmSocket_Init(&socketObj);
- * if (QpmSocket_TcpConnect(&socketObj, "192.168.1.50", 5025) == 0)
- * {
- *     QpmSocket_Send(&socketObj, "*IDN?\n", 6, NULL);
- *     QpmSocket_Close(&socketObj);
- * }
- * QpmSocket_ShutdownLibrary();
- * @endcode
- */
 #ifndef QPM_SOCKET_H
 #define QPM_SOCKET_H
+
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stddef.h>
+typedef intptr_t QpmSocketHandle;
+#define QPM_SOCKET_INVALID ((QpmSocketHandle)-1)
 
-#ifdef _WIN32
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <winsock2.h>
-typedef SOCKET QpmSocketNativeHandle;
-#else
-typedef int QpmSocketNativeHandle;
-#endif
-
-typedef struct QpmSocket
+typedef struct QpmSocketEndpoint
 {
-    QpmSocketNativeHandle handle;
-    int type;
-    int isOpen;
-} QpmSocket;
+    char address[128];
+    uint16_t port;
+} QpmSocketEndpoint;
 
-int QpmSocket_InitLibrary(void);
-void QpmSocket_ShutdownLibrary(void);
-void QpmSocket_Init(QpmSocket *socketObj);
-int QpmSocket_TcpConnect(QpmSocket *socketObj, const char *host, unsigned short port);
-int QpmSocket_TcpListen(QpmSocket *socketObj, const char *bindAddress, unsigned short port, int backlog);
-int QpmSocket_TcpAccept(QpmSocket *server, QpmSocket *client);
-int QpmSocket_UdpOpen(QpmSocket *socketObj, const char *bindAddress, unsigned short port);
-int QpmSocket_Send(QpmSocket *socketObj, const void *data, size_t size, size_t *sent);
-int QpmSocket_Recv(QpmSocket *socketObj, void *buffer, size_t bufferSize, size_t *received);
-int QpmSocket_UdpSendTo(QpmSocket *socketObj, const char *host, unsigned short port, const void *data, size_t size, size_t *sent);
-int QpmSocket_UdpRecvFrom(QpmSocket *socketObj, void *buffer, size_t bufferSize, size_t *received, char *remoteHost, size_t remoteHostSize, unsigned short *remotePort);
-void QpmSocket_Close(QpmSocket *socketObj);
-int QpmSocket_IsOpen(const QpmSocket *socketObj);
-const char *QpmSocket_LastError(void);
+int QpmSocket_Startup(void);
+void QpmSocket_Cleanup(void);
+void QpmSocket_Close(QpmSocketHandle socketHandle);
+int QpmSocket_Shutdown(QpmSocketHandle socketHandle, int shutdownRead, int shutdownWrite);
+
+QpmSocketHandle QpmSocket_TcpConnect(const char *host, uint16_t port, int timeoutMs);
+QpmSocketHandle QpmSocket_TcpListen(const char *bindAddress, uint16_t port, int backlog);
+QpmSocketHandle QpmSocket_TcpAccept(QpmSocketHandle listener, char *peerAddress, size_t peerAddressSize, uint16_t *peerPort);
+QpmSocketHandle QpmSocket_TcpAcceptTimeout(QpmSocketHandle listener, int timeoutMs, QpmSocketEndpoint *peer);
+int QpmSocket_SendAll(QpmSocketHandle socketHandle, const void *data, size_t size);
+int QpmSocket_Receive(QpmSocketHandle socketHandle, void *data, size_t size, int timeoutMs);
+int QpmSocket_ReceiveExact(QpmSocketHandle socketHandle, void *data, size_t size, int timeoutMs);
+int QpmSocket_ReceiveUntil(QpmSocketHandle socketHandle, char *buffer, size_t bufferSize, const char *terminator, int timeoutMs);
+int QpmSocket_ReceiveLine(QpmSocketHandle socketHandle, char *buffer, size_t bufferSize, int timeoutMs);
+
+QpmSocketHandle QpmSocket_UdpOpen(const char *bindAddress, uint16_t localPort, int enableBroadcast);
+int QpmSocket_UdpConnect(QpmSocketHandle socketHandle, const char *host, uint16_t port);
+int QpmSocket_UdpSend(QpmSocketHandle socketHandle, const void *data, size_t size);
+int QpmSocket_UdpReceive(QpmSocketHandle socketHandle, void *data, size_t size, int timeoutMs);
+int QpmSocket_UdpSendTo(QpmSocketHandle socketHandle, const char *host, uint16_t port, const void *data, size_t size);
+int QpmSocket_UdpReceiveFrom(QpmSocketHandle socketHandle, void *data, size_t size, int timeoutMs,
+                             char *peerAddress, size_t peerAddressSize, uint16_t *peerPort);
+int QpmSocket_UdpJoinMulticast(QpmSocketHandle socketHandle, const char *multicastAddress, const char *interfaceAddress);
+int QpmSocket_UdpLeaveMulticast(QpmSocketHandle socketHandle, const char *multicastAddress, const char *interfaceAddress);
+int QpmSocket_UdpSetMulticastTtl(QpmSocketHandle socketHandle, int ttl);
+int QpmSocket_UdpSetMulticastLoop(QpmSocketHandle socketHandle, int enabled);
+
+int QpmSocket_WaitReadable(QpmSocketHandle socketHandle, int timeoutMs);
+int QpmSocket_WaitWritable(QpmSocketHandle socketHandle, int timeoutMs);
+int QpmSocket_SetNoDelay(QpmSocketHandle socketHandle, int enabled);
+int QpmSocket_SetKeepAlive(QpmSocketHandle socketHandle, int enabled);
+int QpmSocket_SetReuseAddress(QpmSocketHandle socketHandle, int enabled);
+int QpmSocket_SetBufferSizes(QpmSocketHandle socketHandle, int receiveBytes, int sendBytes);
+int QpmSocket_GetLocalEndpoint(QpmSocketHandle socketHandle, QpmSocketEndpoint *endpoint);
+int QpmSocket_GetPeerEndpoint(QpmSocketHandle socketHandle, QpmSocketEndpoint *endpoint);
+int QpmSocket_ResolveFirst(const char *host, char *address, size_t addressSize);
+
+const char *QpmSocket_LastErrorText(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* QPM_SOCKET_H */
+#endif

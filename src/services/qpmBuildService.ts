@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { ChildProcess, execFileSync, spawn } from 'child_process';
 import * as vscode from 'vscode';
+import { qpmRunSessions } from './qpmRunSessions';
 import { QpmBuildMode, QpmProgramOutputMode, QpmProjectFile, QpmWorkspaceProjectRef } from '../model/types';
 import { QpmParser } from '../model/qpmParser';
 import { QpmWorkspaceService } from './qpmWorkspaceService';
@@ -60,10 +61,29 @@ interface BuildArtifacts {
   objectFiles: string[];
 }
 
+export interface QpmLastBuildResult {
+  project: string;
+  success: boolean;
+  rebuild: boolean;
+  finishedAt: number;
+  durationMs: number;
+  errors: number;
+  warnings: number;
+  failedAt?: string;
+}
+
 export class QpmBuildService implements vscode.Disposable {
   private readonly qtBackends: QpmQtBuildBackendService;
   private readonly launchedApplications = new Map<string, Set<ChildProcess>>();
   private readonly buildDiagnostics = vscode.languages.createDiagnosticCollection('qpm-build');
+  private readonly buildFinishedEmitter = new vscode.EventEmitter<QpmLastBuildResult>();
+  /** Fired after every build or rebuild, successful or not. */
+  readonly onDidFinishBuild = this.buildFinishedEmitter.event;
+  /** Result of the most recent build/rebuild in this window (Home, status bar). */
+  lastBuild: QpmLastBuildResult | undefined;
+  private currentBuild: { project: string; rebuild: boolean } | undefined;
+  /** Build problems published by QPM (status-bar counter, Home). */
+  get diagnostics(): vscode.DiagnosticCollection { return this.buildDiagnostics; }
   private readonly diagnosticStore = new Map<string, vscode.Diagnostic[]>();
   private buildStartedAt = 0;
   private buildToolRuns = 0;
@@ -88,6 +108,7 @@ export class QpmBuildService implements vscode.Disposable {
 
   dispose(): void {
     this.buildDiagnostics.dispose();
+    this.buildFinishedEmitter.dispose();
   }
 
   get buildMode(): QpmBuildMode {
@@ -195,6 +216,7 @@ export class QpmBuildService implements vscode.Disposable {
     }
 
     this.beginOutput(`${rebuild ? 'Rebuild' : 'Build'} ${ref.name}`);
+    this.currentBuild = { project: ref.name, rebuild };
     const order = this.projectSettings.getBuildOrder(ref);
     this.logSection('BUILD ORDER');
     this.output.appendLine(`  ${order.map((item) => item.name).join(' -> ')}`);
@@ -508,20 +530,17 @@ export class QpmBuildService implements vscode.Disposable {
 
   private launchExecutable(projectName: string, executablePath: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, mode: QpmProgramOutputMode): void {
     const rendered = [executablePath, ...args].map(renderArgument).join(' ');
+    const sessions = qpmRunSessions(this.output);
     if (mode === 'integrated-terminal') {
-      const terminal = vscode.window.createTerminal({
-        name: `QPM — ${projectName}`,
-        shellPath: executablePath,
-        shellArgs: args,
-        cwd,
-        env
-      });
+      // Replaces the previous QPM Run tab (transient: never revived by VS Code after a restart).
+      const terminal = sessions.createRunTerminal(projectName, { shellPath: executablePath, shellArgs: args, cwd, env });
       terminal.show(false);
       this.output.appendLine(`[Qt/C++] Started in Integrated Terminal: ${rendered}`);
       this.output.appendLine(`[Qt/C++] stdin/stdout/stderr are attached to the VS Code terminal.`);
       return;
     }
 
+    sessions.stopPrevious('Run');
     if (mode === 'output-channel') {
       this.programOutput.clear();
       this.programOutput.appendLine(`=== ${projectName} ===`);
@@ -538,6 +557,7 @@ export class QpmBuildService implements vscode.Disposable {
         stdio: ['ignore', 'pipe', 'pipe']
       });
       this.trackLaunchedApplication(executablePath, child);
+      sessions.trackProcess(child);
       child.stdout?.on('data', (chunk: Buffer | string) => this.programOutput.append(chunk.toString()));
       child.stderr?.on('data', (chunk: Buffer | string) => this.programOutput.append(chunk.toString()));
       child.on('error', (error) => this.programOutput.appendLine(`\n[QPM] Unable to start process: ${error.message}`));
@@ -636,6 +656,7 @@ export class QpmBuildService implements vscode.Disposable {
           miDebuggerPath: config.debuggerPath || (debuggerType === 'lldb' ? 'lldb' : 'gdb'),
           environment: debugEnvironment
         };
+    qpmRunSessions(this.output).stopPrevious('Debug');
     const started = await vscode.debug.startDebugging(vscode.workspace.getWorkspaceFolder(vscode.Uri.file(ref.absolutePath)), debugConfig);
     if (!started) {
       vscode.window.showErrorMessage('Unable to start the VS Code Qt/C++ debug session. Check that the Microsoft Qt/C++ extension and gdb are installed.');
@@ -1585,6 +1606,11 @@ export class QpmBuildService implements vscode.Disposable {
       this.output.appendLine('    3. Use Output -> Qt Project Manager - Build Trace for full commands/raw output.');
     }
     this.output.appendLine('================================================================================');
+    if (this.currentBuild) {
+      this.lastBuild = { ...this.currentBuild, success, finishedAt: Date.now(), durationMs: duration, errors: this.buildErrors, warnings: this.buildWarnings, failedAt: !success && this.failedPhase ? this.failedPhase : undefined };
+      this.currentBuild = undefined;
+      this.buildFinishedEmitter.fire(this.lastBuild);
+    }
   }
 
   private publishDiagnostics(items: QpmBuildDiagnostic[]): void {

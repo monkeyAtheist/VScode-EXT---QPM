@@ -46,6 +46,7 @@ const crypto = __importStar(require("crypto"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const webviewKit_1 = require("./webviewKit");
 class QtInstrumentProfileEditorPanel {
     projectRoot;
     catalog;
@@ -272,7 +273,7 @@ class QtInstrumentProfileEditorPanel {
         const dirty = JSON.stringify(this.document) !== this.savedSnapshot;
         const status = escapeHtml(this.statusMessage);
         const fileLabel = this.profilePath ? this.profilePath : 'Unsaved profile — choose Save or Save As';
-        webview.html = `<!DOCTYPE html>
+        webview.html = (0, webviewKit_1.hardenHtml)(`<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <title>SCPI Instrument Profile Editor</title>
@@ -324,7 +325,7 @@ fillMetadata();renderRows();renderCapabilities();renderPreview();renderCatalog()
 byId('catalogSearch').oninput=renderCatalog;byId('catalogFamily').onchange=renderCatalog;byId('idnTest').oninput=renderCatalog;byId('addAction').onclick=()=>{syncRows();const a=defaultAction();let index=state.actions.length+1;const used=new Set(state.actions.map(x=>x.id));while(used.has(a.id))a.id='new-action-'+index++;state.actions.push(a);renderRows();renderPreview();};
 byId('addCapability').onclick=()=>{syncCapabilities();const c=defaultCapability();let index=state.capabilities.length+1;const used=new Set(state.capabilities.map(x=>x.id));while(used.has(c.id))c.id='custom.capability.'+index++;state.capabilities.push(c);renderCapabilities();};
 byId('newProfile').onclick=()=>send('newProfile');byId('openProfile').onclick=()=>send('openProfile');byId('save').onclick=()=>send('save');byId('saveAs').onclick=()=>send('saveAs');byId('validate').onclick=()=>send('validate');byId('openJson').onclick=()=>send('openJson');byId('reload').onclick=()=>send('reload');byId('revealDirectory').onclick=()=>send('revealDirectory');byId('openDocumentation').onclick=()=>send('openDocumentation',{documentationUrl:byId('documentationUrl').value});
-</script></body></html>`;
+</script></body></html>`, webview, { harmonize: true });
     }
 }
 exports.QtInstrumentProfileEditorPanel = QtInstrumentProfileEditorPanel;

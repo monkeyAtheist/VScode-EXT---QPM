@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import * as vscode from 'vscode';
+import { hardenHtml } from '../views/webviewKit';
 import { QpmBuildMode, QpmWorkspaceProjectRef } from '../model/types';
 import { getQtInstallationPreference, isQtProjectManifestPath, readQtProjectManifest } from '../model/qtProjectManifest';
 import { FileNode } from '../providers/qpmTreeProvider';
@@ -217,7 +218,7 @@ export class QpmImportLibraryService {
         if (!this.dllBatchRows.some((row) => samePath(row.dllPath, filePath))) this.dllBatchRows.push(this.createDllBatchRow(filePath, ref));
       }
     }
-    this.dllPanel.webview.html = this.renderDllBatchPanel();
+    this.dllPanel.webview.html = hardenHtml(this.renderDllBatchPanel(), this.dllPanel.webview, { harmonize: true });
     this.dllPanel.reveal(vscode.ViewColumn.Active);
   }
 

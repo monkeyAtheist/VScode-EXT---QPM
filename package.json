@@ -2,7 +2,7 @@
   "name": "qt-project-manager-and-build",
   "displayName": "Qt Project Manager and Build",
   "description": "Qt Project Manager and Build for VS Code — C++/Qt and Qt for Python (PySide6), package managers, build, debug, Designer, deployment, installers and publication.",
-  "version": "0.35.0",
+  "version": "0.36.0",
   "publisher": "JerryCrozet-ElectronicEngineer",
   "license": "MIT",
   "engines": {
@@ -80,254 +80,7 @@
     "C++ dependencies"
   ],
   "activationEvents": [
-    "workspaceContains:**/*.qtproject.json",
-    "onView:qpm.quickActions",
-    "onView:qpm.workspaceExplorer",
-    "onCommand:qpm.openHome",
-    "onCommand:qpm.createProjectInWorkspace",
-    "onView:qpm.libraryExplorer",
-    "onCommand:qpm.debugWithGdb",
-    "onCommand:qpm.library.findFunction",
-    "onCommand:qpm.library.managePacks",
-    "onCommand:qpm.library.reloadPacks",
-    "onCommand:qpm.insertSnippet",
-    "onCommand:qpm.saveSelectionAsSnippet",
-    "onCommand:qpm.manageSnippets",
-    "onCommand:qpm.saveFileAsTemplate",
-    "onCommand:qpm.importFileTemplate",
-    "onCommand:qpm.manageFileTemplates",
-    "onCommand:qpm.diagnoseCppTools",
-    "onCommand:qpm.addWorkspaceFolderForIntelliSense",
-    "onCommand:qpm.repairCppToolsProvider",
-    "onCommand:qpm.enableAutomaticSuggestions",
-    "onCommand:qpm.chooseBuildAction",
-    "onCommand:qpm.showBuildProblems",
-    "onCommand:qpm.showBuildTrace",
-    "onCommand:qpm.clean",
-    "onCommand:qpm.cleanProject",
-    "onCommand:qpm.selectTargetType",
-    "onCommand:qpm.editBuildSettings",
-    "onCommand:qpm.editBuildSettingsSafeMode",
-    "onCommand:qpm.generatePrototypes",
-    "onView:qpm.fileSymbols",
-    "onCommand:qpm.refreshFileSymbols",
-    "onCommand:qpm.revealFileSymbol",
-    "onCommand:qpm.chooseRunAction",
-    "onCommand:qpm.runWithoutBuild",
-    "onCommand:qpm.selectBuildModeD32",
-    "onCommand:qpm.selectBuildModeR32",
-    "onCommand:qpm.selectBuildModeD64",
-    "onCommand:qpm.selectBuildModeR64",
-    "onCommand:qpm.selectTargetTypeEXE",
-    "onCommand:qpm.selectTargetTypeDLL",
-    "onCommand:qpm.selectTargetTypeLIB",
-    "onCommand:qpm.copyFilePath",
-    "onCommand:qpm.copyRelativeFilePath",
-    "onCommand:qpm.convertSelectedIntegerToDecimal",
-    "onCommand:qpm.convertSelectedIntegerToHexadecimal",
-    "onCommand:qpm.convertSelectedIntegerToBinary",
-    "onCommand:qpm.openFunctionPanel",
-    "onCommand:qpm.insertFileHeader",
-    "onCommand:qpm.insertHeaderChangeEntry",
-    "onCommand:qpm.insertCommentSection",
-    "onCommand:qpm.insertSpecialCharacterText",
-    "onCommand:qpm.insertColorValue",
-    "onCommand:qpm.configureSdl",
-    "onCommand:qpm.createSdlWorkspaceProject",
-    "onCommand:qpm.createSdlProjectInWorkspace",
-    "onCommand:qpm.selectQtInstallation",
-    "onCommand:qpm.showQtInstallationInfo",
-    "onCommand:qpm.createQtProject",
-    "onCommand:qpm.showQtProjectInfo",
-    "onCommand:qpm.editQtModules",
-    "onCommand:qpm.showQtBuildPlan",
-    "onCommand:qpm.deployQtRuntime",
-    "onCommand:qpm.openQtDesigner",
-    "onCommand:qpm.convertQtFormToClass",
-    "onCommand:qpm.selectQtDesigner",
-    "onView:qpm.projectHealth",
-    "onCommand:qpm.refreshQtTools",
-    "onCommand:qpm.createTranslation",
-    "onCommand:qpm.updateTranslations",
-    "onCommand:qpm.releaseTranslations",
-    "onCommand:qpm.openTranslationInLinguist",
-    "onCommand:qpm.showTranslationStatus",
-    "onCommand:qpm.openQrcEditor",
-    "onCommand:qpm.validateQrc",
-    "onCommand:qpm.qmlLintFile",
-    "onCommand:qpm.qmlLintProject",
-    "onCommand:qpm.qmlFormatFile",
-    "onCommand:qpm.qmlFormatProject",
-    "onCommand:qpm.qmlPreviewFile",
-    "onCommand:qpm.clearQmlDiagnostics",
-    "onCommand:qpm.openQtDocumentation",
-    "onCommand:qpm.openQtDocumentationHome",
-    "onView:qpm.qtTools",
-    "onView:qpm.quality",
-    "onCommand:qpm.refreshTests",
-    "onCommand:qpm.openTestExplorer",
-    "onCommand:qpm.runAllTests",
-    "onCommand:qpm.runTestAtCursor",
-    "onCommand:qpm.debugTestAtCursor",
-    "onCommand:qpm.runClangTidyFile",
-    "onCommand:qpm.runClangTidyProject",
-    "onCommand:qpm.applyClangTidyFixes",
-    "onCommand:qpm.runClazyFile",
-    "onCommand:qpm.runClazyProject",
-    "onCommand:qpm.clearQualityDiagnostics",
-    "onCommand:qpm.configureQuality",
-    "onCommand:qpm.createSanitizerProfiles",
-    "onCommand:qpm.createCoverageProfile",
-    "onCommand:qpm.openQualityReport",
-    "onCommand:qpm.runAllTestsWithCoverage",
-    "onView:qpm.debugging",
-    "onCommand:qpm.startQtDebugProfile",
-    "onCommand:qpm.startQtDebugProfileWithoutBuild",
-    "onCommand:qpm.attachQtProcess",
-    "onCommand:qpm.debugQtCoreDump",
-    "onCommand:qpm.attachQmlDebugger",
-    "onCommand:qpm.manageQtDebugProfiles",
-    "onCommand:qpm.generateQtLaunchJson",
-    "onView:qpm.platforms",
-    "onCommand:qpm.manageQtPlatforms",
-    "onCommand:qpm.selectQtPlatform",
-    "onCommand:qpm.detectPlatformCapabilities",
-    "onCommand:qpm.buildForPlatform",
-    "onCommand:qpm.deployToPlatform",
-    "onCommand:qpm.runOnPlatform",
-    "onCommand:qpm.buildDeployRunPlatform",
-    "onCommand:qpm.openSshDeviceManager",
-    "onCommand:qpm.openRemoteTerminal",
-    "onCommand:qpm.openDockerShell",
-    "onCommand:qpm.serveWebAssembly",
-    "onCommand:qpm.stopWebAssemblyServer",
-    "onCommand:qpm.openPlatformReport",
-    "onCommand:qpm.toolbarBuildModeD32",
-    "onCommand:qpm.toolbarBuildModeR32",
-    "onCommand:qpm.toolbarBuildModeD64",
-    "onCommand:qpm.toolbarBuildModeR64",
-    "onCommand:qpm.insertSnippetC",
-    "onCommand:qpm.insertSnippetCpp",
-    "onCommand:qpm.insertSnippetQt",
-    "onCommand:qpm.insertSnippetWindows",
-    "onCommand:qpm.insertSnippetDocumentation",
-    "onCommand:qpm.insertSnippetUser",
-    "onView:qpm.packaging",
-    "onCommand:qpm.generateProductMetadata",
-    "onCommand:qpm.createPortablePackage",
-    "onCommand:qpm.openPackagingReport",
-    "onCommand:qpm.revealPackagingOutput",
-    "onCommand:qpm.cleanPackagingOutput",
-    "onView:qpm.profiling",
-    "onCommand:qpm.profileQmlApplication",
-    "onCommand:qpm.profileCpu",
-    "onCommand:qpm.profileMemory",
-    "onCommand:qpm.runCppcheck",
-    "onCommand:qpm.traceSystemCalls",
-    "onCommand:qpm.stopProfiling",
-    "onCommand:qpm.openLatestProfilingResult",
-    "onCommand:qpm.openProfilingReport",
-    "onCommand:qpm.revealProfilingOutput",
-    "onCommand:qpm.cleanProfilingOutput",
-    "onCommand:qpm.rerunFailedTests",
-    "onCommand:qpm.openTestHistory",
-    "onCommand:qpm.clearTestHistory",
-    "onCommand:qpm.createDesktopInstaller",
-    "onCommand:qpm.generateInstallerProject",
-    "onCommand:qpm.createQtIfwRepository",
-    "onCommand:qpm.signDistributionArtifacts",
-    "onCommand:qpm.verifyDistributionSignatures",
-    "onCommand:qpm.detectInstallerTools",
-    "onCommand:qpm.openInstallerReport",
-    "onCommand:qpm.revealInstallerOutput",
-    "onCommand:qpm.cleanInstallerOutput",
-    "onView:qpm.installers",
-    "onCommand:qpm.startQmlLanguageServer",
-    "onCommand:qpm.restartQmlLanguageServer",
-    "onCommand:qpm.stopQmlLanguageServer",
-    "onCommand:qpm.refreshQmlLanguageServer",
-    "onCommand:qpm.generateQmllsConfiguration",
-    "onCommand:qpm.openQmllsConfiguration",
-    "onCommand:qpm.generateQmldir",
-    "onCommand:qpm.openQmlLanguageReport",
-    "onCommand:qpm.showQmlLanguageOutput",
-    "onCommand:qpm.showQmlLanguageTrace",
-    "onView:qpm.qmlLanguage",
-    "onCommand:qpm.configureAppleEnvironment",
-    "onCommand:qpm.refreshAppleDevices",
-    "onCommand:qpm.selectAppleSimulator",
-    "onCommand:qpm.bootAppleSimulator",
-    "onCommand:qpm.buildAppleTarget",
-    "onCommand:qpm.deployMacApplication",
-    "onCommand:qpm.createMacDmg",
-    "onCommand:qpm.signAppleArtifacts",
-    "onCommand:qpm.verifyAppleSignatures",
-    "onCommand:qpm.notarizeAppleArtifact",
-    "onCommand:qpm.stapleAppleArtifact",
-    "onCommand:qpm.installRunIosSimulator",
-    "onCommand:qpm.openAppleReport",
-    "onCommand:qpm.revealAppleOutput",
-    "onCommand:qpm.cleanAppleOutput",
-    "onView:qpm.apple",
-    "onCommand:qpm.detectPublicationTools",
-    "onCommand:qpm.generatePublicationSources",
-    "onCommand:qpm.createMsixPackage",
-    "onCommand:qpm.generateAppInstaller",
-    "onCommand:qpm.generateWingetManifests",
-    "onCommand:qpm.validateWingetManifests",
-    "onCommand:qpm.createReleaseBundle",
-    "onCommand:qpm.publishRelease",
-    "onCommand:qpm.openPublicationReport",
-    "onCommand:qpm.revealPublicationOutput",
-    "onCommand:qpm.cleanPublicationOutput",
-    "onView:qpm.publication",
-    "onView:qpm.python",
-    "onCommand:qpm.python.bootstrap",
-    "onCommand:qpm.python.selectInterpreter",
-    "onCommand:qpm.python.createVirtualEnvironment",
-    "onCommand:qpm.python.installPySide6",
-    "onCommand:qpm.python.build",
-    "onCommand:qpm.python.run",
-    "onCommand:qpm.python.debug",
-    "onCommand:qpm.python.clean",
-    "onCommand:qpm.python.compileUi",
-    "onCommand:qpm.python.compileResources",
-    "onCommand:qpm.python.openDesigner",
-    "onCommand:qpm.python.deploy",
-    "onCommand:qpm.python.deployAndroid",
-    "onCommand:qpm.python.openReport",
-    "onCommand:qpm.python.revealEnvironment",
-    "onView:qpm.dependencies",
-    "onCommand:qpm.dependencies.configure",
-    "onCommand:qpm.dependencies.detectTools",
-    "onCommand:qpm.dependencies.generateManifests",
-    "onCommand:qpm.dependencies.install",
-    "onCommand:qpm.dependencies.openReport",
-    "onCommand:qpm.dependencies.revealOutput",
-    "onCommand:qpm.dependencies.clean",
-    "onCommand:qpm.prepareQtDesignerWidgets",
-    "onCommand:qpm.prepareAndOpenQtDesignerWidgets",
-    "onCommand:qpm.configureQtDesignerWidgets",
-    "onCommand:qpm.buildQtDesignerWidgets",
-    "onCommand:qpm.installQtDesignerWidgets",
-    "onCommand:qpm.openQtDesignerWithCustomWidgets",
-    "onCommand:qpm.cleanQtDesignerWidgets",
-    "onCommand:qpm.revealQtDesignerWidgets",
-    "onCommand:qpm.moveFileToFolder",
-    "onCommand:qpm.library.createPack",
-    "onCommand:qpm.library.importPack",
-    "onCommand:qpm.copyFileSymbol",
-    "onCommand:qpm.copyFileSymbolDeclaration",
-    "onCommand:qpm.copyFileSymbols",
-    "onCommand:qpm.copyFileSymbolDeclarations",
-    "onCommand:qpm.exportFileSymbols",
-    "onCommand:qpm.generateFileSymbolsHeader",
-    "onCommand:qpm.generateImportLibraryFromDll",
-    "onCommand:qpm.analyzeDll",
-    "onCommand:qpm.generateImportLibraryFromHeaders",
-    "onCommand:qpm.analyzeLibrary",
-    "onCommand:qpm.openImportLibraryReport",
-    "onCommand:qpm.extractDllDefinitionFile"
+    "workspaceContains:**/*.qtproject.json"
   ],
   "main": "./dist/extension.js",
   "scripts": {
@@ -403,50 +156,55 @@
       "qpm": [
         {
           "id": "qpm.workspaceExplorer",
-          "name": "Qt Workspace",
+          "name": "Workspace",
           "contextualTitle": "Qt Workspace",
           "showCollapseAll": true
         },
         {
           "id": "qpm.quickActions",
-          "name": "Qt Actions",
+          "name": "Actions",
           "contextualTitle": "Qt Actions",
           "visibility": "visible",
           "showCollapseAll": false
         },
         {
           "id": "qpm.kits",
-          "name": "Qt Kits & Backends",
+          "name": "Kits & Backends",
           "contextualTitle": "Qt Kits & Backends",
-          "showCollapseAll": true
+          "showCollapseAll": true,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.platforms",
-          "name": "Qt Platforms",
+          "name": "Platforms",
           "contextualTitle": "Qt Platforms",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.android",
-          "name": "Qt Android & Devices",
+          "name": "Android & Devices",
           "contextualTitle": "Qt Android & Devices",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.apple",
-          "name": "Qt Apple Platforms",
+          "name": "Apple Platforms",
           "contextualTitle": "Qt Apple Platforms",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.debugging",
-          "name": "Qt Debugging",
+          "name": "Debugging",
           "contextualTitle": "Qt Debugging",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.projectHealth",
-          "name": "Qt Project Health",
+          "name": "Project Health",
           "contextualTitle": "Qt Project Health",
           "showCollapseAll": false
         },
@@ -454,67 +212,76 @@
           "id": "qpm.qtTools",
           "name": "Qt Tools",
           "contextualTitle": "Qt Tools",
-          "showCollapseAll": true
+          "showCollapseAll": true,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.quality",
-          "name": "Qt Tests & Quality",
+          "name": "Tests & Quality",
           "contextualTitle": "Qt Tests & Quality",
-          "showCollapseAll": true
+          "showCollapseAll": true,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.fileSymbols",
-          "name": "Qt File Symbols",
+          "name": "File Symbols",
           "contextualTitle": "Qt File Symbols",
           "showCollapseAll": false
         },
         {
           "id": "qpm.libraryExplorer",
-          "name": "Qt Libraries",
+          "name": "Libraries",
           "contextualTitle": "Qt Libraries",
           "showCollapseAll": true
         },
         {
           "id": "qpm.profiling",
-          "name": "Qt Profiling & Diagnostics",
+          "name": "Profiling & Diagnostics",
           "contextualTitle": "Qt Profiling & Diagnostics",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.packaging",
-          "name": "Qt Packaging",
+          "name": "Packaging",
           "contextualTitle": "Qt Packaging",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.installers",
-          "name": "Qt Installers & Signing",
+          "name": "Installers & Signing",
           "contextualTitle": "Qt Installers & Signing",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.publication",
-          "name": "Qt Publication & Updates",
+          "name": "Publication & Updates",
           "contextualTitle": "Qt Publication & Updates",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.dependencies",
-          "name": "Qt Dependencies",
+          "name": "Dependencies",
           "contextualTitle": "Qt Dependencies & Package Managers",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.python",
           "name": "Qt for Python",
           "contextualTitle": "Qt for Python / PySide6",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         },
         {
           "id": "qpm.qmlLanguage",
           "name": "QML Language & Modules",
           "contextualTitle": "QML Language & Modules",
-          "showCollapseAll": false
+          "showCollapseAll": false,
+          "visibility": "collapsed"
         }
       ]
     },
@@ -541,467 +308,570 @@
         "view": "qpm.qmlLanguage",
         "contents": "Configure QML code intelligence, qmlls build/import paths and QML module metadata.\n[Open Qt Project Settings](command:qpm.editBuildSettings)\n[Start QML Language Server](command:qpm.startQmlLanguageServer)",
         "when": "!qpm.nativeQtProjectActive"
+      },
+      {
+        "view": "qpm.projectHealth",
+        "contents": "Load a Qt project to check its Qt kit, build outputs, tests and deployment.\n[Open a workspace](command:qpm.openWorkspace)"
+      },
+      {
+        "view": "qpm.fileSymbols",
+        "contents": "Open a C, C++ or QML source file to list its functions, classes and macros here."
+      },
+      {
+        "view": "qpm.dependencies",
+        "contents": "No package manager is configured for the active project.\n[Configure dependencies](command:qpm.dependencies.configure)\n[Detect vcpkg / Conan / pkg-config](command:qpm.dependencies.detectTools)",
+        "when": "!qpm.nativeQtProjectActive"
+      },
+      {
+        "view": "qpm.platforms",
+        "contents": "Open a native Qt project to build, deploy and run on Remote Linux, Docker, WebAssembly, Android or Apple targets.\n[Open a workspace](command:qpm.openWorkspace)\n[OpenSSH Device Manager](command:qpm.openSshDeviceManager)",
+        "when": "!qpm.nativeQtProjectActive"
+      },
+      {
+        "view": "qpm.kits",
+        "contents": "Detect the Qt installations and compilers available on this machine.\n[Detect Qt kits](command:qpm.detectQtKits)\n[Select Qt installation](command:qpm.selectQtInstallation)",
+        "when": "!qpm.nativeQtProjectActive"
       }
     ],
     "commands": [
       {
         "command": "qpm.openQtDesigner",
-        "title": "Qt Project Manager: Open .ui in Qt Widgets Designer",
-        "icon": "$(layout)"
+        "title": "Open .ui in Qt Widgets Designer",
+        "icon": "$(layout)",
+        "category": "QPM"
       },
       {
         "command": "qpm.prepareQtDesignerWidgets",
-        "title": "Qt Project Manager: Prepare All QPM Widgets for Qt Designer",
-        "category": "Qt Project Manager",
+        "title": "Prepare All QPM Widgets for Qt Designer",
+        "category": "QPM",
         "icon": "$(tools)"
       },
       {
         "command": "qpm.prepareAndOpenQtDesignerWidgets",
-        "title": "Qt Project Manager: Prepare QPM Widgets & Open Designer",
-        "category": "Qt Project Manager",
+        "title": "Prepare QPM Widgets & Open Designer",
+        "category": "QPM",
         "icon": "$(layout)"
       },
       {
         "command": "qpm.configureQtDesignerWidgets",
-        "title": "Qt Project Manager: Configure Qt Designer Custom Widgets...",
-        "category": "Qt Project Manager",
+        "title": "Configure Qt Designer Custom Widgets...",
+        "category": "QPM",
         "icon": "$(symbol-misc)"
       },
       {
         "command": "qpm.buildQtDesignerWidgets",
-        "title": "Qt Project Manager: Build Qt Designer Widget Plugin",
-        "category": "Qt Project Manager",
+        "title": "Build Qt Designer Widget Plugin",
+        "category": "QPM",
         "icon": "$(tools)"
       },
       {
         "command": "qpm.installQtDesignerWidgets",
-        "title": "Qt Project Manager: Install Widget Plugin into Qt Designer...",
-        "category": "Qt Project Manager",
+        "title": "Install Widget Plugin into Qt Designer...",
+        "category": "QPM",
         "icon": "$(cloud-download)"
       },
       {
         "command": "qpm.openQtDesignerWithCustomWidgets",
-        "title": "Qt Project Manager: Open .ui in Designer with QPM Custom Widgets",
-        "category": "Qt Project Manager",
+        "title": "Open .ui in Designer with QPM Custom Widgets",
+        "category": "QPM",
         "icon": "$(layout)"
       },
       {
         "command": "qpm.cleanQtDesignerWidgets",
-        "title": "Qt Project Manager: Clean Qt Designer Widget Plugin",
-        "category": "Qt Project Manager",
+        "title": "Clean Qt Designer Widget Plugin",
+        "category": "QPM",
         "icon": "$(trash)"
       },
       {
         "command": "qpm.revealQtDesignerWidgets",
-        "title": "Qt Project Manager: Reveal Qt Designer Widget Plugin Output",
-        "category": "Qt Project Manager",
+        "title": "Reveal Qt Designer Widget Plugin Output",
+        "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.convertQtFormToClass",
-        "title": "Qt Project Manager: Convert Designer Form to Qt C++ Class...",
-        "category": "Qt Project Manager",
+        "title": "Convert Designer Form to Qt C++ Class...",
+        "category": "QPM",
         "icon": "$(symbol-class)"
       },
       {
         "command": "qpm.selectQtDesigner",
-        "title": "Qt Project Manager: Select Qt Widgets Designer Executable",
-        "icon": "$(folder-opened)"
+        "title": "Select Qt Widgets Designer Executable",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.deployQtRuntime",
-        "title": "Qt Project Manager: Deploy Qt Runtime",
-        "icon": "$(package)"
+        "title": "Deploy Qt Runtime",
+        "icon": "$(package)",
+        "category": "QPM"
       },
       {
         "command": "qpm.showQtBuildPlan",
-        "title": "Qt Project Manager: Show Direct Qt Build Plan",
-        "icon": "$(list-tree)"
+        "title": "Show Direct Qt Build Plan",
+        "icon": "$(list-tree)",
+        "category": "QPM"
       },
       {
         "command": "qpm.editQtModules",
-        "title": "Qt Project Manager: Edit Qt Modules",
-        "icon": "$(library)"
+        "title": "Edit Qt Modules",
+        "icon": "$(library)",
+        "category": "QPM"
       },
       {
         "command": "qpm.showQtProjectInfo",
-        "title": "Qt Project Manager: Show Native Qt Project Information",
-        "icon": "$(info)"
+        "title": "Show Native Qt Project Information",
+        "icon": "$(info)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createQtProject",
-        "title": "Qt Project Manager: Create Native Qt Project",
-        "icon": "$(new-folder)"
+        "title": "Create Native Qt Project",
+        "icon": "$(new-folder)",
+        "category": "QPM"
       },
       {
         "command": "qpm.selectQtInstallation",
-        "title": "Qt Project Manager: Detect / Select Qt Installation",
-        "icon": "$(versions)"
+        "title": "Detect / Select Qt Installation",
+        "icon": "$(versions)",
+        "category": "QPM"
       },
       {
         "command": "qpm.repairQtToolchain",
-        "title": "Qt Project Manager: Repair / Select Matching Qt Compiler",
-        "icon": "$(tools)"
+        "title": "Repair / Select Matching Qt Compiler",
+        "icon": "$(tools)",
+        "category": "QPM"
       },
       {
         "command": "qpm.showQtInstallationInfo",
-        "title": "Qt Project Manager: Show Active Qt Installation Information",
-        "icon": "$(info)"
+        "title": "Show Active Qt Installation Information",
+        "icon": "$(info)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openHome",
-        "title": "Qt Project Manager: Open Home",
-        "icon": "$(home)"
+        "title": "Open Home",
+        "icon": "$(home)",
+        "category": "QPM"
+      },
+      {
+        "command": "qpm.openGettingStarted",
+        "title": "Open the Getting Started Guide",
+        "icon": "$(rocket)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openWorkspace",
-        "title": "Qt Project Manager: Open Workspace or Project",
-        "icon": "$(folder-opened)"
+        "title": "Open Workspace or Project",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createWorkspaceProject",
-        "title": "Qt Project Manager: Create Workspace and Native Qt Project"
+        "title": "Create Workspace and Native Qt Project",
+        "category": "QPM"
       },
       {
         "command": "qpm.refresh",
-        "title": "Qt Project Manager: Refresh Workspace",
-        "icon": "$(refresh)"
+        "title": "Refresh Workspace",
+        "icon": "$(refresh)",
+        "category": "QPM"
       },
       {
         "command": "qpm.configureInstallation",
-        "title": "Qt Project Manager: Detect / Select Toolchain",
-        "icon": "$(settings-gear)"
+        "title": "Detect / Select Toolchain",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.syncCppTools",
-        "title": "Qt Project Manager: Synchronize Qt/C++ IntelliSense Configuration",
-        "icon": "$(symbol-namespace)"
+        "title": "Synchronize Qt/C++ IntelliSense Configuration",
+        "icon": "$(symbol-namespace)",
+        "category": "QPM"
       },
       {
         "command": "qpm.diagnoseCppTools",
-        "title": "Qt Project Manager: Diagnose Qt/C++ IntelliSense Configuration",
-        "icon": "$(pulse)"
+        "title": "Diagnose Qt/C++ IntelliSense Configuration",
+        "icon": "$(pulse)",
+        "category": "QPM"
       },
       {
         "command": "qpm.repairCppToolsProvider",
-        "title": "Qt Project Manager: Repair Qt/C++ IntelliSense Provider Selection",
-        "icon": "$(wrench)"
+        "title": "Repair Qt/C++ IntelliSense Provider Selection",
+        "icon": "$(wrench)",
+        "category": "QPM"
       },
       {
         "command": "qpm.enableAutomaticSuggestions",
-        "title": "Qt Project Manager: Enable Automatic Qt/C++ Suggestions",
-        "icon": "$(sparkle)"
+        "title": "Enable Automatic Qt/C++ Suggestions",
+        "icon": "$(sparkle)",
+        "category": "QPM"
       },
       {
         "command": "qpm.addWorkspaceFolderForIntelliSense",
-        "title": "Qt Project Manager: Add Qt/C++ Folder to VS Code Workspace for IntelliSense"
+        "title": "Add Qt/C++ Folder to VS Code Workspace for IntelliSense",
+        "category": "QPM"
       },
       {
         "command": "qpm.selectBuildMode",
-        "title": "Qt Project Manager: Select Build Mode",
-        "icon": "$(symbol-enum)"
+        "title": "Select Build Mode",
+        "icon": "$(symbol-enum)",
+        "category": "QPM"
+      },
+      {
+        "command": "qpm.selectConfiguration",
+        "title": "Select Build Configuration (Mode / Target / Platform)...",
+        "icon": "$(settings)",
+        "category": "QPM"
       },
       {
         "command": "qpm.build",
-        "title": "Qt Project Manager: Build Active Project",
-        "icon": "$(tools)"
+        "title": "Build Active Project",
+        "icon": "$(tools)",
+        "category": "QPM"
       },
       {
         "command": "qpm.rebuild",
-        "title": "Qt Project Manager: Rebuild Active Project"
+        "title": "Rebuild Active Project",
+        "category": "QPM"
       },
       {
         "command": "qpm.showBuildProblems",
-        "title": "Qt Project Manager: Show Build Problems",
-        "icon": "$(issues)"
+        "title": "Show Build Problems",
+        "icon": "$(issues)",
+        "category": "QPM"
       },
       {
         "command": "qpm.showBuildTrace",
-        "title": "Qt Project Manager: Show Full Build Trace",
-        "icon": "$(output)"
+        "title": "Show Full Build Trace",
+        "icon": "$(output)",
+        "category": "QPM"
       },
       {
         "command": "qpm.run",
-        "title": "Qt Project Manager: Build and Run Active Target",
-        "icon": "$(play)"
+        "title": "Build and Run Active Target",
+        "icon": "$(play)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openWorkspaceFile",
         "title": "Open Workspace File",
-        "icon": "$(link-external)"
+        "icon": "$(link-external)",
+        "category": "QPM"
       },
       {
         "command": "qpm.setActiveProject",
-        "title": "Set Active Project"
+        "title": "Set Active Project",
+        "category": "QPM"
       },
       {
         "command": "qpm.buildProject",
-        "title": "Build"
+        "title": "Build",
+        "category": "QPM"
       },
       {
         "command": "qpm.rebuildProject",
-        "title": "Rebuild"
+        "title": "Rebuild",
+        "category": "QPM"
       },
       {
         "command": "qpm.executeProject",
-        "title": "Execute"
+        "title": "Execute",
+        "category": "QPM"
       },
       {
         "command": "qpm.editProjectFile",
-        "title": "Edit Project File..."
+        "title": "Edit Project File...",
+        "category": "QPM"
       },
       {
         "command": "qpm.openProjectFile",
-        "title": "Browse Project File..."
+        "title": "Browse Project File...",
+        "category": "QPM"
       },
       {
         "command": "qpm.createProjectInWorkspace",
-        "title": "Create Native Qt Project in Workspace..."
+        "title": "Create Native Qt Project in Workspace...",
+        "category": "QPM"
       },
       {
         "command": "qpm.addExistingProject",
-        "title": "Add Existing Project to Workspace"
+        "title": "Add Existing Project to Workspace",
+        "category": "QPM"
       },
       {
         "command": "qpm.removeProject",
-        "title": "Remove Project From Workspace"
+        "title": "Remove Project From Workspace",
+        "category": "QPM"
       },
       {
         "command": "qpm.addFiles",
-        "title": "Add Existing File..."
+        "title": "Add Existing File...",
+        "category": "QPM"
       },
       {
         "command": "qpm.createNewFile",
-        "title": "Create New File or Starter..."
+        "title": "Create New File or Starter...",
+        "category": "QPM"
       },
       {
         "command": "qpm.addFolder",
-        "title": "Add Folder..."
+        "title": "Add Folder...",
+        "category": "QPM"
       },
       {
         "command": "qpm.renameFolder",
-        "title": "Rename Folder..."
+        "title": "Rename Folder...",
+        "category": "QPM"
       },
       {
         "command": "qpm.removeFolder",
-        "title": "Remove Folder"
+        "title": "Remove Folder",
+        "category": "QPM"
       },
       {
         "command": "qpm.removeFile",
-        "title": "Remove File"
+        "title": "Remove File",
+        "category": "QPM"
       },
       {
         "command": "qpm.excludeFile",
-        "title": "Exclude File from Build"
+        "title": "Exclude File from Build",
+        "category": "QPM"
       },
       {
         "command": "qpm.includeFile",
-        "title": "Include File in Build"
+        "title": "Include File in Build",
+        "category": "QPM"
       },
       {
         "command": "qpm.toggleObjOption",
-        "title": "Toggle .Obj Option"
+        "title": "Toggle .Obj Option",
+        "category": "QPM"
       },
       {
         "command": "qpm.renameFile",
-        "title": "Rename File..."
+        "title": "Rename File...",
+        "category": "QPM"
       },
       {
         "command": "qpm.replaceFile",
-        "title": "Replace File in Project..."
+        "title": "Replace File in Project...",
+        "category": "QPM"
       },
       {
         "command": "qpm.compileFile",
-        "title": "Compile File"
+        "title": "Compile File",
+        "category": "QPM"
       },
       {
         "command": "qpm.saveFile",
-        "title": "Save"
+        "title": "Save",
+        "category": "QPM"
       },
       {
         "command": "qpm.saveAll",
-        "title": "Save All"
+        "title": "Save All",
+        "category": "QPM"
       },
       {
         "command": "qpm.openFile",
-        "title": "Open"
+        "title": "Open",
+        "category": "QPM"
       },
       {
         "command": "qpm.openGeneratedFile",
-        "title": "Open Generated File"
+        "title": "Open Generated File",
+        "category": "QPM"
       },
       {
         "command": "qpm.revealGeneratedPath",
-        "title": "Reveal Generated Path in Explorer"
+        "title": "Reveal Generated Path in Explorer",
+        "category": "QPM"
       },
       {
         "command": "qpm.copyGeneratedPath",
-        "title": "Copy Generated Path"
+        "title": "Copy Generated Path",
+        "category": "QPM"
       },
       {
         "command": "qpm.openPanelFile",
-        "title": "Open UI/Resource File"
+        "title": "Open UI/Resource File",
+        "category": "QPM"
       },
       {
         "command": "qpm.openFunctionPanel",
-        "title": "Open Function Panel"
+        "title": "Open Function Panel",
+        "category": "QPM"
       },
       {
         "command": "qpm.revealProjectFile",
-        "title": "Reveal Project File in Explorer"
+        "title": "Reveal Project File in Explorer",
+        "category": "QPM"
       },
       {
         "command": "qpm.revealFile",
-        "title": "Browse File..."
+        "title": "Browse File...",
+        "category": "QPM"
       },
       {
         "command": "qpm.copyFilePath",
-        "title": "Copy Path"
+        "title": "Copy Path",
+        "category": "QPM"
       },
       {
         "command": "qpm.copyRelativeFilePath",
-        "title": "Copy Relative Path"
+        "title": "Copy Relative Path",
+        "category": "QPM"
       },
       {
         "command": "qpm.exploreProjectDirectory",
-        "title": "Explore Directory..."
+        "title": "Explore Directory...",
+        "category": "QPM"
       },
       {
         "command": "qpm.exploreFolderDirectory",
-        "title": "Explore Directory..."
+        "title": "Explore Directory...",
+        "category": "QPM"
       },
       {
         "command": "qpm.exploreFileDirectory",
-        "title": "Explore Directory..."
+        "title": "Explore Directory...",
+        "category": "QPM"
       },
       {
         "command": "qpm.findProject",
-        "title": "Find..."
+        "title": "Find...",
+        "category": "QPM"
       },
       {
         "command": "qpm.findFolder",
-        "title": "Find..."
+        "title": "Find...",
+        "category": "QPM"
       },
       {
         "command": "qpm.findFile",
-        "title": "Find..."
+        "title": "Find...",
+        "category": "QPM"
       },
       {
         "command": "qpm.expandAll",
-        "title": "Expand All"
+        "title": "Expand All",
+        "category": "QPM"
       },
       {
         "command": "qpm.collapseAll",
-        "title": "Collapse All"
+        "title": "Collapse All",
+        "category": "QPM"
       },
       {
         "command": "qpm.debugWithGdb",
-        "title": "Qt Project Manager: Build and Start Active Debug Profile",
-        "category": "Qt Project Manager",
+        "title": "Build and Start Active Debug Profile",
+        "category": "QPM",
         "icon": "$(debug-alt)"
       },
       {
         "command": "qpm.debugProjectWithGdb",
         "title": "Build and Start Debug Profile",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.refresh",
         "title": "Refresh Libraries",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(refresh)"
       },
       {
         "command": "qpm.library.showFunctionDetails",
         "title": "Show Symbol Details",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.insertCall",
         "title": "Insert Symbol Call",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.findFunction",
         "title": "Find Symbol",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(search)"
       },
       {
         "command": "qpm.library.clearFind",
         "title": "Clear Filter",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(clear-all)"
       },
       {
         "command": "qpm.library.reloadPacks",
         "title": "Reload Library Packs",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(sync)"
       },
       {
         "command": "qpm.library.managePacks",
         "title": "Manage Library Packs",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.library.importPack",
         "title": "Import Library Pack...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.library.createPack",
         "title": "Create Library Pack...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(new-file)"
       },
       {
         "command": "qpm.library.openVisualEditor",
         "title": "Open Visual Library Pack Editor",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(edit)"
       },
       {
         "command": "qpm.library.generateHeader",
         "title": "Generate Header From Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.importSymbols",
         "title": "Import Source/Header Into Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.importPrototypes",
         "title": "Import Prototypes Into Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.importSnippetFile",
         "title": "Import Snippet File Into Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.addLanguageStarter",
         "title": "Add Language Starter Into Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.addContent",
         "title": "Add Content To Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.exportContent",
         "title": "Export Content From Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.library.deleteContent",
         "title": "Delete Content From Library Pack",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.insertSnippet",
@@ -1051,505 +921,597 @@
       },
       {
         "command": "qpm.openDigitalFilterDesigner",
-        "title": "Open digital filter designer"
+        "title": "Open digital filter designer",
+        "category": "QPM"
       },
       {
         "command": "qpm.openTruthTableDesigner",
-        "title": "Open truth table / FSM designer"
+        "title": "Open truth table / FSM designer",
+        "category": "QPM"
       },
       {
         "command": "qpm.openNumberConverter",
-        "title": "Open number / bit converter"
+        "title": "Open number / bit converter",
+        "category": "QPM"
       },
       {
         "command": "qpm.convertSelectedNumbersToText",
-        "title": "Convert selected numbers to text"
+        "title": "Convert selected numbers to text",
+        "category": "QPM"
       },
       {
         "command": "qpm.convertSelectedTextToDecimalValues",
-        "title": "Convert selected text to decimal values"
+        "title": "Convert selected text to decimal values",
+        "category": "QPM"
       },
       {
         "command": "qpm.openCharacterTable",
-        "title": "Open character table / converter"
+        "title": "Open character table / converter",
+        "category": "QPM"
       },
       {
         "command": "qpm.saveFileAsTemplate",
         "title": "Save as Qt/C++ Creation Template...",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.importFileTemplate",
-        "title": "QPM: Import creation template from file...",
-        "category": "Qt Project Manager"
+        "title": "Import creation template from file...",
+        "category": "QPM"
       },
       {
         "command": "qpm.manageFileTemplates",
-        "title": "QPM: Manage creation templates...",
-        "category": "Qt Project Manager"
+        "title": "Manage creation templates...",
+        "category": "QPM"
       },
       {
         "command": "qpm.chooseBuildAction",
-        "title": "Qt Project Manager: Build / Rebuild / Clean Active Project",
+        "title": "Build / Rebuild / Clean Active Project",
         "icon": "$(tools)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.clean",
-        "title": "Qt Project Manager: Clean Active Project",
+        "title": "Clean Active Project",
         "icon": "$(trash)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.cleanProject",
         "title": "Clean Generated Target",
         "icon": "$(trash)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectTargetType",
         "title": "Select Target Type...",
         "icon": "$(symbol-enum)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.editBuildSettings",
-        "title": "Qt Project Settings...",
+        "title": "Project Settings...",
         "icon": "$(settings-gear)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.editBuildSettingsSafeMode",
         "title": "Qt Project Settings (Safe Mode)…",
         "icon": "$(shield)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.generatePrototypes",
         "title": "Generate Prototypes Header...",
         "icon": "$(symbol-method)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.refreshFileSymbols",
         "title": "Refresh Selected File Symbols",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(refresh)"
       },
       {
         "command": "qpm.revealFileSymbol",
         "title": "Reveal Function in Source",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.chooseRunAction",
-        "title": "Qt Project Manager: Run Options...",
+        "title": "Run Options...",
         "icon": "$(list-selection)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.runWithoutBuild",
-        "title": "Qt Project Manager: Run Active Target Without Build",
-        "category": "Qt Project Manager"
+        "title": "Run Active Target Without Build",
+        "category": "QPM"
       },
       {
         "command": "qpm.selectBuildModeD32",
         "title": "D32",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectBuildModeR32",
         "title": "R32",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectBuildModeD64",
         "title": "D64",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectBuildModeR64",
         "title": "R64",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectTargetTypeEXE",
         "title": "EXE",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectTargetTypeDLL",
         "title": "DLL",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.selectTargetTypeLIB",
         "title": "LIB",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.convertSelectedIntegerToDecimal",
         "title": "Convert Selected Integer to Decimal",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.convertSelectedIntegerToHexadecimal",
         "title": "Convert Selected Integer to Hexadecimal",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.convertSelectedIntegerToBinary",
         "title": "Convert Selected Integer to Binary",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.configureSdl",
-        "title": "Qt Project Manager: Configure SDL Compatibility Integration",
-        "icon": "$(window)"
+        "title": "Configure SDL Compatibility Integration",
+        "icon": "$(window)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createSdlWorkspaceProject",
-        "title": "Qt Project Manager: Create Legacy SDL Workspace and Project",
-        "icon": "$(window)"
+        "title": "Create Legacy SDL Workspace and Project",
+        "icon": "$(window)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createSdlProjectInWorkspace",
         "title": "Create Legacy SDL Project in Workspace...",
-        "icon": "$(window)"
+        "icon": "$(window)",
+        "category": "QPM"
       },
       {
         "command": "qpm.refreshProjectHealth",
-        "title": "Qt Project Manager: Refresh Project Health",
-        "icon": "$(refresh)"
+        "title": "Refresh Project Health",
+        "icon": "$(refresh)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openProjectHealthReport",
-        "title": "Qt Project Manager: Open Project Health Report",
-        "icon": "$(report)"
+        "title": "Open Project Health Report",
+        "icon": "$(report)",
+        "category": "QPM"
       },
       {
         "command": "qpm.manageQtProfiles",
-        "title": "Qt Project Manager: Manage Project Profiles",
-        "icon": "$(settings-view-bar-icon)"
+        "title": "Manage Project Profiles",
+        "icon": "$(settings-view-bar-icon)",
+        "category": "QPM"
       },
       {
         "command": "qpm.refreshQtTools",
-        "title": "Qt Project Manager: Refresh Qt Tools",
-        "icon": "$(refresh)"
+        "title": "Refresh Qt Tools",
+        "icon": "$(refresh)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createTranslation",
-        "title": "Qt Project Manager: Create Translation",
-        "icon": "$(new-file)"
+        "title": "Create Translation",
+        "icon": "$(new-file)",
+        "category": "QPM"
       },
       {
         "command": "qpm.updateTranslations",
-        "title": "Qt Project Manager: Update Translations (lupdate)",
-        "icon": "$(sync)"
+        "title": "Update Translations (lupdate)",
+        "icon": "$(sync)",
+        "category": "QPM"
       },
       {
         "command": "qpm.releaseTranslations",
-        "title": "Qt Project Manager: Release Translations (lrelease)",
-        "icon": "$(package)"
+        "title": "Release Translations (lrelease)",
+        "icon": "$(package)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openTranslationInLinguist",
-        "title": "Qt Project Manager: Open Translation in Qt Linguist",
-        "icon": "$(globe)"
+        "title": "Open Translation in Qt Linguist",
+        "icon": "$(globe)",
+        "category": "QPM"
       },
       {
         "command": "qpm.showTranslationStatus",
-        "title": "Qt Project Manager: Show Translation Status",
-        "icon": "$(graph)"
+        "title": "Show Translation Status",
+        "icon": "$(graph)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openQrcEditor",
-        "title": "Qt Project Manager: Open Qt Resource Editor",
-        "icon": "$(edit)"
+        "title": "Open Qt Resource Editor",
+        "icon": "$(edit)",
+        "category": "QPM"
       },
       {
         "command": "qpm.validateQrc",
-        "title": "Qt Project Manager: Validate Qt Resource Collection",
-        "icon": "$(check-all)"
+        "title": "Validate Qt Resource Collection",
+        "icon": "$(check-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.qmlLintFile",
-        "title": "Qt Project Manager: Lint Current QML File",
-        "icon": "$(check)"
+        "title": "Lint Current QML File",
+        "icon": "$(check)",
+        "category": "QPM"
       },
       {
         "command": "qpm.qmlLintProject",
-        "title": "Qt Project Manager: Lint All Project QML",
-        "icon": "$(check-all)"
+        "title": "Lint All Project QML",
+        "icon": "$(check-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.qmlFormatFile",
-        "title": "Qt Project Manager: Format Current QML File",
-        "icon": "$(symbol-keyword)"
+        "title": "Format Current QML File",
+        "icon": "$(symbol-keyword)",
+        "category": "QPM"
       },
       {
         "command": "qpm.qmlFormatProject",
-        "title": "Qt Project Manager: Format All Project QML",
-        "icon": "$(files)"
+        "title": "Format All Project QML",
+        "icon": "$(files)",
+        "category": "QPM"
       },
       {
         "command": "qpm.qmlPreviewFile",
-        "title": "Qt Project Manager: Preview QML File",
-        "icon": "$(preview)"
+        "title": "Preview QML File",
+        "icon": "$(preview)",
+        "category": "QPM"
       },
       {
         "command": "qpm.clearQmlDiagnostics",
-        "title": "Qt Project Manager: Clear QML Diagnostics",
-        "icon": "$(clear-all)"
+        "title": "Clear QML Diagnostics",
+        "icon": "$(clear-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openQtDocumentation",
-        "title": "Qt Project Manager: Search Selected Symbol in Qt Documentation",
-        "icon": "$(search)"
+        "title": "Search Selected Symbol in Qt Documentation",
+        "icon": "$(search)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openQtDocumentationHome",
-        "title": "Qt Project Manager: Open Qt Documentation",
-        "icon": "$(book)"
+        "title": "Open Qt Documentation",
+        "icon": "$(book)",
+        "category": "QPM"
       },
       {
         "command": "qpm.refreshTests",
-        "title": "Qt Project Manager: Refresh Test Discovery",
-        "icon": "$(refresh)"
+        "title": "Refresh Test Discovery",
+        "icon": "$(refresh)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openTestExplorer",
-        "title": "Qt Project Manager: Open Test Explorer",
-        "icon": "$(beaker)"
+        "title": "Open Test Explorer",
+        "icon": "$(beaker)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runAllTests",
-        "title": "Qt Project Manager: Run All Project Tests",
-        "icon": "$(run-all)"
+        "title": "Run All Project Tests",
+        "icon": "$(run-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runAllTestsWithCoverage",
-        "title": "Qt Project Manager: Run All Tests with Coverage",
-        "icon": "$(graph)"
+        "title": "Run All Tests with Coverage",
+        "icon": "$(graph)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runTestAtCursor",
-        "title": "Qt Project Manager: Run Test at Cursor",
-        "icon": "$(play)"
+        "title": "Run Test at Cursor",
+        "icon": "$(play)",
+        "category": "QPM"
       },
       {
         "command": "qpm.debugTestAtCursor",
-        "title": "Qt Project Manager: Debug Test at Cursor",
-        "icon": "$(debug-alt)"
+        "title": "Debug Test at Cursor",
+        "icon": "$(debug-alt)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runClangTidyFile",
-        "title": "Qt Project Manager: Clang-Tidy Current File",
-        "icon": "$(check)"
+        "title": "Clang-Tidy Current File",
+        "icon": "$(check)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runClangTidyProject",
-        "title": "Qt Project Manager: Clang-Tidy Project",
-        "icon": "$(check-all)"
+        "title": "Clang-Tidy Project",
+        "icon": "$(check-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.applyClangTidyFixes",
-        "title": "Qt Project Manager: Apply Clang-Tidy Fixes to Current File",
-        "icon": "$(wand)"
+        "title": "Apply Clang-Tidy Fixes to Current File",
+        "icon": "$(wand)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runClazyFile",
-        "title": "Qt Project Manager: Clazy Current File",
-        "icon": "$(search)"
+        "title": "Clazy Current File",
+        "icon": "$(search)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runClazyProject",
-        "title": "Qt Project Manager: Clazy Project",
-        "icon": "$(search-fuzzy)"
+        "title": "Clazy Project",
+        "icon": "$(search-fuzzy)",
+        "category": "QPM"
       },
       {
         "command": "qpm.clearQualityDiagnostics",
-        "title": "Qt Project Manager: Clear Quality Diagnostics",
-        "icon": "$(clear-all)"
+        "title": "Clear Quality Diagnostics",
+        "icon": "$(clear-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.configureQuality",
-        "title": "Qt Project Manager: Configure Tests and Quality",
-        "icon": "$(settings-gear)"
+        "title": "Configure Tests and Quality",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createSanitizerProfiles",
-        "title": "Qt Project Manager: Create Sanitizer Build Profiles",
-        "icon": "$(shield)"
+        "title": "Create Sanitizer Build Profiles",
+        "icon": "$(shield)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createCoverageProfile",
-        "title": "Qt Project Manager: Create Coverage Build Profile",
-        "icon": "$(graph)"
+        "title": "Create Coverage Build Profile",
+        "icon": "$(graph)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openQualityReport",
-        "title": "Qt Project Manager: Open Quality Report",
-        "icon": "$(report)"
+        "title": "Open Quality Report",
+        "icon": "$(report)",
+        "category": "QPM"
       },
       {
         "command": "qpm.manageQtKits",
-        "title": "Qt Project Manager: Manage Named Qt Kits",
-        "icon": "$(settings-gear)"
+        "title": "Manage Named Qt Kits",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.detectQtKits",
-        "title": "Qt Project Manager: Detect and Update Qt Kits",
-        "icon": "$(search)"
+        "title": "Detect and Update Qt Kits",
+        "icon": "$(search)",
+        "category": "QPM"
       },
       {
         "command": "qpm.assignQtKit",
-        "title": "Qt Project Manager: Assign Named Qt Kit to Active Project",
-        "icon": "$(link)"
+        "title": "Assign Named Qt Kit to Active Project",
+        "icon": "$(link)",
+        "category": "QPM"
       },
       {
         "command": "qpm.selectQtBackend",
-        "title": "Qt Project Manager: Select Build Backend",
-        "icon": "$(server-process)"
+        "title": "Select Build Backend",
+        "icon": "$(server-process)",
+        "category": "QPM"
       },
       {
         "command": "qpm.importQtBuildProject",
-        "title": "Qt Project Manager: Import qmake or CMake Project",
-        "icon": "$(folder-opened)"
+        "title": "Import qmake or CMake Project",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.configureQtBackend",
-        "title": "Qt Project Manager: Configure Active qmake/CMake Backend",
-        "icon": "$(gear)"
+        "title": "Configure Active qmake/CMake Backend",
+        "icon": "$(gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openQtBackendProject",
-        "title": "Qt Project Manager: Open qmake/CMake Project File",
-        "icon": "$(file-code)"
+        "title": "Open qmake/CMake Project File",
+        "icon": "$(file-code)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openPanelPathFile",
-        "title": "Qt Project Manager: Open Panel-Associated File",
-        "enablement": "false"
+        "title": "Open Panel-Associated File",
+        "enablement": "false",
+        "category": "QPM"
       },
       {
         "command": "qpm.startQtDebugProfile",
-        "title": "Qt Project Manager: Start Active Debug Profile",
-        "icon": "$(debug-start)"
+        "title": "Start Active Debug Profile",
+        "icon": "$(debug-start)",
+        "category": "QPM"
       },
       {
         "command": "qpm.startQtDebugProfileWithoutBuild",
-        "title": "Qt Project Manager: Run Debug Without Build",
+        "title": "Run Debug Without Build",
         "icon": "$(debug-alt)",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.attachQtProcess",
-        "title": "Qt Project Manager: Attach to Local Qt Process",
-        "icon": "$(plug)"
+        "title": "Attach to Local Qt Process",
+        "icon": "$(plug)",
+        "category": "QPM"
       },
       {
         "command": "qpm.debugQtCoreDump",
-        "title": "Qt Project Manager: Open Core or Dump File",
-        "icon": "$(file-binary)"
+        "title": "Open Core or Dump File",
+        "icon": "$(file-binary)",
+        "category": "QPM"
       },
       {
         "command": "qpm.attachQmlDebugger",
-        "title": "Qt Project Manager: Attach QML Debugger",
-        "icon": "$(symbol-event)"
+        "title": "Attach QML Debugger",
+        "icon": "$(symbol-event)",
+        "category": "QPM"
       },
       {
         "command": "qpm.manageQtDebugProfiles",
-        "title": "Qt Project Manager: Manage Debug Profiles",
-        "icon": "$(settings-gear)"
+        "title": "Manage Debug Profiles",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.generateQtLaunchJson",
-        "title": "Qt Project Manager: Generate launch.json from Debug Profiles",
-        "icon": "$(json)"
+        "title": "Generate launch.json from Debug Profiles",
+        "icon": "$(json)",
+        "category": "QPM"
       },
       {
         "command": "qpm.manageQtPlatforms",
-        "title": "Qt Project Manager: Manage Platform Profiles",
-        "icon": "$(settings-gear)"
+        "title": "Manage Platform Profiles",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.selectQtPlatform",
-        "title": "Qt Project Manager: Select Active Platform",
-        "icon": "$(device-desktop)"
+        "title": "Select Active Platform",
+        "icon": "$(device-desktop)",
+        "category": "QPM"
       },
       {
         "command": "qpm.detectPlatformCapabilities",
-        "title": "Qt Project Manager: Detect Platform Capabilities",
-        "icon": "$(pulse)"
+        "title": "Detect Platform Capabilities",
+        "icon": "$(pulse)",
+        "category": "QPM"
       },
       {
         "command": "qpm.buildForPlatform",
-        "title": "Qt Project Manager: Build for Active Platform",
-        "icon": "$(tools)"
+        "title": "Build for Active Platform",
+        "icon": "$(tools)",
+        "category": "QPM"
       },
       {
         "command": "qpm.deployToPlatform",
-        "title": "Qt Project Manager: Deploy to Active Platform",
-        "icon": "$(cloud-upload)"
+        "title": "Deploy to Active Platform",
+        "icon": "$(cloud-upload)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runOnPlatform",
-        "title": "Qt Project Manager: Run on Active Platform",
-        "icon": "$(play)"
+        "title": "Run on Active Platform",
+        "icon": "$(play)",
+        "category": "QPM"
       },
       {
         "command": "qpm.buildDeployRunPlatform",
-        "title": "Qt Project Manager: Build, Deploy and Run on Active Platform",
-        "icon": "$(rocket)"
+        "title": "Build, Deploy and Run on Active Platform",
+        "icon": "$(rocket)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openSshDeviceManager",
-        "title": "Qt Project Manager: OpenSSH Device Manager",
-        "icon": "$(remote)",
+        "title": "OpenSSH Device Manager",
+        "icon": "$(remote-explorer)",
         "shortTitle": "OpenSSH Device Manager",
-        "category": "Qt Project Manager"
+        "category": "QPM"
+      },
+      {
+        "command": "qpm.openInstrumentDiagnostics",
+        "title": "Open Instrument Diagnostics",
+        "icon": "$(radio-tower)",
+        "category": "QPM"
+      },
+      {
+        "command": "qpm.openNetworkDiagnostics",
+        "title": "Open Network & Wireless Diagnostics",
+        "icon": "$(globe)",
+        "category": "QPM"
+      },
+      {
+        "command": "qpm.openDeviceManager",
+        "title": "Open QPM Device Manager",
+        "icon": "$(device-desktop)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openRemoteTerminal",
-        "title": "Qt Project Manager: Open Remote Linux Terminal",
-        "icon": "$(terminal)"
+        "title": "Open Remote Linux Terminal",
+        "icon": "$(terminal)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openDockerShell",
-        "title": "Qt Project Manager: Open Docker Shell",
-        "icon": "$(terminal)"
+        "title": "Open Docker Shell",
+        "icon": "$(terminal)",
+        "category": "QPM"
       },
       {
         "command": "qpm.serveWebAssembly",
-        "title": "Qt Project Manager: Serve WebAssembly Target",
-        "icon": "$(globe)"
+        "title": "Serve WebAssembly Target",
+        "icon": "$(globe)",
+        "category": "QPM"
       },
       {
         "command": "qpm.stopWebAssemblyServer",
-        "title": "Qt Project Manager: Stop WebAssembly Server",
-        "icon": "$(debug-stop)"
+        "title": "Stop WebAssembly Server",
+        "icon": "$(debug-stop)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openPlatformReport",
-        "title": "Qt Project Manager: Open Platform Report",
-        "icon": "$(pulse)"
+        "title": "Open Platform Report",
+        "icon": "$(pulse)",
+        "category": "QPM"
       },
       {
         "command": "qpm.toolbarBuildModeD32",
-        "title": "D32"
+        "title": "D32",
+        "category": "QPM"
       },
       {
         "command": "qpm.toolbarBuildModeR32",
-        "title": "R32"
+        "title": "R32",
+        "category": "QPM"
       },
       {
         "command": "qpm.toolbarBuildModeD64",
-        "title": "D64"
+        "title": "D64",
+        "category": "QPM"
       },
       {
         "command": "qpm.toolbarBuildModeR64",
-        "title": "R64"
+        "title": "R64",
+        "category": "QPM"
       },
       {
         "command": "qpm.insertSnippetC",
@@ -1589,681 +1551,762 @@
       },
       {
         "command": "qpm.generateProductMetadata",
-        "title": "Qt Project Manager: Generate Product Metadata",
-        "icon": "$(symbol-property)"
+        "title": "Generate Product Metadata",
+        "icon": "$(symbol-property)",
+        "category": "QPM"
       },
       {
         "command": "qpm.createPortablePackage",
-        "title": "Qt Project Manager: Create Portable Package",
-        "icon": "$(package)"
+        "title": "Create Portable Package",
+        "icon": "$(package)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openPackagingReport",
-        "title": "Qt Project Manager: Open Packaging Report",
-        "icon": "$(report)"
+        "title": "Open Packaging Report",
+        "icon": "$(report)",
+        "category": "QPM"
       },
       {
         "command": "qpm.revealPackagingOutput",
-        "title": "Qt Project Manager: Reveal Packaging Output",
-        "icon": "$(folder-opened)"
+        "title": "Reveal Packaging Output",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.cleanPackagingOutput",
-        "title": "Qt Project Manager: Clean Packaging Output",
-        "icon": "$(trash)"
+        "title": "Clean Packaging Output",
+        "icon": "$(trash)",
+        "category": "QPM"
       },
       {
         "command": "qpm.profileQmlApplication",
-        "title": "Qt Project Manager: Profile QML / Qt Quick Application",
-        "icon": "$(graph-line)"
+        "title": "Profile QML / Qt Quick Application",
+        "icon": "$(graph-line)",
+        "category": "QPM"
       },
       {
         "command": "qpm.profileCpu",
-        "title": "Qt Project Manager: Profile CPU",
-        "icon": "$(dashboard)"
+        "title": "Profile CPU",
+        "icon": "$(dashboard)",
+        "category": "QPM"
       },
       {
         "command": "qpm.profileMemory",
-        "title": "Qt Project Manager: Analyze Memory",
-        "icon": "$(bug)"
+        "title": "Analyze Memory",
+        "icon": "$(bug)",
+        "category": "QPM"
       },
       {
         "command": "qpm.runCppcheck",
-        "title": "Qt Project Manager: Run Cppcheck",
-        "icon": "$(checklist)"
+        "title": "Run Cppcheck",
+        "icon": "$(checklist)",
+        "category": "QPM"
       },
       {
         "command": "qpm.traceSystemCalls",
-        "title": "Qt Project Manager: Trace System Calls",
-        "icon": "$(list-tree)"
+        "title": "Trace System Calls",
+        "icon": "$(list-tree)",
+        "category": "QPM"
       },
       {
         "command": "qpm.stopProfiling",
-        "title": "Qt Project Manager: Stop Active Profiler",
-        "icon": "$(debug-stop)"
+        "title": "Stop Active Profiler",
+        "icon": "$(debug-stop)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openLatestProfilingResult",
-        "title": "Qt Project Manager: Open Latest Profiling Result",
-        "icon": "$(folder-opened)"
+        "title": "Open Latest Profiling Result",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openProfilingReport",
-        "title": "Qt Project Manager: Open Profiling Report",
-        "icon": "$(report)"
+        "title": "Open Profiling Report",
+        "icon": "$(report)",
+        "category": "QPM"
       },
       {
         "command": "qpm.revealProfilingOutput",
-        "title": "Qt Project Manager: Reveal Profiling Output",
-        "icon": "$(folder)"
+        "title": "Reveal Profiling Output",
+        "icon": "$(folder)",
+        "category": "QPM"
       },
       {
         "command": "qpm.cleanProfilingOutput",
-        "title": "Qt Project Manager: Clean Profiling Output",
-        "icon": "$(trash)"
+        "title": "Clean Profiling Output",
+        "icon": "$(trash)",
+        "category": "QPM"
       },
       {
         "command": "qpm.rerunFailedTests",
-        "title": "Qt Project Manager: Rerun Failed Tests",
-        "icon": "$(debug-rerun)"
+        "title": "Rerun Failed Tests",
+        "icon": "$(debug-rerun)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openTestHistory",
-        "title": "Qt Project Manager: Open Test History",
-        "icon": "$(history)"
+        "title": "Open Test History",
+        "icon": "$(history)",
+        "category": "QPM"
       },
       {
         "command": "qpm.clearTestHistory",
-        "title": "Qt Project Manager: Clear Test History",
-        "icon": "$(clear-all)"
+        "title": "Clear Test History",
+        "icon": "$(clear-all)",
+        "category": "QPM"
       },
       {
         "command": "qpm.configureAndroidEnvironment",
-        "title": "Qt Project Manager: Configure Android Environment",
+        "title": "Configure Android Environment",
         "category": "QPM"
       },
       {
         "command": "qpm.refreshAndroidDevices",
-        "title": "Qt Project Manager: Refresh Android Devices",
+        "title": "Refresh Android Devices",
         "category": "QPM"
       },
       {
         "command": "qpm.selectAndroidDevice",
-        "title": "Qt Project Manager: Select Android Device",
+        "title": "Select Android Device",
         "category": "QPM"
       },
       {
         "command": "qpm.selectAndroidAvd",
-        "title": "Qt Project Manager: Select Android Virtual Device",
+        "title": "Select Android Virtual Device",
         "category": "QPM"
       },
       {
         "command": "qpm.startAndroidAvd",
-        "title": "Qt Project Manager: Start Android Emulator",
+        "title": "Start Android Emulator",
         "category": "QPM"
       },
       {
         "command": "qpm.installAndroidSdkPackages",
-        "title": "Qt Project Manager: Install Required Android SDK Packages",
+        "title": "Install Required Android SDK Packages",
         "category": "QPM"
       },
       {
         "command": "qpm.buildAndroidApk",
-        "title": "Qt Project Manager: Build Android APK",
+        "title": "Build Android APK",
         "category": "QPM"
       },
       {
         "command": "qpm.buildAndroidAab",
-        "title": "Qt Project Manager: Build Android App Bundle (AAB)",
+        "title": "Build Android App Bundle (AAB)",
         "category": "QPM"
       },
       {
         "command": "qpm.buildAndroidAar",
-        "title": "Qt Project Manager: Build Android Archive (AAR)",
+        "title": "Build Android Archive (AAR)",
         "category": "QPM"
       },
       {
         "command": "qpm.installAndroidPackage",
-        "title": "Qt Project Manager: Install Android Package",
+        "title": "Install Android Package",
         "category": "QPM"
       },
       {
         "command": "qpm.buildInstallRunAndroid",
-        "title": "Qt Project Manager: Build, Install and Run Android Application",
+        "title": "Build, Install and Run Android Application",
         "category": "QPM"
       },
       {
         "command": "qpm.runAndroidApplication",
-        "title": "Qt Project Manager: Run Android Application",
+        "title": "Run Android Application",
         "category": "QPM"
       },
       {
         "command": "qpm.uninstallAndroidApplication",
-        "title": "Qt Project Manager: Uninstall Android Application",
+        "title": "Uninstall Android Application",
         "category": "QPM"
       },
       {
         "command": "qpm.prepareAndroidDebug",
-        "title": "Qt Project Manager: Launch Android Application Waiting for Debugger",
+        "title": "Launch Android Application Waiting for Debugger",
         "category": "QPM"
       },
       {
         "command": "qpm.startAndroidLogcat",
-        "title": "Qt Project Manager: Start Android Logcat",
+        "title": "Start Android Logcat",
         "category": "QPM"
       },
       {
         "command": "qpm.stopAndroidLogcat",
-        "title": "Qt Project Manager: Stop Android Logcat",
+        "title": "Stop Android Logcat",
         "category": "QPM"
       },
       {
         "command": "qpm.openAndroidReport",
-        "title": "Qt Project Manager: Open Android Environment Report",
+        "title": "Open Android Environment Report",
         "category": "QPM"
       },
       {
         "command": "qpm.revealAndroidPackage",
-        "title": "Qt Project Manager: Reveal Latest Android Package",
+        "title": "Reveal Latest Android Package",
         "category": "QPM"
       },
       {
         "command": "qpm.createDesktopInstaller",
-        "title": "Qt Project Manager: Create Desktop Installer",
+        "title": "Create Desktop Installer",
         "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.generateInstallerProject",
-        "title": "Qt Project Manager: Generate Installer Sources",
+        "title": "Generate Installer Sources",
         "category": "QPM",
         "icon": "$(files)"
       },
       {
         "command": "qpm.createQtIfwRepository",
-        "title": "Qt Project Manager: Create Qt IFW Update Repository",
+        "title": "Create Qt IFW Update Repository",
         "category": "QPM",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "qpm.signDistributionArtifacts",
-        "title": "Qt Project Manager: Sign Distribution Artifacts",
+        "title": "Sign Distribution Artifacts",
         "category": "QPM",
         "icon": "$(verified)"
       },
       {
         "command": "qpm.verifyDistributionSignatures",
-        "title": "Qt Project Manager: Verify Distribution Signatures",
+        "title": "Verify Distribution Signatures",
         "category": "QPM",
         "icon": "$(shield)"
       },
       {
         "command": "qpm.detectInstallerTools",
-        "title": "Qt Project Manager: Detect Installer and Signing Tools",
+        "title": "Detect Installer and Signing Tools",
         "category": "QPM",
         "icon": "$(search)"
       },
       {
         "command": "qpm.openInstallerReport",
-        "title": "Qt Project Manager: Open Installer and Signing Report",
+        "title": "Open Installer and Signing Report",
         "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.revealInstallerOutput",
-        "title": "Qt Project Manager: Reveal Installer Output",
+        "title": "Reveal Installer Output",
         "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.cleanInstallerOutput",
-        "title": "Qt Project Manager: Clean Installer Output",
+        "title": "Clean Installer Output",
         "category": "QPM",
         "icon": "$(trash)"
       },
       {
         "command": "qpm.startQmlLanguageServer",
-        "title": "Qt Project Manager: Start QML Language Server",
+        "title": "Start QML Language Server",
         "category": "QPM",
         "icon": "$(play)"
       },
       {
         "command": "qpm.restartQmlLanguageServer",
-        "title": "Qt Project Manager: Restart QML Language Server",
+        "title": "Restart QML Language Server",
         "category": "QPM",
         "icon": "$(refresh)"
       },
       {
         "command": "qpm.stopQmlLanguageServer",
-        "title": "Qt Project Manager: Stop QML Language Server",
+        "title": "Stop QML Language Server",
         "category": "QPM",
         "icon": "$(debug-stop)"
       },
       {
         "command": "qpm.refreshQmlLanguageServer",
-        "title": "Qt Project Manager: Refresh QML Build Directories",
+        "title": "Refresh QML Build Directories",
         "category": "QPM",
         "icon": "$(sync)"
       },
       {
         "command": "qpm.generateQmllsConfiguration",
-        "title": "Qt Project Manager: Generate .qmlls.ini",
+        "title": "Generate .qmlls.ini",
         "category": "QPM",
         "icon": "$(settings-gear)"
       },
       {
         "command": "qpm.openQmllsConfiguration",
-        "title": "Qt Project Manager: Open .qmlls.ini",
+        "title": "Open .qmlls.ini",
         "category": "QPM",
         "icon": "$(go-to-file)"
       },
       {
         "command": "qpm.generateQmldir",
-        "title": "Qt Project Manager: Generate qmldir",
+        "title": "Generate qmldir",
         "category": "QPM",
         "icon": "$(symbol-module)"
       },
       {
         "command": "qpm.openQmlLanguageReport",
-        "title": "Qt Project Manager: Open QML Language Report",
+        "title": "Open QML Language Report",
         "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.showQmlLanguageOutput",
-        "title": "Qt Project Manager: Show QML Language Server Output",
+        "title": "Show QML Language Server Output",
         "category": "QPM",
         "icon": "$(output)"
       },
       {
         "command": "qpm.showQmlLanguageTrace",
-        "title": "Qt Project Manager: Show QML Language Server Trace",
+        "title": "Show QML Language Server Trace",
         "category": "QPM",
         "icon": "$(list-tree)"
       },
       {
         "command": "qpm.configureAppleEnvironment",
-        "title": "Qt Project Manager: Configure Apple Environment",
+        "title": "Configure Apple Environment",
         "category": "QPM",
         "icon": "$(settings-gear)"
       },
       {
         "command": "qpm.refreshAppleDevices",
-        "title": "Qt Project Manager: Refresh Apple Devices",
+        "title": "Refresh Apple Devices",
         "category": "QPM",
         "icon": "$(refresh)"
       },
       {
         "command": "qpm.selectAppleSimulator",
-        "title": "Qt Project Manager: Select iOS Simulator",
+        "title": "Select iOS Simulator",
         "category": "QPM",
         "icon": "$(list-selection)"
       },
       {
         "command": "qpm.bootAppleSimulator",
-        "title": "Qt Project Manager: Boot iOS Simulator",
+        "title": "Boot iOS Simulator",
         "category": "QPM",
         "icon": "$(vm-running)"
       },
       {
         "command": "qpm.buildAppleTarget",
-        "title": "Qt Project Manager: Build Apple Target",
+        "title": "Build Apple Target",
         "category": "QPM",
         "icon": "$(tools)"
       },
       {
         "command": "qpm.deployMacApplication",
-        "title": "Qt Project Manager: Deploy macOS Application",
+        "title": "Deploy macOS Application",
         "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.createMacDmg",
-        "title": "Qt Project Manager: Create macOS DMG",
+        "title": "Create macOS DMG",
         "category": "QPM",
         "icon": "$(archive)"
       },
       {
         "command": "qpm.signAppleArtifacts",
-        "title": "Qt Project Manager: Sign Apple Artifacts",
+        "title": "Sign Apple Artifacts",
         "category": "QPM",
         "icon": "$(verified-filled)"
       },
       {
         "command": "qpm.verifyAppleSignatures",
-        "title": "Qt Project Manager: Verify Apple Signatures",
+        "title": "Verify Apple Signatures",
         "category": "QPM",
         "icon": "$(shield)"
       },
       {
         "command": "qpm.notarizeAppleArtifact",
-        "title": "Qt Project Manager: Notarize Apple Artifact",
+        "title": "Notarize Apple Artifact",
         "category": "QPM",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "qpm.stapleAppleArtifact",
-        "title": "Qt Project Manager: Staple Apple Notarization Ticket",
+        "title": "Staple Apple Notarization Ticket",
         "category": "QPM",
         "icon": "$(pin)"
       },
       {
         "command": "qpm.installRunIosSimulator",
-        "title": "Qt Project Manager: Build, Install and Run iOS Simulator",
+        "title": "Build, Install and Run iOS Simulator",
         "category": "QPM",
         "icon": "$(rocket)"
       },
       {
         "command": "qpm.openAppleReport",
-        "title": "Qt Project Manager: Open Apple Platform Report",
+        "title": "Open Apple Platform Report",
         "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.revealAppleOutput",
-        "title": "Qt Project Manager: Reveal Apple Output",
+        "title": "Reveal Apple Output",
         "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.cleanAppleOutput",
-        "title": "Qt Project Manager: Clean Apple Output",
+        "title": "Clean Apple Output",
         "category": "QPM",
         "icon": "$(trash)"
       },
       {
         "command": "qpm.detectPublicationTools",
-        "title": "Qt Project Manager: Detect Publication Tools",
+        "title": "Detect Publication Tools",
         "category": "QPM",
         "icon": "$(search)"
       },
       {
         "command": "qpm.generatePublicationSources",
-        "title": "Qt Project Manager: Generate Publication Sources",
+        "title": "Generate Publication Sources",
         "category": "QPM",
         "icon": "$(files)"
       },
       {
         "command": "qpm.createMsixPackage",
-        "title": "Qt Project Manager: Create MSIX Package",
+        "title": "Create MSIX Package",
         "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.generateAppInstaller",
-        "title": "Qt Project Manager: Generate App Installer File",
+        "title": "Generate App Installer File",
         "category": "QPM",
         "icon": "$(cloud-download)"
       },
       {
         "command": "qpm.generateWingetManifests",
-        "title": "Qt Project Manager: Generate WinGet Manifests",
+        "title": "Generate WinGet Manifests",
         "category": "QPM",
         "icon": "$(list-tree)"
       },
       {
         "command": "qpm.validateWingetManifests",
-        "title": "Qt Project Manager: Validate WinGet Manifests",
+        "title": "Validate WinGet Manifests",
         "category": "QPM",
         "icon": "$(check-all)"
       },
       {
         "command": "qpm.createReleaseBundle",
-        "title": "Qt Project Manager: Create Release Bundle",
+        "title": "Create Release Bundle",
         "category": "QPM",
         "icon": "$(archive)"
       },
       {
         "command": "qpm.publishRelease",
-        "title": "Qt Project Manager: Publish Release",
+        "title": "Publish Release",
         "category": "QPM",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "qpm.openPublicationReport",
-        "title": "Qt Project Manager: Open Publication Report",
+        "title": "Open Publication Report",
         "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.revealPublicationOutput",
-        "title": "Qt Project Manager: Reveal Publication Output",
+        "title": "Reveal Publication Output",
         "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.cleanPublicationOutput",
-        "title": "Qt Project Manager: Clean Publication Output",
+        "title": "Clean Publication Output",
         "category": "QPM",
         "icon": "$(trash)"
       },
       {
         "command": "qpm.python.bootstrap",
-        "title": "Qt Project Manager: Prepare Qt for Python Environment",
+        "title": "Prepare Qt for Python Environment",
         "category": "QPM",
         "icon": "$(rocket)"
       },
       {
         "command": "qpm.python.selectInterpreter",
-        "title": "Qt Project Manager: Select Qt for Python Interpreter",
+        "title": "Select Qt for Python Interpreter",
         "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.python.createVirtualEnvironment",
-        "title": "Qt Project Manager: Create Python Virtual Environment",
+        "title": "Create Python Virtual Environment",
         "category": "QPM",
         "icon": "$(new-folder)"
       },
       {
         "command": "qpm.python.installPySide6",
-        "title": "Qt Project Manager: Install or Update PySide6",
+        "title": "Install or Update PySide6",
         "category": "QPM",
         "icon": "$(cloud-download)"
       },
       {
         "command": "qpm.python.build",
-        "title": "Qt Project Manager: Build Qt for Python Project",
+        "title": "Build Qt for Python Project",
         "category": "QPM",
         "icon": "$(tools)"
       },
       {
         "command": "qpm.python.run",
-        "title": "Qt Project Manager: Run Qt for Python Project",
+        "title": "Run Qt for Python Project",
         "category": "QPM",
         "icon": "$(play)"
       },
       {
         "command": "qpm.python.debug",
-        "title": "Qt Project Manager: Debug Qt for Python Project",
+        "title": "Debug Qt for Python Project",
         "category": "QPM",
         "icon": "$(debug-alt)"
       },
       {
         "command": "qpm.python.clean",
-        "title": "Qt Project Manager: Clean Qt for Python Project",
+        "title": "Clean Qt for Python Project",
         "category": "QPM",
         "icon": "$(trash)"
       },
       {
         "command": "qpm.python.compileUi",
-        "title": "Qt Project Manager: Generate Python UI Files",
+        "title": "Generate Python UI Files",
         "category": "QPM",
         "icon": "$(layout)"
       },
       {
         "command": "qpm.python.compileResources",
-        "title": "Qt Project Manager: Generate Python Resource Files",
+        "title": "Generate Python Resource Files",
         "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.python.openDesigner",
-        "title": "Qt Project Manager: Open PySide6 Designer",
+        "title": "Open PySide6 Designer",
         "category": "QPM",
         "icon": "$(preview)"
       },
       {
         "command": "qpm.python.deploy",
-        "title": "Qt Project Manager: Deploy Qt for Python Desktop Application",
+        "title": "Deploy Qt for Python Desktop Application",
         "category": "QPM",
         "icon": "$(package)"
       },
       {
         "command": "qpm.python.deployAndroid",
-        "title": "Qt Project Manager: Deploy Qt for Python Android Application",
+        "title": "Deploy Qt for Python Android Application",
         "category": "QPM",
         "icon": "$(device-mobile)"
       },
       {
         "command": "qpm.python.openReport",
-        "title": "Qt Project Manager: Open Qt for Python Report",
+        "title": "Open Qt for Python Report",
         "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.python.revealEnvironment",
-        "title": "Qt Project Manager: Reveal Qt for Python Environment",
+        "title": "Reveal Qt for Python Environment",
         "category": "QPM",
         "icon": "$(folder-opened)"
       },
       {
         "command": "qpm.dependencies.configure",
-        "title": "Qt Project Manager: Configure Dependency Managers",
-        "icon": "$(settings-gear)"
+        "title": "Configure Dependency Managers",
+        "icon": "$(settings-gear)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.detectTools",
-        "title": "Qt Project Manager: Detect Dependency Tools",
-        "icon": "$(search)"
+        "title": "Detect Dependency Tools",
+        "icon": "$(search)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.generateManifests",
-        "title": "Qt Project Manager: Generate Dependency Manifests",
-        "icon": "$(file-code)"
+        "title": "Generate Dependency Manifests",
+        "icon": "$(file-code)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.install",
-        "title": "Qt Project Manager: Install / Synchronize Dependencies",
-        "icon": "$(cloud-download)"
+        "title": "Install / Synchronize Dependencies",
+        "icon": "$(cloud-download)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.openReport",
-        "title": "Qt Project Manager: Open Dependency Report",
-        "icon": "$(preview)"
+        "title": "Open Dependency Report",
+        "icon": "$(preview)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.revealOutput",
-        "title": "Qt Project Manager: Reveal Dependency Output",
-        "icon": "$(folder-opened)"
+        "title": "Reveal Dependency Output",
+        "icon": "$(folder-opened)",
+        "category": "QPM"
       },
       {
         "command": "qpm.dependencies.clean",
-        "title": "Qt Project Manager: Clean Dependency Output",
-        "icon": "$(trash)"
+        "title": "Clean Dependency Output",
+        "icon": "$(trash)",
+        "category": "QPM"
       },
       {
         "command": "qpm.openInstrumentProfileEditor",
-        "title": "Qt Project Manager: Open SCPI Instrument Profile Catalog & Editor",
-        "category": "Qt Project Manager",
+        "title": "Open SCPI Instrument Profile Catalog & Editor",
+        "category": "QPM",
         "icon": "$(radio-tower)"
       },
       {
         "command": "qpm.openInstrumentProfileFile",
-        "title": "Qt Project Manager: Open SCPI Instrument Profile...",
-        "category": "Qt Project Manager",
+        "title": "Open SCPI Instrument Profile...",
+        "category": "QPM",
         "icon": "$(json)"
       },
       {
         "command": "qpm.newInstrumentProfileFromCatalog",
-        "title": "Qt Project Manager: New SCPI Instrument Profile from Catalog",
-        "category": "Qt Project Manager",
+        "title": "New SCPI Instrument Profile from Catalog",
+        "category": "QPM",
         "icon": "$(new-file)"
       },
       {
         "command": "qpm.moveFileToFolder",
         "title": "Move File To Folder...",
-        "icon": "$(move)"
+        "icon": "$(move)",
+        "category": "QPM"
       },
       {
         "command": "qpm.copyFileSymbol",
         "title": "Copy Qt File Symbol Signature",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(copy)"
       },
       {
         "command": "qpm.copyFileSymbolDeclaration",
         "title": "Copy Qt File Symbol Declaration",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.copyFileSymbols",
         "title": "Copy Qt File Symbols",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(copy)"
       },
       {
         "command": "qpm.copyFileSymbolDeclarations",
         "title": "Copy Qt File Symbol Declarations",
-        "category": "Qt Project Manager"
+        "category": "QPM"
       },
       {
         "command": "qpm.exportFileSymbols",
         "title": "Export Qt File Symbols...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(export)"
       },
       {
         "command": "qpm.generateFileSymbolsHeader",
         "title": "Generate Header From Qt File Symbols...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(file-code)"
       },
       {
         "command": "qpm.generateFileSymbolsSource",
         "title": "Generate Source From Qt File Symbols...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(new-file)"
       },
       {
         "command": "qpm.generateImportLibraryFromHeaders",
         "title": "Generate Import Library (.lib) from Header(s)...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(library)"
       },
       {
         "command": "qpm.generateImportLibraryFromDll",
         "title": "Generate DLL Import Library (.lib)...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(library)"
       },
       {
         "command": "qpm.extractDllDefinitionFile",
         "title": "Extract DLL Exports (.def)...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(symbol-file)"
       },
       {
         "command": "qpm.openImportLibraryReport",
         "title": "Open Import-Library Generation Report",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(report)"
       },
       {
         "command": "qpm.analyzeDll",
         "title": "Analyze DLL...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(inspect)"
       },
       {
         "command": "qpm.analyzeLibrary",
         "title": "Analyze .a / .lib Library...",
-        "category": "Qt Project Manager",
+        "category": "QPM",
         "icon": "$(inspect)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "qpm.chooseBuildAction",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "qpm.run",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "qpm.startQtDebugProfileWithoutBuild",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "qpm.refresh",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "navigation@4"
+        },
+        {
+          "command": "qpm.openHome",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "1_workspace@1"
+        },
+        {
+          "command": "qpm.openWorkspace",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "1_workspace@2"
+        },
+        {
+          "command": "qpm.createQtProject",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "1_workspace@3"
+        },
+        {
+          "command": "qpm.selectConfiguration",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "2_configuration@1"
+        },
+        {
+          "command": "qpm.selectQtInstallation",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "2_configuration@2"
+        },
+        {
+          "command": "qpm.chooseRunAction",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "2_configuration@3"
+        },
+        {
+          "command": "qpm.editBuildSettings",
+          "when": "view == qpm.workspaceExplorer",
+          "group": "3_settings@1"
+        },
         {
           "command": "qpm.library.findFunction",
           "when": "view == qpm.libraryExplorer",
@@ -2323,86 +2366,6 @@
           "command": "qpm.generateFileSymbolsSource",
           "when": "view == qpm.fileSymbols",
           "group": "navigation@5"
-        },
-        {
-          "command": "qpm.openHome",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@1"
-        },
-        {
-          "command": "qpm.createQtProject",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@2.5"
-        },
-        {
-          "command": "qpm.openWorkspace",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@2"
-        },
-        {
-          "command": "qpm.chooseBuildAction",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@3"
-        },
-        {
-          "command": "qpm.run",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@4"
-        },
-        {
-          "command": "qpm.startQtDebugProfileWithoutBuild",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@5"
-        },
-        {
-          "command": "qpm.chooseRunAction",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@6"
-        },
-        {
-          "command": "qpm.toolbarBuildModeD32",
-          "when": "view == qpm.workspaceExplorer && qpm.buildMode == debug",
-          "group": "navigation@6"
-        },
-        {
-          "command": "qpm.toolbarBuildModeR32",
-          "when": "view == qpm.workspaceExplorer && qpm.buildMode == release",
-          "group": "navigation@6"
-        },
-        {
-          "command": "qpm.toolbarBuildModeD64",
-          "when": "view == qpm.workspaceExplorer && qpm.buildMode == debug64",
-          "group": "navigation@6"
-        },
-        {
-          "command": "qpm.toolbarBuildModeR64",
-          "when": "view == qpm.workspaceExplorer && qpm.buildMode == release64",
-          "group": "navigation@6"
-        },
-        {
-          "command": "qpm.selectTargetTypeEXE",
-          "when": "view == qpm.workspaceExplorer && qpm.targetType == exe",
-          "group": "navigation@7"
-        },
-        {
-          "command": "qpm.selectTargetTypeDLL",
-          "when": "view == qpm.workspaceExplorer && qpm.targetType == dll",
-          "group": "navigation@7"
-        },
-        {
-          "command": "qpm.selectTargetTypeLIB",
-          "when": "view == qpm.workspaceExplorer && qpm.targetType == lib",
-          "group": "navigation@7"
-        },
-        {
-          "command": "qpm.editBuildSettings",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@9"
-        },
-        {
-          "command": "qpm.refresh",
-          "when": "view == qpm.workspaceExplorer",
-          "group": "navigation@10"
         },
         {
           "command": "qpm.refreshProjectHealth",
@@ -2558,6 +2521,11 @@
           "command": "qpm.python.openReport",
           "when": "view == qpm.python",
           "group": "navigation@3"
+        },
+        {
+          "command": "qpm.openNetworkDiagnostics",
+          "when": "view == qpm.platforms",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -3149,15 +3117,15 @@
         },
         {
           "command": "qpm.selectTargetTypeEXE",
-          "when": "!qpm.nativeQtProjectActive"
+          "when": "false"
         },
         {
           "command": "qpm.selectTargetTypeDLL",
-          "when": "!qpm.nativeQtProjectActive"
+          "when": "false"
         },
         {
           "command": "qpm.selectTargetTypeLIB",
-          "when": "!qpm.nativeQtProjectActive"
+          "when": "false"
         },
         {
           "command": "qpm.copyFilePath",
@@ -3367,6 +3335,18 @@
         {
           "command": "qpm.openSshDeviceManager",
           "group": "2_remote@1"
+        },
+        {
+          "command": "qpm.openInstrumentDiagnostics",
+          "group": "2_remote@2"
+        },
+        {
+          "command": "qpm.openNetworkDiagnostics",
+          "group": "2_remote@3"
+        },
+        {
+          "command": "qpm.openDeviceManager",
+          "group": "2_remote@4"
         },
         {
           "submenu": "qpm.editorLibraries",
@@ -4005,6 +3985,18 @@
         {
           "command": "qpm.openSshDeviceManager",
           "group": "2_remote@1"
+        },
+        {
+          "command": "qpm.openInstrumentDiagnostics",
+          "group": "2_remote@2"
+        },
+        {
+          "command": "qpm.openNetworkDiagnostics",
+          "group": "2_remote@3"
+        },
+        {
+          "command": "qpm.openDeviceManager",
+          "group": "2_remote@4"
         },
         {
           "submenu": "qpm.editorLibraries",
@@ -4685,598 +4677,795 @@
         }
       ]
     },
-    "configuration": {
-      "title": "Qt Project Manager",
-      "properties": {
-        "qpm.installations": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+    "configuration": [
+      {
+        "id": "qpm.qt",
+        "title": "QPM — Qt",
+        "order": 1,
+        "properties": {
+          "qpm.qtSearchPaths": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional Qt base directories or kit roots scanned by Qt Project Manager.",
+            "order": 0
           },
-          "description": "Known Qt/C++ toolchain root or bin directories detected or added manually.",
-          "markdownDescription": "Known Qt/C++ toolchain root or bin directories detected or added manually."
-        },
-        "qpm.activeInstallation": {
-          "type": "string",
-          "default": "",
-          "description": "Selected Qt/C++ toolchain root or bin directory. Leave empty to use automatic detection from PATH and common MinGW/MSYS2/Clang locations."
-        },
-        "qpm.buildMode": {
-          "type": "string",
-          "enum": [
-            "debug",
-            "release",
-            "debug64",
-            "release64"
-          ],
-          "default": "debug64",
-          "description": "Build mode used by QPM. Native Qt projects default to 64-bit and are aligned with the selected kit architecture. Debug modes add -g -O0; release modes add -O2."
-        },
-        "qpm.buildLogDetail": {
-          "type": "string",
-          "enum": [
-            "compact",
-            "normal",
-            "verbose"
-          ],
-          "enumDescriptions": [
-            "Show phases, failures and the final summary only.",
-            "Recommended: show structured phases, per-tool status, parsed diagnostics and hints while keeping full command lines in the Build Trace output channel.",
-            "Also show full compiler commands and successful tool output in the main QPM output channel."
-          ],
-          "default": "normal",
-          "description": "Controls how much information QPM shows in the main build log. Full raw commands/output are always preserved in the separate Qt Project Manager - Build Trace output channel."
-        },
-        "qpm.runArguments": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.activeQtInstallation": {
+            "type": "string",
+            "default": "",
+            "description": "Selected Qt kit root, for example C:\\Qt\\6.8.3\\mingw_64.",
+            "order": 1
           },
-          "description": "Arguments passed to the active executable when running it."
-        },
-        "qpm.projectFormatVersion": {
-          "type": "number",
-          "default": 1200,
-          "minimum": 1,
-          "description": "Internal .cws/.prj format version used when generating new Qt Project Manager workspaces. Keep the default unless you need compatibility with a specific legacy parser."
-        },
-        "qpm.autoLoadWorkspace": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically load a native .qtproject.json project or a .cws compatibility workspace when the opened VS Code folder contains exactly one candidate."
-        },
-        "qpm.autoConfigureCppTools": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically create and refresh the managed Qt Project Manager IntelliSense configuration and compile database when a native Qt project is created, opened or changed."
-        },
-        "qpm.autoAddQpmFolderToWorkspace": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically add the precise native Qt project root as a VS Code workspace folder so Microsoft C/C++ loads the generated project-local IntelliSense configuration."
-        },
-        "qpm.intelliSenseCompilerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional explicit compiler executable used by Microsoft Qt/C++ IntelliSense. Leave empty to use the selected gcc/g++/clang toolchain."
-        },
-        "qpm.additionalIncludePaths": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.qtCompilerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional C++ compiler override dedicated to native Qt kits. Leave empty to auto-detect the matching compiler under the Qt installation Tools directory.",
+            "order": 2
           },
-          "description": "Additional include directories appended to the generated Qt/C++ IntelliSense configuration."
-        },
-        "qpm.enableSupplementalCompletionProvider": {
-          "type": "boolean",
-          "default": false,
-          "description": "Provide supplemental completion items parsed from active project sources only. Disabled by default to leave completion fully managed by Microsoft Qt/C++ and avoid extra work while typing."
-        },
-        "qpm.enableStandardLibraryCompletionProvider": {
-          "type": "boolean",
-          "default": true,
-          "description": "Provide lightweight completion items for common Qt/C++ standard-library symbols only when the matching header is not already included. This avoids duplicates with Microsoft Qt/C++ IntelliSense while still allowing auto-include insertion before the header exists."
-        },
-        "qpm.standardLibraryCompletionAutoInclude": {
-          "type": "boolean",
-          "default": true,
-          "description": "When a standard-library completion item is accepted, insert the required #include if it is missing from the current file."
-        },
-        "qpm.showPersistentStatusBarActions": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show compact Qt Project Manager actions in the VS Code status bar. These actions remain available when the Qt Workspace view is collapsed."
-        },
-        "qpm.cCompilerPath": {
-          "type": "string",
-          "default": "gcc",
-          "description": "C compiler executable used by the generic build pipeline, for example gcc or an absolute MinGW gcc.exe path."
-        },
-        "qpm.cppCompilerPath": {
-          "type": "string",
-          "default": "g++",
-          "description": "C++ compiler and linker executable used by the generic build pipeline, for example g++ or an absolute MinGW g++.exe path."
-        },
-        "qpm.archiverPath": {
-          "type": "string",
-          "default": "ar",
-          "description": "Static-library archiver executable used for Static Library targets."
-        },
-        "qpm.debuggerPath": {
-          "type": "string",
-          "default": "gdb",
-          "description": "GDB executable used when launching the VS Code cppdbg debugger."
-        },
-        "qpm.outputDirectory": {
-          "type": "string",
-          "default": "build",
-          "description": "Directory, relative to the project file by default, used to store generic compiler objects and fallback targets."
-        },
-        "qpm.cStandard": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "c89",
-            "c90",
-            "c99",
-            "c11",
-            "c17",
-            "gnu89",
-            "gnu99",
-            "gnu11",
-            "gnu17"
-          ],
-          "default": "auto",
-          "description": "C language standard passed as -std=<value>. auto does not pass a C standard flag."
-        },
-        "qpm.cppStandard": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "c++98",
-            "c++03",
-            "c++11",
-            "c++14",
-            "c++17",
-            "c++20",
-            "c++23",
-            "gnu++11",
-            "gnu++14",
-            "gnu++17",
-            "gnu++20",
-            "gnu++23"
-          ],
-          "default": "c++17",
-          "description": "C++ language standard passed as -std=<value>. auto does not pass a C++ standard flag."
-        },
-        "qpm.warningLevel": {
-          "type": "string",
-          "enum": [
-            "none",
-            "wall",
-            "wall-extra",
-            "wall-extra-pedantic",
-            "all"
-          ],
-          "default": "wall-extra",
-          "description": "Predefined warning profile used by the generic GCC/MinGW build pipeline. none passes no warning flag; all adds -Wall -Wextra -Wpedantic -Wconversion."
-        },
-        "qpm.optimizationLevel": {
-          "type": "string",
-          "enum": [
-            "mode-default",
-            "none",
-            "O0",
-            "Og",
-            "O1",
-            "O2",
-            "O3",
-            "Os",
-            "Ofast"
-          ],
-          "default": "mode-default",
-          "description": "Optimization profile used by the generic build pipeline. mode-default uses -O0 for Debug and -O2 for Release."
-        },
-        "qpm.debugInformation": {
-          "type": "string",
-          "enum": [
-            "mode-default",
-            "none",
-            "g",
-            "g3"
-          ],
-          "default": "mode-default",
-          "description": "Debug-information profile used by the generic build pipeline. mode-default adds -g only for Debug configurations."
-        },
-        "qpm.architectureMode": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "from-build-mode",
-            "m32",
-            "m64"
-          ],
-          "default": "auto",
-          "description": "Architecture flag mode. auto uses the selected compiler default; from-build-mode maps Debug/Release to -m32 and Debug64/Release64 to -m64."
-        },
-        "qpm.compilerFlags": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.qtDesignerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to Qt Widgets Designer (designer.exe) or Qt Creator. Leave empty to auto-detect the launcher from the selected Qt kit.",
+            "order": 3
           },
-          "description": "Additional flags passed to both C and C++ compilation commands."
-        },
-        "qpm.cCompilerFlags": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.qtDeployTranslations": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include Qt translation catalogs when deploying a native Qt target with the Qt deployment tool.",
+            "order": 4
           },
-          "description": "Additional flags passed only to C compilation commands."
-        },
-        "qpm.cppCompilerFlags": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.pythonExecutable": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Python executable used to serve WebAssembly output when qtwasmserver is unavailable.",
+            "order": 5
+          }
+        }
+      },
+      {
+        "id": "qpm.workspace-intellisense",
+        "title": "QPM — Workspace & IntelliSense",
+        "order": 2,
+        "properties": {
+          "qpm.autoLoadWorkspace": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically load a native .qtproject.json project or a .cws compatibility workspace when the opened VS Code folder contains exactly one candidate.",
+            "order": 0
           },
-          "description": "Additional flags passed only to C++ compilation commands."
-        },
-        "qpm.linkerFlags": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.projectFormatVersion": {
+            "type": "number",
+            "default": 1200,
+            "minimum": 1,
+            "description": "Internal .cws/.prj format version used when generating new Qt Project Manager workspaces. Keep the default unless you need compatibility with a specific legacy parser.",
+            "order": 1
           },
-          "description": "Additional flags passed to the final link command."
-        },
-        "qpm.includePaths": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.showPersistentStatusBarActions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show compact Qt Project Manager actions in the VS Code status bar. These actions remain available when the Qt Workspace view is collapsed.",
+            "order": 2
           },
-          "description": "Additional include directories. Relative paths are resolved from the project file directory."
-        },
-        "qpm.libraryPaths": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.autoConfigureCppTools": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically create and refresh the managed Qt Project Manager IntelliSense configuration and compile database when a native Qt project is created, opened or changed.",
+            "order": 3
           },
-          "description": "Additional library search directories passed as -L entries. Relative paths are resolved from the project file directory."
-        },
-        "qpm.libraries": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.autoAddQpmFolderToWorkspace": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically add the precise native Qt project root as a VS Code workspace folder so Microsoft C/C++ loads the generated project-local IntelliSense configuration.",
+            "order": 4
           },
-          "description": "Additional libraries passed to the linker. Values may be names such as m/ws2_32 or complete -l flags."
-        },
-        "qpm.defineSymbols": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.intelliSenseCompilerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional explicit compiler executable used by Microsoft Qt/C++ IntelliSense. Leave empty to use the selected gcc/g++/clang toolchain.",
+            "order": 5
           },
-          "description": "Preprocessor symbols passed as -D entries."
-        },
-        "qpm.useBuildModeArchitectureFlags": {
-          "type": "boolean",
-          "default": false,
-          "description": "When enabled, x86 modes add -m32 and x64 modes add -m64. Keep disabled if you select architecture by choosing a specific compiler path."
-        },
-        "qpm.runtimeDependencyMode": {
-          "type": "string",
-          "enum": [
-            "copy-dlls",
-            "path-only",
-            "static-link"
-          ],
-          "default": "copy-dlls",
-          "description": "Generic toolchain runtime dependency handling for normal Qt builds. copy-dlls copies detected GCC/MinGW/MSYS2 and LLVM/Clang runtime DLLs beside the target; path-only prepends the selected toolchain bin directory to PATH for QPM run/debug; static-link injects GCC/Clang static runtime link flags when supported by the toolchain."
-        },
-        "qpm.deployRuntimeDlls": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "never",
-            "copy-dlls",
-            "path-only",
-            "static-link"
-          ],
-          "default": "auto",
-          "description": "Legacy setting for toolchain runtime DLL deployment. Prefer qpm.runtimeDependencyMode.",
-          "deprecationMessage": "Use qpm.runtimeDependencyMode instead. Legacy auto maps to copy-dlls and never maps to path-only."
-        },
-        "qpm.useLocalBuildCacheForOneDrive": {
-          "type": "boolean",
-          "default": true,
-          "description": "When the project is located under OneDrive and the normal object directory cannot be created, fall back to a local build cache for intermediate object files."
-        },
-        "qpm.cleanRuntimeDllsOnDeploy": {
-          "type": "boolean",
-          "default": true,
-          "description": "Before deploying toolchain runtime DLLs beside the target, remove stale or architecture-mismatched runtime DLLs managed by QPM from the target directory. This prevents x86/x64 runtime DLL mix-ups when switching build modes or toolchains."
-        },
-        "qpm.sdlInstallations": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.additionalIncludePaths": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional include directories appended to the generated Qt/C++ IntelliSense configuration.",
+            "order": 6
           },
-          "description": "Known SDL SDK root directories detected or added manually."
-        },
-        "qpm.sdlRootPath": {
-          "type": "string",
-          "default": "",
-          "description": "Selected SDL2/SDL3 SDK directory. This can be the SDK root, an architecture folder such as i686-w64-mingw32/x86_64-w64-mingw32, or a nested bin/lib/include/include\\SDL2 folder. Leave empty to let QPM auto-scan common SDK roots when a project uses SDL."
-        },
-        "qpm.sdlEnabled": {
-          "type": "string",
-          "enum": [
-            "off",
-            "auto",
-            "on"
-          ],
-          "default": "auto",
-          "description": "SDL build integration mode. off disables SDL flags; auto injects SDL only for projects that include or call SDL; on always injects SDL for active builds."
-        },
-        "qpm.sdlPackages": {
-          "type": "array",
-          "default": [
-            "SDL2"
-          ],
-          "items": {
+          "qpm.enableSupplementalCompletionProvider": {
+            "type": "boolean",
+            "default": false,
+            "description": "Provide supplemental completion items parsed from active project sources only. Disabled by default to leave completion fully managed by Microsoft Qt/C++ and avoid extra work while typing.",
+            "order": 7
+          },
+          "qpm.enableStandardLibraryCompletionProvider": {
+            "type": "boolean",
+            "default": true,
+            "description": "Provide lightweight completion items for common Qt/C++ standard-library symbols only when the matching header is not already included. This avoids duplicates with Microsoft Qt/C++ IntelliSense while still allowing auto-include insertion before the header exists.",
+            "order": 8
+          },
+          "qpm.standardLibraryCompletionAutoInclude": {
+            "type": "boolean",
+            "default": true,
+            "description": "When a standard-library completion item is accepted, insert the required #include if it is missing from the current file.",
+            "order": 9
+          }
+        }
+      },
+      {
+        "id": "qpm.build",
+        "title": "QPM — Build",
+        "order": 3,
+        "properties": {
+          "qpm.buildMode": {
             "type": "string",
             "enum": [
-              "SDL2",
-              "SDL2_image",
-              "SDL2_mixer",
-              "SDL2_ttf",
-              "SDL2_net",
-              "SDL2_gfx",
-              "SDL3",
-              "SDL3_image",
-              "SDL3_mixer",
-              "SDL3_ttf",
-              "SDL3_net"
+              "debug",
+              "release",
+              "debug64",
+              "release64"
+            ],
+            "default": "debug64",
+            "description": "Build mode used by QPM. Native Qt projects default to 64-bit and are aligned with the selected kit architecture. Debug modes add -g -O0; release modes add -O2.",
+            "order": 0,
+            "enumDescriptions": [
+              "Debug, 32-bit: -g -O0",
+              "Release, 32-bit: -O2",
+              "Debug, 64-bit: -g -O0 (and -m64 when architecture flags are enabled)",
+              "Release, 64-bit: -O2 (and -m64 when architecture flags are enabled)"
             ]
           },
-          "description": "SDL packages linked by the generic build pipeline. SDL2 or SDL3 core is selected from qpm.sdlVersion; extension packages are added when selected and present in the SDK."
-        },
-        "qpm.sdlRuntimeMode": {
-          "type": "string",
-          "enum": [
-            "copy-dlls",
-            "path-only",
-            "static-link"
-          ],
-          "default": "copy-dlls",
-          "description": "How SDL runtime dependencies are handled. copy-dlls copies SDL2/SDL3 DLLs beside the executable; path-only prepends SDL bin to PATH at run/debug; static-link uses static SDL libraries when available."
-        },
-        "qpm.sdlSubsystem": {
-          "type": "string",
-          "enum": [
-            "windows",
-            "console"
-          ],
-          "default": "windows",
-          "description": "Windows subsystem used for SDL executable linking. windows hides the console with -mwindows; console keeps terminal output visible with -mconsole."
-        },
-        "qpm.sdlCopyAllRuntimeDlls": {
-          "type": "boolean",
-          "default": true,
-          "description": "When SDL runtime mode is copy-dlls, copy every DLL from the SDL bin directory. This helps SDL_image, SDL_ttf and similar packages that may depend on companion DLLs."
-        },
-        "qpm.sdlVersion": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "SDL2",
-            "SDL3"
-          ],
-          "default": "auto",
-          "description": "SDL major version used by the generic build pipeline. auto infers SDL2 or SDL3 from selected packages and source includes."
-        },
-        "qpm.qtSearchPaths": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.buildLogDetail": {
+            "type": "string",
+            "enum": [
+              "compact",
+              "normal",
+              "verbose"
+            ],
+            "enumDescriptions": [
+              "Show phases, failures and the final summary only.",
+              "Recommended: show structured phases, per-tool status, parsed diagnostics and hints while keeping full command lines in the Build Trace output channel.",
+              "Also show full compiler commands and successful tool output in the main QPM output channel."
+            ],
+            "default": "normal",
+            "description": "Controls how much information QPM shows in the main build log. Full raw commands/output are always preserved in the separate Qt Project Manager - Build Trace output channel.",
+            "order": 1
           },
-          "description": "Additional Qt base directories or kit roots scanned by Qt Project Manager."
-        },
-        "qpm.activeQtInstallation": {
-          "type": "string",
-          "default": "",
-          "description": "Selected Qt kit root, for example C:\\Qt\\6.8.3\\mingw_64."
-        },
-        "qpm.qtCompilerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional C++ compiler override dedicated to native Qt kits. Leave empty to auto-detect the matching compiler under the Qt installation Tools directory."
-        },
-        "qpm.qtDeployTranslations": {
-          "type": "boolean",
-          "default": false,
-          "description": "Include Qt translation catalogs when deploying a native Qt target with the Qt deployment tool."
-        },
-        "qpm.qtDesignerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to Qt Widgets Designer (designer.exe) or Qt Creator. Leave empty to auto-detect the launcher from the selected Qt kit."
-        },
-        "qpm.translationOutputDirectory": {
-          "type": "string",
-          "default": "translations",
-          "description": "Project-relative directory suggested when creating Qt Linguist .ts files."
-        },
-        "qpm.translationSourceLanguage": {
-          "type": "string",
-          "default": "en",
-          "description": "Source-language locale passed to lupdate when creating or updating Qt translations."
-        },
-        "qpm.translationFailOnUnfinished": {
-          "type": "boolean",
-          "default": false,
-          "description": "Pass -fail-on-unfinished to lrelease so unfinished translations fail catalog generation."
-        },
-        "qpm.qmlLintOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Run the selected Qt kit qmllint tool whenever a managed QML file is saved."
-        },
-        "qpm.qmlFormatOnSave": {
-          "type": "boolean",
-          "default": false,
-          "description": "Run the selected Qt kit qmlformat tool in place whenever a managed QML file is saved."
-        },
-        "qpm.qmlImportPaths": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
+          "qpm.installations": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Known Qt/C++ toolchain root or bin directories detected or added manually.",
+            "markdownDescription": "Known Qt/C++ toolchain root or bin directories detected or added manually.",
+            "order": 2
           },
-          "description": "Additional project-relative or absolute QML import paths passed to qmllint, qmlformat preview and QML runtime tools."
-        },
-        "qpm.qrcCreateBackups": {
-          "type": "boolean",
-          "default": true,
-          "description": "Create a one-time .qpm-backup copy before the graphical Qt Resource Editor first rewrites a .qrc file."
-        },
-        "qpm.clangTidyPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to clang-tidy. Leave empty to search the selected Qt toolchain, Qt Tools/LLVM and PATH."
-        },
-        "qpm.clazyPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to clazy-standalone or clazy. Leave empty to search the Qt installation and PATH."
-        },
-        "qpm.gcovPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to gcov used by the Qt Test coverage profile. Leave empty to use the compiler toolchain gcov."
-        },
-        "qpm.testAutoRefresh": {
-          "type": "boolean",
-          "default": true,
-          "description": "Refresh Qt Test, Qt Quick Test, GoogleTest, Catch2, Boost.Test and CTest discovery after managed test sources or CMake files change."
-        },
-        "qpm.sshExecutable": {
-          "type": "string",
-          "default": "",
-          "description": "Optional SSH executable override used by Remote Linux platform profiles."
-        },
-        "qpm.scpExecutable": {
-          "type": "string",
-          "default": "",
-          "description": "Optional SCP executable override used by Remote Linux deployment."
-        },
-        "qpm.rsyncExecutable": {
-          "type": "string",
-          "default": "",
-          "description": "Optional rsync executable override used by Remote Linux synchronization."
-        },
-        "qpm.dockerExecutable": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Docker CLI executable override."
-        },
-        "qpm.pythonExecutable": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Python executable used to serve WebAssembly output when qtwasmserver is unavailable."
-        },
-        "qpm.qtWasmServerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional qtwasmserver executable override."
-        },
-        "qpm.qmlProfilerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional qmlprofiler executable override. Leave empty to use the selected Qt kit."
-        },
-        "qpm.perfPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Linux perf executable override."
-        },
-        "qpm.valgrindPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Valgrind executable override used by Memcheck and Callgrind."
-        },
-        "qpm.callgrindAnnotatePath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional callgrind_annotate executable override."
-        },
-        "qpm.kcachegrindPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional KCachegrind or QCachegrind executable override."
-        },
-        "qpm.cppcheckPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Cppcheck executable override."
-        },
-        "qpm.heobPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Heob executable override for Windows memory diagnostics."
-        },
-        "qpm.stracePath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional strace executable override."
-        },
-        "qpm.ctestPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to CTest. Leave empty to use the active CMake/Qt kit or PATH."
-        },
-        "qpm.androidSdkRoot": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Android SDK root. Leave empty to use ANDROID_HOME, ANDROID_SDK_ROOT or standard installation locations."
-        },
-        "qpm.androidNdkRoot": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Android NDK root. Leave empty to use the NDK configured by the Android platform profile or the newest installed side-by-side NDK."
-        },
-        "qpm.androidJdkRoot": {
-          "type": "string",
-          "default": "",
-          "description": "Optional Java JDK root used by Gradle and Android packaging. Leave empty to use JAVA_HOME or Qt/Android Studio bundled JDK locations."
-        },
-        "qpm.androidAdbPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to adb. Leave empty to use Android SDK platform-tools."
-        },
-        "qpm.androidEmulatorPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to the Android emulator executable."
-        },
-        "qpm.androidDeployQtPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to androiddeployqt. Leave empty to use the selected Qt for Android kit."
+          "qpm.activeInstallation": {
+            "type": "string",
+            "default": "",
+            "description": "Selected Qt/C++ toolchain root or bin directory. Leave empty to use automatic detection from PATH and common MinGW/MSYS2/Clang locations.",
+            "order": 3
+          },
+          "qpm.cCompilerPath": {
+            "type": "string",
+            "default": "gcc",
+            "description": "C compiler executable used by the generic build pipeline, for example gcc or an absolute MinGW gcc.exe path.",
+            "order": 4
+          },
+          "qpm.cppCompilerPath": {
+            "type": "string",
+            "default": "g++",
+            "description": "C++ compiler and linker executable used by the generic build pipeline, for example g++ or an absolute MinGW g++.exe path.",
+            "order": 5
+          },
+          "qpm.archiverPath": {
+            "type": "string",
+            "default": "ar",
+            "description": "Static-library archiver executable used for Static Library targets.",
+            "order": 6
+          },
+          "qpm.debuggerPath": {
+            "type": "string",
+            "default": "gdb",
+            "description": "GDB executable used when launching the VS Code cppdbg debugger.",
+            "order": 7
+          },
+          "qpm.outputDirectory": {
+            "type": "string",
+            "default": "build",
+            "description": "Directory, relative to the project file by default, used to store generic compiler objects and fallback targets.",
+            "order": 8
+          },
+          "qpm.cStandard": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "c89",
+              "c90",
+              "c99",
+              "c11",
+              "c17",
+              "gnu89",
+              "gnu99",
+              "gnu11",
+              "gnu17"
+            ],
+            "default": "auto",
+            "description": "C language standard passed as -std=<value>. auto does not pass a C standard flag.",
+            "order": 9
+          },
+          "qpm.cppStandard": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "c++98",
+              "c++03",
+              "c++11",
+              "c++14",
+              "c++17",
+              "c++20",
+              "c++23",
+              "gnu++11",
+              "gnu++14",
+              "gnu++17",
+              "gnu++20",
+              "gnu++23"
+            ],
+            "default": "c++17",
+            "description": "C++ language standard passed as -std=<value>. auto does not pass a C++ standard flag.",
+            "order": 10
+          },
+          "qpm.warningLevel": {
+            "type": "string",
+            "enum": [
+              "none",
+              "wall",
+              "wall-extra",
+              "wall-extra-pedantic",
+              "all"
+            ],
+            "default": "wall-extra",
+            "description": "Predefined warning profile used by the generic GCC/MinGW build pipeline. none passes no warning flag; all adds -Wall -Wextra -Wpedantic -Wconversion.",
+            "order": 11,
+            "enumDescriptions": [
+              "No warning flag",
+              "-Wall",
+              "-Wall -Wextra",
+              "-Wall -Wextra -Wpedantic",
+              "-Wall -Wextra -Wpedantic -Wconversion"
+            ]
+          },
+          "qpm.optimizationLevel": {
+            "type": "string",
+            "enum": [
+              "mode-default",
+              "none",
+              "O0",
+              "Og",
+              "O1",
+              "O2",
+              "O3",
+              "Os",
+              "Ofast"
+            ],
+            "default": "mode-default",
+            "description": "Optimization profile used by the generic build pipeline. mode-default uses -O0 for Debug and -O2 for Release.",
+            "order": 12,
+            "enumDescriptions": [
+              "-O0 for Debug, -O2 for Release",
+              "No optimization flag",
+              "-O0: no optimization",
+              "-Og: optimize for debugging",
+              "-O1",
+              "-O2",
+              "-O3",
+              "-Os: optimize for size",
+              "-Ofast: aggressive, may break strict standard compliance"
+            ]
+          },
+          "qpm.debugInformation": {
+            "type": "string",
+            "enum": [
+              "mode-default",
+              "none",
+              "g",
+              "g3"
+            ],
+            "default": "mode-default",
+            "description": "Debug-information profile used by the generic build pipeline. mode-default adds -g only for Debug configurations.",
+            "order": 13,
+            "enumDescriptions": [
+              "-g only for Debug configurations",
+              "No debug information",
+              "-g",
+              "-g3: includes macro definitions"
+            ]
+          },
+          "qpm.architectureMode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "from-build-mode",
+              "m32",
+              "m64"
+            ],
+            "default": "auto",
+            "description": "Architecture flag mode. auto uses the selected compiler default; from-build-mode maps Debug/Release to -m32 and Debug64/Release64 to -m64.",
+            "order": 14,
+            "enumDescriptions": [
+              "Compiler default architecture",
+              "-m32 for D32/R32, -m64 for D64/R64",
+              "Always -m32",
+              "Always -m64"
+            ]
+          },
+          "qpm.useBuildModeArchitectureFlags": {
+            "type": "boolean",
+            "default": false,
+            "description": "When enabled, x86 modes add -m32 and x64 modes add -m64. Keep disabled if you select architecture by choosing a specific compiler path.",
+            "order": 15
+          },
+          "qpm.compilerFlags": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional flags passed to both C and C++ compilation commands.",
+            "order": 16
+          },
+          "qpm.cCompilerFlags": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional flags passed only to C compilation commands.",
+            "order": 17
+          },
+          "qpm.cppCompilerFlags": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional flags passed only to C++ compilation commands.",
+            "order": 18
+          },
+          "qpm.linkerFlags": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional flags passed to the final link command.",
+            "order": 19
+          },
+          "qpm.includePaths": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional include directories. Relative paths are resolved from the project file directory.",
+            "order": 20
+          },
+          "qpm.libraryPaths": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional library search directories passed as -L entries. Relative paths are resolved from the project file directory.",
+            "order": 21
+          },
+          "qpm.libraries": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional libraries passed to the linker. Values may be names such as m/ws2_32 or complete -l flags.",
+            "order": 22
+          },
+          "qpm.defineSymbols": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Preprocessor symbols passed as -D entries.",
+            "order": 23
+          },
+          "qpm.useLocalBuildCacheForOneDrive": {
+            "type": "boolean",
+            "default": true,
+            "description": "When the project is located under OneDrive and the normal object directory cannot be created, fall back to a local build cache for intermediate object files.",
+            "order": 24
+          }
+        }
+      },
+      {
+        "id": "qpm.run-deployment",
+        "title": "QPM — Run & Deployment",
+        "order": 4,
+        "properties": {
+          "qpm.runArguments": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Arguments passed to the active executable when running it.",
+            "order": 0
+          },
+          "qpm.runtimeDependencyMode": {
+            "type": "string",
+            "enum": [
+              "copy-dlls",
+              "path-only",
+              "static-link"
+            ],
+            "default": "copy-dlls",
+            "description": "Generic toolchain runtime dependency handling for normal Qt builds. copy-dlls copies detected GCC/MinGW/MSYS2 and LLVM/Clang runtime DLLs beside the target; path-only prepends the selected toolchain bin directory to PATH for QPM run/debug; static-link injects GCC/Clang static runtime link flags when supported by the toolchain.",
+            "order": 1,
+            "enumDescriptions": [
+              "Copy the toolchain runtime DLLs beside the target",
+              "Use the toolchain through PATH at run/debug time",
+              "Link the GCC/Clang runtime statically when the toolchain supports it"
+            ]
+          },
+          "qpm.deployRuntimeDlls": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "never",
+              "copy-dlls",
+              "path-only",
+              "static-link"
+            ],
+            "default": "auto",
+            "description": "Legacy setting for toolchain runtime DLL deployment. Prefer qpm.runtimeDependencyMode.",
+            "deprecationMessage": "Use qpm.runtimeDependencyMode instead. Legacy auto maps to copy-dlls and never maps to path-only.",
+            "order": 2
+          },
+          "qpm.cleanRuntimeDllsOnDeploy": {
+            "type": "boolean",
+            "default": true,
+            "description": "Before deploying toolchain runtime DLLs beside the target, remove stale or architecture-mismatched runtime DLLs managed by QPM from the target directory. This prevents x86/x64 runtime DLL mix-ups when switching build modes or toolchains.",
+            "order": 3
+          }
+        }
+      },
+      {
+        "id": "qpm.qml-resources-translations",
+        "title": "QPM — QML, Resources & Translations",
+        "order": 5,
+        "properties": {
+          "qpm.qmlLintOnSave": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run the selected Qt kit qmllint tool whenever a managed QML file is saved.",
+            "order": 0
+          },
+          "qpm.qmlFormatOnSave": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run the selected Qt kit qmlformat tool in place whenever a managed QML file is saved.",
+            "order": 1
+          },
+          "qpm.qmlImportPaths": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional project-relative or absolute QML import paths passed to qmllint, qmlformat preview and QML runtime tools.",
+            "order": 2
+          },
+          "qpm.qrcCreateBackups": {
+            "type": "boolean",
+            "default": true,
+            "description": "Create a one-time .qpm-backup copy before the graphical Qt Resource Editor first rewrites a .qrc file.",
+            "order": 3
+          },
+          "qpm.translationOutputDirectory": {
+            "type": "string",
+            "default": "translations",
+            "description": "Project-relative directory suggested when creating Qt Linguist .ts files.",
+            "order": 4
+          },
+          "qpm.translationSourceLanguage": {
+            "type": "string",
+            "default": "en",
+            "description": "Source-language locale passed to lupdate when creating or updating Qt translations.",
+            "order": 5
+          },
+          "qpm.translationFailOnUnfinished": {
+            "type": "boolean",
+            "default": false,
+            "description": "Pass -fail-on-unfinished to lrelease so unfinished translations fail catalog generation.",
+            "order": 6
+          }
+        }
+      },
+      {
+        "id": "qpm.tests-quality-profiling",
+        "title": "QPM — Tests, Quality & Profiling",
+        "order": 6,
+        "properties": {
+          "qpm.testAutoRefresh": {
+            "type": "boolean",
+            "default": true,
+            "description": "Refresh Qt Test, Qt Quick Test, GoogleTest, Catch2, Boost.Test and CTest discovery after managed test sources or CMake files change.",
+            "order": 0
+          },
+          "qpm.ctestPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to CTest. Leave empty to use the active CMake/Qt kit or PATH.",
+            "order": 1
+          },
+          "qpm.clangTidyPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to clang-tidy. Leave empty to search the selected Qt toolchain, Qt Tools/LLVM and PATH.",
+            "order": 2
+          },
+          "qpm.clazyPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to clazy-standalone or clazy. Leave empty to search the Qt installation and PATH.",
+            "order": 3
+          },
+          "qpm.gcovPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to gcov used by the Qt Test coverage profile. Leave empty to use the compiler toolchain gcov.",
+            "order": 4
+          },
+          "qpm.cppcheckPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Cppcheck executable override.",
+            "order": 5
+          },
+          "qpm.qmlProfilerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional qmlprofiler executable override. Leave empty to use the selected Qt kit.",
+            "order": 6
+          },
+          "qpm.perfPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Linux perf executable override.",
+            "order": 7
+          },
+          "qpm.valgrindPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Valgrind executable override used by Memcheck and Callgrind.",
+            "order": 8
+          },
+          "qpm.callgrindAnnotatePath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional callgrind_annotate executable override.",
+            "order": 9
+          },
+          "qpm.kcachegrindPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional KCachegrind or QCachegrind executable override.",
+            "order": 10
+          },
+          "qpm.heobPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Heob executable override for Windows memory diagnostics.",
+            "order": 11
+          },
+          "qpm.stracePath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional strace executable override.",
+            "order": 12
+          }
+        }
+      },
+      {
+        "id": "qpm.platforms-remote",
+        "title": "QPM — Platforms & Remote",
+        "order": 7,
+        "properties": {
+          "qpm.sshExecutable": {
+            "type": "string",
+            "default": "",
+            "description": "Optional SSH executable override used by Remote Linux platform profiles.",
+            "order": 0
+          },
+          "qpm.scpExecutable": {
+            "type": "string",
+            "default": "",
+            "description": "Optional SCP executable override used by Remote Linux deployment.",
+            "order": 1
+          },
+          "qpm.rsyncExecutable": {
+            "type": "string",
+            "default": "",
+            "description": "Optional rsync executable override used by Remote Linux synchronization.",
+            "order": 2
+          },
+          "qpm.dockerExecutable": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Docker CLI executable override.",
+            "order": 3
+          },
+          "qpm.qtWasmServerPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional qtwasmserver executable override.",
+            "order": 4
+          },
+          "qpm.androidSdkRoot": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Android SDK root. Leave empty to use ANDROID_HOME, ANDROID_SDK_ROOT or standard installation locations.",
+            "order": 5
+          },
+          "qpm.androidNdkRoot": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Android NDK root. Leave empty to use the NDK configured by the Android platform profile or the newest installed side-by-side NDK.",
+            "order": 6
+          },
+          "qpm.androidJdkRoot": {
+            "type": "string",
+            "default": "",
+            "description": "Optional Java JDK root used by Gradle and Android packaging. Leave empty to use JAVA_HOME or Qt/Android Studio bundled JDK locations.",
+            "order": 7
+          },
+          "qpm.androidAdbPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to adb. Leave empty to use Android SDK platform-tools.",
+            "order": 8
+          },
+          "qpm.androidEmulatorPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to the Android emulator executable.",
+            "order": 9
+          },
+          "qpm.androidDeployQtPath": {
+            "type": "string",
+            "default": "",
+            "description": "Optional path to androiddeployqt. Leave empty to use the selected Qt for Android kit.",
+            "order": 10
+          }
+        }
+      },
+      {
+        "id": "qpm.sdl",
+        "title": "QPM — SDL",
+        "order": 8,
+        "properties": {
+          "qpm.sdlInstallations": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "description": "Known SDL SDK root directories detected or added manually.",
+            "order": 0
+          },
+          "qpm.sdlRootPath": {
+            "type": "string",
+            "default": "",
+            "description": "Selected SDL2/SDL3 SDK directory. This can be the SDK root, an architecture folder such as i686-w64-mingw32/x86_64-w64-mingw32, or a nested bin/lib/include/include\\SDL2 folder. Leave empty to let QPM auto-scan common SDK roots when a project uses SDL.",
+            "order": 1
+          },
+          "qpm.sdlEnabled": {
+            "type": "string",
+            "enum": [
+              "off",
+              "auto",
+              "on"
+            ],
+            "default": "auto",
+            "description": "SDL build integration mode. off disables SDL flags; auto injects SDL only for projects that include or call SDL; on always injects SDL for active builds.",
+            "order": 2,
+            "enumDescriptions": [
+              "Never inject SDL flags",
+              "Inject SDL only for projects that include or call SDL",
+              "Always inject SDL flags"
+            ]
+          },
+          "qpm.sdlVersion": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "SDL2",
+              "SDL3"
+            ],
+            "default": "auto",
+            "description": "SDL major version used by the generic build pipeline. auto infers SDL2 or SDL3 from selected packages and source includes.",
+            "order": 3,
+            "enumDescriptions": [
+              "Infer SDL2 or SDL3 from packages and includes",
+              "Force SDL2",
+              "Force SDL3"
+            ]
+          },
+          "qpm.sdlPackages": {
+            "type": "array",
+            "default": [
+              "SDL2"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "SDL2",
+                "SDL2_image",
+                "SDL2_mixer",
+                "SDL2_ttf",
+                "SDL2_net",
+                "SDL2_gfx",
+                "SDL3",
+                "SDL3_image",
+                "SDL3_mixer",
+                "SDL3_ttf",
+                "SDL3_net"
+              ]
+            },
+            "description": "SDL packages linked by the generic build pipeline. SDL2 or SDL3 core is selected from qpm.sdlVersion; extension packages are added when selected and present in the SDK.",
+            "order": 4
+          },
+          "qpm.sdlRuntimeMode": {
+            "type": "string",
+            "enum": [
+              "copy-dlls",
+              "path-only",
+              "static-link"
+            ],
+            "default": "copy-dlls",
+            "description": "How SDL runtime dependencies are handled. copy-dlls copies SDL2/SDL3 DLLs beside the executable; path-only prepends SDL bin to PATH at run/debug; static-link uses static SDL libraries when available.",
+            "order": 5,
+            "enumDescriptions": [
+              "Copy SDL DLLs beside the executable",
+              "Prepend the SDL bin directory to PATH at run/debug time",
+              "Link static SDL libraries when available"
+            ]
+          },
+          "qpm.sdlSubsystem": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "console"
+            ],
+            "default": "windows",
+            "description": "Windows subsystem used for SDL executable linking. windows hides the console with -mwindows; console keeps terminal output visible with -mconsole.",
+            "order": 6,
+            "enumDescriptions": [
+              "-mwindows: no console window",
+              "-mconsole: keep the console for terminal output"
+            ]
+          },
+          "qpm.sdlCopyAllRuntimeDlls": {
+            "type": "boolean",
+            "default": true,
+            "description": "When SDL runtime mode is copy-dlls, copy every DLL from the SDL bin directory. This helps SDL_image, SDL_ttf and similar packages that may depend on companion DLLs.",
+            "order": 7
+          }
         }
       }
-    },
+    ],
     "keybindings": [
       {
         "command": "qpm.library.findFunction",
@@ -5288,6 +5477,23 @@
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "qpm.build",
+        "key": "ctrl+f7",
+        "mac": "cmd+f7",
+        "when": "qpm.workspaceLoaded"
+      },
+      {
+        "command": "qpm.run",
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "when": "qpm.workspaceLoaded && qpm.targetType != lib && !inDebugMode"
+      },
+      {
+        "command": "qpm.debugWithGdb",
+        "key": "f5",
+        "when": "qpm.workspaceLoaded && qpm.targetType != lib && !inDebugMode"
       }
     ],
     "submenus": [
@@ -5472,6 +5678,75 @@
         "language": "qml",
         "scopeName": "source.qml.qpm",
         "path": "./syntaxes/qml.tmLanguage.json"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "qpm.gettingStarted",
+        "title": "Get started with Qt Project Manager",
+        "description": "Select a Qt kit, open or create a Qt project, then build, run and debug your first Qt C++ or PySide6 application.",
+        "steps": [
+          {
+            "id": "qt",
+            "title": "Select a Qt installation",
+            "description": "Choose the Qt version and the matching compiler QPM builds with.\n[Select Qt installation](command:qpm.selectQtInstallation)\n[Detect Qt kits](command:qpm.detectQtKits)",
+            "media": {
+              "markdown": "media/walkthrough/qt.md"
+            },
+            "completionEvents": [
+              "onCommand:qpm.selectQtInstallation",
+              "onCommand:qpm.detectQtKits"
+            ]
+          },
+          {
+            "id": "workspace",
+            "title": "Open or create a Qt project",
+            "description": "Open a .qtproject.json project or a .cws workspace, or create a Qt Widgets, Qt Quick, console, library or PySide6 starter.\n[Open project or workspace](command:qpm.openWorkspace)\n[Create a Qt project](command:qpm.createQtProject)",
+            "media": {
+              "markdown": "media/walkthrough/workspace.md"
+            },
+            "completionEvents": [
+              "onContext:qpm.workspaceLoaded"
+            ]
+          },
+          {
+            "id": "build",
+            "title": "Build with Ctrl+F7",
+            "description": "Pick the configuration from the status bar, then build the active project.\n[Build](command:qpm.build)\n[Select build configuration](command:qpm.selectConfiguration)",
+            "media": {
+              "markdown": "media/walkthrough/build.md"
+            },
+            "completionEvents": [
+              "onCommand:qpm.build",
+              "onCommand:qpm.rebuild"
+            ]
+          },
+          {
+            "id": "debug",
+            "title": "Run (Ctrl+F5) and debug (F5)",
+            "description": "Start the active application with or without the debugger.\n[Debug](command:qpm.debugWithGdb)\n[Run options](command:qpm.chooseRunAction)",
+            "media": {
+              "markdown": "media/walkthrough/debug.md"
+            },
+            "completionEvents": [
+              "onCommand:qpm.run",
+              "onCommand:qpm.debugWithGdb",
+              "onCommand:qpm.startQtDebugProfileWithoutBuild"
+            ]
+          },
+          {
+            "id": "tools",
+            "title": "Explore the bench tools",
+            "description": "Instrument and network diagnostics work without any project.\n[Instrument diagnostics](command:qpm.openInstrumentDiagnostics)\n[Network & wireless](command:qpm.openNetworkDiagnostics)",
+            "media": {
+              "markdown": "media/walkthrough/tools.md"
+            },
+            "completionEvents": [
+              "onCommand:qpm.openInstrumentDiagnostics",
+              "onCommand:qpm.openNetworkDiagnostics"
+            ]
+          }
+        ]
       }
     ]
   },

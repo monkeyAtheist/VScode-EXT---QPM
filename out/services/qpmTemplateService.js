@@ -41,6 +41,7 @@ exports.getBuiltInSnippets = getBuiltInSnippets;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const qtProjectManifest_1 = require("../model/qtProjectManifest");
 exports.SNIPPET_CATEGORIES = [
     { id: 'all', label: 'Search all snippets', description: 'Search every built-in and saved QPM snippet.' },
     { id: 'qt', label: 'Qt', description: 'Qt Core, Widgets, signals/slots, resources, settings and tests.' },
@@ -10854,17 +10855,51 @@ Expected backend routes:
 
 No project-specific GPIO, camera, LiDAR or Raspberry Pi assets are included in this starter.
 `;
+function getBundledModuleCategory(module) {
+    if (module.category) {
+        return module.category;
+    }
+    const label = module.label.toLowerCase();
+    if (module.group === 'C bundles' || module.group === 'C++ bundles') {
+        if (label.includes('communication') || label.includes('uart') || label.includes('ipc') || label.includes('ethernet') || label.includes('wi-fi') || label.includes('bluetooth') || label.includes('can') || label.includes('i2c') || label.includes('spi')) {
+            return 'Communication';
+        }
+        if (label.includes('python') || label.includes('lua') || label.includes('web ui')) {
+            return 'Interoperability & UI';
+        }
+        return 'Configuration & utilities';
+    }
+    if (label.includes('web ui') || label.includes('frontend')) {
+        return 'Web UI';
+    }
+    return 'Workers & scripts';
+}
 function getBuiltInMyUtilModules() {
     return [
         {
-            label: 'Core utilities',
+            label: 'Core utilities (legacy)',
             group: 'C bundles',
+            category: 'Legacy & compatibility',
             description: 'Create qpm_util.c, qpm_util.h and qpm_util.ini.',
-            detail: 'Small C helpers for strings, trimming, timestamps and simple INI key reading.',
+            detail: 'Legacy compatibility bundle. New projects should use INI plus the focused System/Data/Diagnostics bundles instead.',
             defaultFolder: 'Bundle/C/QPM_Util',
             generator: 'c-core',
             entries: [],
             requiredWindowsLibraries: []
+        },
+        {
+            label: 'INI configuration',
+            group: 'C bundles',
+            category: 'Configuration & utilities',
+            description: 'Create qpm_ini.c, qpm_ini.h, example.ini and README.md.',
+            detail: 'Dependency-free section-aware INI parser/writer with typed getters, defaults, editing, enumeration and one-shot read/write helpers.',
+            defaultFolder: 'Bundle/C/Configuration/INI',
+            entries: [
+                'CBundle/Configuration/INI/qpm_ini.c=>qpm_ini.c',
+                'CBundle/Configuration/INI/qpm_ini.h=>qpm_ini.h',
+                'CBundle/Configuration/INI/example.ini=>example.ini',
+                'CBundle/Configuration/INI/README.md=>README.md'
+            ]
         },
         {
             label: 'Error management',
@@ -10874,6 +10909,120 @@ function getBuiltInMyUtilModules() {
             defaultFolder: 'Bundle/C/QPM_Error',
             generator: 'c-error',
             entries: []
+        },
+        {
+            label: 'File & path utilities',
+            group: 'C bundles',
+            category: 'System',
+            description: 'Create qpm_file.c, qpm_file.h and README.md.',
+            detail: 'Cross-platform full-file I/O, recursive directories, path manipulation and executable-path helpers.',
+            defaultFolder: 'Bundle/C/System/FilePath',
+            entries: ['CBundle/System/FilePath/qpm_file.c=>qpm_file.c', 'CBundle/System/FilePath/qpm_file.h=>qpm_file.h', 'CBundle/System/FilePath/README.md=>README.md']
+        },
+        {
+            label: 'String utilities',
+            group: 'C bundles',
+            category: 'System',
+            description: 'Create qpm_string.c, qpm_string.h and README.md.',
+            detail: 'Safe bounded string operations, trimming/search/replace/split helpers and a dynamic StringBuilder.',
+            defaultFolder: 'Bundle/C/System/String',
+            entries: ['CBundle/System/String/qpm_string.c=>qpm_string.c', 'CBundle/System/String/qpm_string.h=>qpm_string.h', 'CBundle/System/String/README.md=>README.md']
+        },
+        {
+            label: 'Time & periodic timers',
+            group: 'C bundles',
+            category: 'System',
+            description: 'Create qpm_time.c, qpm_time.h and README.md.',
+            detail: 'Monotonic/epoch clocks, elapsed values and formatting, stopwatch/lap, deadlines, periodic loops and one-shot/periodic callback scheduling.',
+            defaultFolder: 'Bundle/C/System/Time',
+            entries: ['CBundle/System/Time/qpm_time.c=>qpm_time.c', 'CBundle/System/Time/qpm_time.h=>qpm_time.h', 'CBundle/System/Time/README.md=>README.md']
+        },
+        {
+            label: 'Threads & synchronization',
+            group: 'C bundles',
+            category: 'System',
+            description: 'Create qpm_thread.c, qpm_thread.h and README.md.',
+            detail: 'Portable threads, mutexes, condition variables, timed waits and thread IDs using Win32 or pthreads.',
+            defaultFolder: 'Bundle/C/System/Thread',
+            entries: ['CBundle/System/Thread/qpm_thread.c=>qpm_thread.c', 'CBundle/System/Thread/qpm_thread.h=>qpm_thread.h', 'CBundle/System/Thread/README.md=>README.md']
+        },
+        {
+            label: 'Process & environment utilities',
+            group: 'C bundles',
+            category: 'System',
+            description: 'Create qpm_process.c, qpm_process.h and README.md.',
+            detail: 'Run shell commands, capture stdout, start detached commands, access environment variables and get the process ID.',
+            defaultFolder: 'Bundle/C/System/Process',
+            entries: ['CBundle/System/Process/qpm_process.c=>qpm_process.c', 'CBundle/System/Process/qpm_process.h=>qpm_process.h', 'CBundle/System/Process/README.md=>README.md']
+        },
+        {
+            label: 'JSON tokenizer & writer',
+            group: 'C bundles',
+            category: 'Data & serialization',
+            description: 'Create qpm_json.c, qpm_json.h and README.md.',
+            detail: 'Dependency-free zero-allocation JSON token parser with typed accessors plus a fixed-buffer JSON writer.',
+            defaultFolder: 'Bundle/C/Data/JSON',
+            entries: ['CBundle/Data/JSON/qpm_json.c=>qpm_json.c', 'CBundle/Data/JSON/qpm_json.h=>qpm_json.h', 'CBundle/Data/JSON/README.md=>README.md']
+        },
+        {
+            label: 'CSV reader & writer',
+            group: 'C bundles',
+            category: 'Data & serialization',
+            description: 'Create qpm_csv.c, qpm_csv.h and README.md.',
+            detail: 'CSV parsing and writing with configurable delimiter, quoted fields, escaped quotes and callback-based file reading.',
+            defaultFolder: 'Bundle/C/Data/CSV',
+            entries: ['CBundle/Data/CSV/qpm_csv.c=>qpm_csv.c', 'CBundle/Data/CSV/qpm_csv.h=>qpm_csv.h', 'CBundle/Data/CSV/README.md=>README.md']
+        },
+        {
+            label: 'Byte buffer & endian utilities',
+            group: 'C bundles',
+            category: 'Data & serialization',
+            description: 'Create qpm_buffer.c, qpm_buffer.h and README.md.',
+            detail: 'Dynamic byte buffers, cursor readers, LE/BE integer conversion and HEX encode/decode for binary protocols.',
+            defaultFolder: 'Bundle/C/Data/Buffer',
+            entries: ['CBundle/Data/Buffer/qpm_buffer.c=>qpm_buffer.c', 'CBundle/Data/Buffer/qpm_buffer.h=>qpm_buffer.h', 'CBundle/Data/Buffer/README.md=>README.md']
+        },
+        {
+            label: 'Containers (vector & ring buffer)',
+            group: 'C bundles',
+            category: 'Data & serialization',
+            description: 'Create qpm_containers.c, qpm_containers.h and README.md.',
+            detail: 'Generic growable vector and fixed-capacity FIFO/ring buffer for fixed-size C elements.',
+            defaultFolder: 'Bundle/C/Data/Containers',
+            entries: ['CBundle/Data/Containers/qpm_containers.c=>qpm_containers.c', 'CBundle/Data/Containers/qpm_containers.h=>qpm_containers.h', 'CBundle/Data/Containers/README.md=>README.md']
+        },
+        {
+            label: 'Checksums & CRC',
+            group: 'C bundles',
+            category: 'Integrity & diagnostics',
+            description: 'Create qpm_checksum.c, qpm_checksum.h and README.md.',
+            detail: 'XOR8, Sum8, Fletcher-16, Adler-32, CRC-8, CRC-16/CCITT, CRC-16/MODBUS and CRC-32 helpers.',
+            defaultFolder: 'Bundle/C/Diagnostics/Checksum',
+            entries: ['CBundle/Diagnostics/Checksum/qpm_checksum.c=>qpm_checksum.c', 'CBundle/Diagnostics/Checksum/qpm_checksum.h=>qpm_checksum.h', 'CBundle/Diagnostics/Checksum/README.md=>README.md']
+        },
+        {
+            label: 'Logging',
+            group: 'C bundles',
+            category: 'Integrity & diagnostics',
+            description: 'Create qpm_log.c, qpm_log.h and README.md.',
+            detail: 'Dependency-free leveled console/file logging, callback hook and hexadecimal dumps.',
+            defaultFolder: 'Bundle/C/Diagnostics/Logging',
+            entries: ['CBundle/Diagnostics/Logging/qpm_log.c=>qpm_log.c', 'CBundle/Diagnostics/Logging/qpm_log.h=>qpm_log.h', 'CBundle/Diagnostics/Logging/README.md=>README.md']
+        },
+        {
+            label: 'General C utility stack',
+            group: 'C bundles',
+            category: 'Configuration & utilities',
+            description: 'Create the maintained configuration, system, data and diagnostics C utility modules.',
+            detail: 'INI plus File/Path, String, Time, Thread, Process, JSON, CSV, Buffer/Endian, Containers, Checksum/CRC and Logging in one bundle.',
+            defaultFolder: 'Bundle/C/Utilities',
+            entries: [
+                'CBundle/README_GENERAL_UTILITIES.md=>README.md',
+                'CBundle/Configuration/INI=>Configuration/INI',
+                'CBundle/System=>System',
+                'CBundle/Data=>Data',
+                'CBundle/Diagnostics=>Diagnostics'
+            ]
         },
         {
             label: 'Python execution bridge',
@@ -10907,15 +11056,43 @@ function getBuiltInMyUtilModules() {
             label: 'UART communication',
             group: 'C bundles',
             description: 'Create qpm_uart.c and qpm_uart.h.',
-            detail: 'Pure C serial-port wrapper with open/read/write/read-line helpers for Windows and POSIX.',
+            detail: 'Cross-platform serial wrapper with config structs, flow control, DTR/RTS, purge/flush, send-all and exact/delimited reads.',
             defaultFolder: 'Bundle/C/Communication/UART',
             entries: ['CBundle/Communication/UART/qpm_uart.c=>qpm_uart.c', 'CBundle/Communication/UART/qpm_uart.h=>qpm_uart.h', 'CBundle/Communication/UART/README.md=>README.md']
+        },
+        {
+            label: 'RS-485 communication',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create the RS-485 half-duplex wrapper plus the maintained UART backend.',
+            detail: 'Manual RTS direction control, optional Linux kernel RS-485 mode, transmit turnaround delays and transceive helpers.',
+            defaultFolder: 'Bundle/C/Communication/RS485',
+            entries: ['CBundle/Communication/RS485/qpm_rs485.c=>qpm_rs485.c', 'CBundle/Communication/RS485/qpm_rs485.h=>qpm_rs485.h', 'CBundle/Communication/RS485/README.md=>README.md', 'CBundle/Communication/UART/qpm_uart.c=>qpm_uart.c', 'CBundle/Communication/UART/qpm_uart.h=>qpm_uart.h']
+        },
+        {
+            label: 'LIN communication',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a LIN 2.x master helper plus the maintained UART backend.',
+            detail: 'Protected IDs, classic/enhanced checksums, break/sync/PID headers and 1..8-byte master publish/request helpers.',
+            defaultFolder: 'Bundle/C/Communication/LIN',
+            entries: ['CBundle/Communication/LIN/qpm_lin.c=>qpm_lin.c', 'CBundle/Communication/LIN/qpm_lin.h=>qpm_lin.h', 'CBundle/Communication/LIN/README.md=>README.md', 'CBundle/Communication/UART/qpm_uart.c=>qpm_uart.c', 'CBundle/Communication/UART/qpm_uart.h=>qpm_uart.h']
+        },
+        {
+            label: 'USB HID communication',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create USB HID enumeration and report I/O helpers.',
+            detail: 'Native Windows HID/SetupAPI backend and optional HIDAPI backend on Linux/macOS; input/output/feature reports and VID/PID discovery.',
+            defaultFolder: 'Bundle/C/Communication/USBHID',
+            entries: ['CBundle/Communication/USBHID/qpm_hid.c=>qpm_hid.c', 'CBundle/Communication/USBHID/qpm_hid.h=>qpm_hid.h', 'CBundle/Communication/USBHID/README.md=>README.md'],
+            requiredWindowsLibraries: ['hid', 'setupapi']
         },
         {
             label: 'IPC communication',
             group: 'C bundles',
             description: 'Create qpm_ipc.c and qpm_ipc.h.',
-            detail: 'Pure C named-pipe/FIFO wrapper for simple local process communication.',
+            detail: 'Windows named-pipe / POSIX Unix-domain-socket IPC with reconnectable servers, exact I/O and 32-bit length-prefixed message framing.',
             defaultFolder: 'Bundle/C/Communication/IPC',
             entries: ['CBundle/Communication/IPC/qpm_ipc.c=>qpm_ipc.c', 'CBundle/Communication/IPC/qpm_ipc.h=>qpm_ipc.h', 'CBundle/Communication/IPC/README.md=>README.md']
         },
@@ -10923,7 +11100,7 @@ function getBuiltInMyUtilModules() {
             label: 'Ethernet TCP-UDP communication',
             group: 'C bundles',
             description: 'Create qpm_socket.c and qpm_socket.h.',
-            detail: 'Pure C TCP client/server and UDP socket wrapper. On Windows, QPM automatically adds ws2_32 to linker libraries.',
+            detail: 'Portable TCP client/server and UDP wrapper with timeouts, exact/line reads, endpoint inspection, keepalive/Nagle controls, broadcast and multicast.',
             defaultFolder: 'Bundle/C/Communication/Ethernet',
             entries: ['CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h', 'CBundle/Communication/Ethernet/README.md=>README.md'],
             requiredWindowsLibraries: ['ws2_32']
@@ -10934,14 +11111,14 @@ function getBuiltInMyUtilModules() {
             description: 'Create qpm_wifi.c and qpm_wifi.h.',
             detail: 'Pure C TCP/UDP wrapper for Wi-Fi-connected systems. It handles application IP traffic, not SSID association.',
             defaultFolder: 'Bundle/C/Communication/WiFi',
-            entries: ['CBundle/Communication/WiFi/qpm_wifi.c=>qpm_wifi.c', 'CBundle/Communication/WiFi/qpm_wifi.h=>qpm_wifi.h', 'CBundle/Communication/WiFi/README.md=>README.md'],
+            entries: ['CBundle/Communication/WiFi/qpm_wifi.c=>qpm_wifi.c', 'CBundle/Communication/WiFi/qpm_wifi.h=>qpm_wifi.h', 'CBundle/Communication/WiFi/README.md=>README.md', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h'],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
             label: 'Bluetooth RFCOMM communication',
             group: 'C bundles',
             description: 'Create qpm_bluetooth.c and qpm_bluetooth.h.',
-            detail: 'Pure C Bluetooth Classic RFCOMM client wrapper. Windows implementation included; other platforms return unsupported by default.',
+            detail: 'Bluetooth Classic RFCOMM client with connect timeout, send-all, exact reads and line helpers. Windows implementation included.',
             defaultFolder: 'Bundle/C/Communication/Bluetooth',
             entries: ['CBundle/Communication/Bluetooth/qpm_bluetooth.c=>qpm_bluetooth.c', 'CBundle/Communication/Bluetooth/qpm_bluetooth.h=>qpm_bluetooth.h', 'CBundle/Communication/Bluetooth/README.md=>README.md'],
             requiredWindowsLibraries: ['ws2_32']
@@ -10950,7 +11127,7 @@ function getBuiltInMyUtilModules() {
             label: 'CAN communication',
             group: 'C bundles',
             description: 'Create qpm_can.c and qpm_can.h.',
-            detail: 'Pure C CAN/SocketCAN helper with classical CAN, CAN FD, filters, timeout and diagnostic formatting.',
+            detail: 'Linux SocketCAN helper with Classical CAN, CAN FD, filter arrays, error masks, loopback and diagnostic formatting.',
             defaultFolder: 'Bundle/C/Communication/CAN',
             entries: ['CBundle/Communication/CAN/qpm_can.c=>qpm_can.c', 'CBundle/Communication/CAN/qpm_can.h=>qpm_can.h', 'CBundle/Communication/CAN/README.md=>README.md']
         },
@@ -10958,7 +11135,7 @@ function getBuiltInMyUtilModules() {
             label: 'I2C communication',
             group: 'C bundles',
             description: 'Create qpm_i2c.c and qpm_i2c.h.',
-            detail: 'Pure C Linux /dev/i2c wrapper with register read/write helpers. Other platforms return a clear unsupported status.',
+            detail: 'Linux /dev/i2c wrapper with repeated-start write/read, 8-bit and 16-bit register helpers and selectable register byte order.',
             defaultFolder: 'Bundle/C/Communication/I2C',
             entries: ['CBundle/Communication/I2C/qpm_i2c.c=>qpm_i2c.c', 'CBundle/Communication/I2C/qpm_i2c.h=>qpm_i2c.h', 'CBundle/Communication/I2C/README.md=>README.md']
         },
@@ -10966,26 +11143,179 @@ function getBuiltInMyUtilModules() {
             label: 'SPI communication',
             group: 'C bundles',
             description: 'Create qpm_spi.c and qpm_spi.h.',
-            detail: 'Pure C Linux spidev wrapper with mode/speed/bits configuration and full-duplex transfer helpers. Other platforms return unsupported.',
+            detail: 'Linux spidev wrapper with per-transfer speed/delay/CS options, multi-segment transfers and full-duplex/read/write helpers.',
             defaultFolder: 'Bundle/C/Communication/SPI',
             entries: ['CBundle/Communication/SPI/qpm_spi.c=>qpm_spi.c', 'CBundle/Communication/SPI/qpm_spi.h=>qpm_spi.h', 'CBundle/Communication/SPI/README.md=>README.md']
         },
         {
-            label: 'Full communication stack',
+            label: 'VISA instrument communication',
             group: 'C bundles',
-            description: 'Create C UART, IPC, Ethernet, Wi-Fi, Bluetooth, CAN, I2C and SPI modules.',
-            detail: 'Pure C communication stack converted from the common QPM_Utility C++ communication bundles. CAN targets Linux SocketCAN by default; I2C/SPI target Linux device files; Bluetooth RFCOMM is Windows-first.',
-            defaultFolder: 'Bundle/C/Communication',
-            entries: ['CBundle/Communication/README.md=>README.md', 'CBundle/Communication/UART=>UART', 'CBundle/Communication/IPC=>IPC', 'CBundle/Communication/Ethernet=>Ethernet', 'CBundle/Communication/WiFi=>WiFi', 'CBundle/Communication/Bluetooth=>Bluetooth', 'CBundle/Communication/CAN=>CAN', 'CBundle/Communication/I2C=>I2C', 'CBundle/Communication/SPI=>SPI'],
+            category: 'Communication',
+            description: 'Create the compact dynamic VISA runtime loader.',
+            detail: 'Windows VISA resource discovery and raw session read/write/query without a compile-time dependency on NI/Keysight VISA headers or import libraries.',
+            defaultFolder: 'Bundle/C/Communication/VISA',
+            entries: ['CBundle/Communication/VISA/qpm_visa.c=>qpm_visa.c', 'CBundle/Communication/VISA/qpm_visa.h=>qpm_visa.h', 'CBundle/Communication/VISA/README.md=>README.md']
+        },
+        {
+            label: 'TLS client transport',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create the QPM TLS client transport.',
+            detail: 'OpenSSL-backed TLS 1.2/1.3 client with peer/hostname verification, SNI, CA/client certificate configuration and explicit fallback when OpenSSL is unavailable.',
+            defaultFolder: 'Bundle/C/Communication/TLS',
+            entries: ['CBundle/Communication/TLS/qpm_tls.c=>qpm_tls.c', 'CBundle/Communication/TLS/qpm_tls.h=>qpm_tls.h', 'CBundle/Communication/TLS/README.md=>README.md']
+        },
+        {
+            label: 'Generic USB / libusb communication',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a generic USB transport using a dynamically-loaded libusb-1.0 runtime.',
+            detail: 'VID/PID enumeration/open, string descriptors, interface claim/release, control, bulk and interrupt transfers without a compile-time libusb dependency.',
+            defaultFolder: 'Bundle/C/Communication/USB',
+            entries: ['CBundle/Communication/USB/qpm_usb.c=>qpm_usb.c', 'CBundle/Communication/USB/qpm_usb.h=>qpm_usb.h', 'CBundle/Communication/USB/README.md=>README.md']
+        },
+        {
+            label: 'BLE GATT communication',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create the native Windows BLE GATT device/service/characteristic helper.',
+            detail: 'Enumerate BLE interfaces and GATT services/characteristics, then read/write characteristic values. Non-Windows builds expose explicit unsupported stubs.',
+            defaultFolder: 'Bundle/C/Communication/BLEGATT',
+            entries: ['CBundle/Communication/BLEGATT/qpm_ble_gatt.c=>qpm_ble_gatt.c', 'CBundle/Communication/BLEGATT/qpm_ble_gatt.h=>qpm_ble_gatt.h', 'CBundle/Communication/BLEGATT/README.md=>README.md'],
+            requiredWindowsLibraries: ['setupapi', 'BluetoothApis']
+        },
+        {
+            label: 'Binary framing (COBS / SLIP / length prefix)',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create qpm_framing.c, qpm_framing.h and README.md.',
+            detail: 'Dependency-free COBS, SLIP, 16/32-bit length-prefix framing and delimiter helpers for UART/TCP/IPC byte streams.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/Framing',
+            entries: ['CBundle/Communication/Protocols/Framing/qpm_framing.c=>qpm_framing.c', 'CBundle/Communication/Protocols/Framing/qpm_framing.h=>qpm_framing.h', 'CBundle/Communication/Protocols/Framing/README.md=>README.md']
+        },
+        {
+            label: 'SCPI instrument protocol',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create transport-independent SCPI helpers.',
+            detail: 'SCPI/IEEE-488.2 command/query layer with typed queries, binary blocks, terminators and callbacks usable over UART, TCP, IPC, Bluetooth or a custom VISA transport.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/SCPI',
+            entries: ['CBundle/Communication/Protocols/SCPI/qpm_scpi.c=>qpm_scpi.c', 'CBundle/Communication/Protocols/SCPI/qpm_scpi.h=>qpm_scpi.h', 'CBundle/Communication/Protocols/SCPI/README.md=>README.md']
+        },
+        {
+            label: 'Modbus RTU / TCP protocol',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create Modbus RTU/TCP frame builders and parsers.',
+            detail: 'Dependency-free Modbus CRC, RTU validation, read/write register requests, TCP MBAP framing, exception detection and register parsing.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/Modbus',
+            entries: ['CBundle/Communication/Protocols/Modbus/qpm_modbus.c=>qpm_modbus.c', 'CBundle/Communication/Protocols/Modbus/qpm_modbus.h=>qpm_modbus.h', 'CBundle/Communication/Protocols/Modbus/README.md=>README.md']
+        },
+        {
+            label: 'Retry / reconnect policy',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a transport-independent retry/backoff helper.',
+            detail: 'Fixed/linear/exponential backoff, bounded delay, jitter and caller-supplied retry/sleep callbacks.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/Retry',
+            entries: ['CBundle/Communication/Protocols/Retry/qpm_retry.c=>qpm_retry.c', 'CBundle/Communication/Protocols/Retry/qpm_retry.h=>qpm_retry.h', 'CBundle/Communication/Protocols/Retry/README.md=>README.md']
+        },
+        {
+            label: 'HTTP / REST client',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a compact HTTP/1.1 client plus the maintained socket backend.',
+            detail: 'GET/POST/custom methods, headers, status metadata, Content-Length and chunked responses. Plain HTTP only; TLS is intentionally separate.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/HTTP',
+            entries: ['CBundle/Communication/Protocols/HTTP/qpm_http.c=>qpm_http.c', 'CBundle/Communication/Protocols/HTTP/qpm_http.h=>qpm_http.h', 'CBundle/Communication/Protocols/HTTP/README.md=>README.md', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h'],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
-            label: 'QPM_Utility core utilities',
+            label: 'MQTT 3.1.1 client',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a compact MQTT client plus the maintained socket backend.',
+            detail: 'CONNECT, Last Will, QoS 0/1 publish, subscribe/unsubscribe, ping and incoming publish parsing over plain TCP.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/MQTT',
+            entries: ['CBundle/Communication/Protocols/MQTT/qpm_mqtt.c=>qpm_mqtt.c', 'CBundle/Communication/Protocols/MQTT/qpm_mqtt.h=>qpm_mqtt.h', 'CBundle/Communication/Protocols/MQTT/README.md=>README.md', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'WebSocket client',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create an RFC 6455 ws:// client plus the maintained socket backend.',
+            detail: 'Upgrade handshake verification, masked client frames, text/binary, ping/pong and close. WSS/TLS remains a separate transport concern.',
+            defaultFolder: 'Bundle/C/Communication/Protocols/WebSocket',
+            entries: ['CBundle/Communication/Protocols/WebSocket/qpm_websocket.c=>qpm_websocket.c', 'CBundle/Communication/Protocols/WebSocket/qpm_websocket.h=>qpm_websocket.h', 'CBundle/Communication/Protocols/WebSocket/README.md=>README.md', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'SCPI over TCP / VISA stack',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create ready-to-use SCPI adapters for raw TCP and VISA sessions.',
+            detail: 'Binds the transport-independent SCPI protocol to a TCP socket or QPM VISA session without application-side callback boilerplate.',
+            defaultFolder: 'Bundle/C/Communication/Stacks/SCPI',
+            entries: ['CBundle/Communication/Stacks/SCPI/qpm_scpi_transport.c=>qpm_scpi_transport.c', 'CBundle/Communication/Stacks/SCPI/qpm_scpi_transport.h=>qpm_scpi_transport.h', 'CBundle/Communication/Stacks/SCPI/README.md=>README.md', 'CBundle/Communication/Protocols/SCPI/qpm_scpi.c=>qpm_scpi.c', 'CBundle/Communication/Protocols/SCPI/qpm_scpi.h=>qpm_scpi.h', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h', 'CBundle/Communication/VISA/qpm_visa.c=>qpm_visa.c', 'CBundle/Communication/VISA/qpm_visa.h=>qpm_visa.h'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Modbus RTU over RS-485 stack',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create a ready-to-use Modbus RTU master over the maintained RS-485/UART transport.',
+            detail: 'Read holding/input registers and write single/multiple registers without manually constructing RTU frames.',
+            defaultFolder: 'Bundle/C/Communication/Stacks/ModbusRS485',
+            entries: ['CBundle/Communication/Stacks/ModbusRS485/qpm_modbus_rs485.c=>qpm_modbus_rs485.c', 'CBundle/Communication/Stacks/ModbusRS485/qpm_modbus_rs485.h=>qpm_modbus_rs485.h', 'CBundle/Communication/Stacks/ModbusRS485/README.md=>README.md', 'CBundle/Communication/Protocols/Modbus/qpm_modbus.c=>qpm_modbus.c', 'CBundle/Communication/Protocols/Modbus/qpm_modbus.h=>qpm_modbus.h', 'CBundle/Communication/RS485/qpm_rs485.c=>qpm_rs485.c', 'CBundle/Communication/RS485/qpm_rs485.h=>qpm_rs485.h', 'CBundle/Communication/UART/qpm_uart.c=>qpm_uart.c', 'CBundle/Communication/UART/qpm_uart.h=>qpm_uart.h']
+        },
+        {
+            label: 'MQTT automatic reconnect stack',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create MQTT with retry, health checks, reconnect and subscription restoration.',
+            detail: 'Keeps MQTT 3.1.1 connection settings and subscriptions, reconnects with the QPM retry policy and retries publish after reconnect.',
+            defaultFolder: 'Bundle/C/Communication/Stacks/MQTTAuto',
+            entries: ['CBundle/Communication/Stacks/MQTTAuto/qpm_mqtt_auto.c=>qpm_mqtt_auto.c', 'CBundle/Communication/Stacks/MQTTAuto/qpm_mqtt_auto.h=>qpm_mqtt_auto.h', 'CBundle/Communication/Stacks/MQTTAuto/README.md=>README.md', 'CBundle/Communication/Protocols/MQTT/qpm_mqtt.c=>qpm_mqtt.c', 'CBundle/Communication/Protocols/MQTT/qpm_mqtt.h=>qpm_mqtt.h', 'CBundle/Communication/Protocols/Retry/qpm_retry.c=>qpm_retry.c', 'CBundle/Communication/Protocols/Retry/qpm_retry.h=>qpm_retry.h', 'CBundle/Communication/Ethernet/qpm_socket.c=>qpm_socket.c', 'CBundle/Communication/Ethernet/qpm_socket.h=>qpm_socket.h'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Ready-to-use communication stacks',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create the composed SCPI, Modbus/RS-485 and MQTT reconnect stacks.',
+            detail: 'High-level stacks built exclusively from the maintained QPM transport/protocol modules.',
+            defaultFolder: 'Bundle/C/Communication/Stacks',
+            entries: ['CBundle/Communication/Stacks=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Communication protocol stack',
+            group: 'C bundles',
+            category: 'Communication',
+            description: 'Create framing, SCPI and Modbus protocol modules.',
+            detail: 'Framing, SCPI, Modbus, retry/reconnect, HTTP/REST, MQTT and WebSocket helpers designed to sit on top of maintained transports.',
+            defaultFolder: 'Bundle/C/Communication/Protocols',
+            entries: ['CBundle/Communication/Protocols=>.']
+        },
+        {
+            label: 'Full communication stack',
+            group: 'C bundles',
+            description: 'Create the complete maintained C transport and protocol stack.',
+            detail: 'UART, RS-485, LIN, IPC, TCP/UDP, Wi-Fi, Bluetooth RFCOMM, USB HID, generic USB, BLE GATT, CAN, I2C, SPI, VISA, TLS plus protocols and ready-to-use communication stacks.',
+            defaultFolder: 'Bundle/C/Communication',
+            entries: ['CBundle/Communication/README.md=>README.md', 'CBundle/Communication/UART=>UART', 'CBundle/Communication/RS485=>RS485', 'CBundle/Communication/LIN=>LIN', 'CBundle/Communication/IPC=>IPC', 'CBundle/Communication/Ethernet=>Ethernet', 'CBundle/Communication/WiFi=>WiFi', 'CBundle/Communication/Bluetooth=>Bluetooth', 'CBundle/Communication/USBHID=>USBHID', 'CBundle/Communication/USB=>USB', 'CBundle/Communication/BLEGATT=>BLEGATT', 'CBundle/Communication/TLS=>TLS', 'CBundle/Communication/CAN=>CAN', 'CBundle/Communication/I2C=>I2C', 'CBundle/Communication/SPI=>SPI', 'CBundle/Communication/VISA=>VISA', 'CBundle/Communication/Protocols=>Protocols', 'CBundle/Communication/Stacks=>Stacks'],
+            requiredWindowsLibraries: ['ws2_32', 'hid', 'setupapi', 'BluetoothApis']
+        },
+        {
+            label: 'QPM_Utility core utilities (legacy)',
             group: 'C++ bundles',
+            category: 'Legacy & compatibility',
             description: 'Copy qpm_utility.cpp, qpm_utility.h and utility.ini.',
-            detail: 'Canonical QPM C++ utility bundle: executable path helpers, filesystem, text I/O, INI, strings, timestamps, delays, stopwatch, matrix/vector and error-log helpers.',
+            detail: 'Legacy monolithic C++ compatibility bundle. New projects should prefer the focused C++17 Configuration/System/Data/Diagnostics bundles.',
             defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['qpm_utility.cpp', 'qpm_utility.h', 'utility.ini', 'README_QPM_Utility.md=>README.md']
+            generator: 'cpp-core',
+            entries: []
         },
         {
             label: 'Error management',
@@ -10997,96 +11327,394 @@ function getBuiltInMyUtilModules() {
             entries: []
         },
         {
-            label: 'QPM_Utility error management',
+            label: 'INI configuration',
             group: 'C++ bundles',
-            description: 'Copy errorManagement.cpp/.h plus required core utility files.',
-            detail: 'check_negerror, check_zeroerror, set_error macros and a runtime utility.ini configuration file.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['qpm_utility.cpp', 'qpm_utility.h', 'utility.ini', 'ErrorManagement/errorManagement.cpp', 'ErrorManagement/errorManagement.h']
+            category: 'Configuration & utilities',
+            description: 'Create qpm::IniDocument plus the maintained C INI backend.',
+            detail: 'Move-aware RAII INI document with typed getters/setters, section/key enumeration and normalized save.',
+            defaultFolder: 'Bundle/C++/Configuration/INI',
+            entries: ['CppBundle/Configuration/INI=>.']
+        },
+        {
+            label: 'File & path utilities',
+            group: 'C++ bundles',
+            category: 'System',
+            description: 'Create C++17 filesystem helpers plus portable executable-path discovery.',
+            detail: 'std::filesystem/std::fstream helpers for text/binary I/O, directories, rename/remove and executable paths.',
+            defaultFolder: 'Bundle/C++/System/FilePath',
+            entries: ['CppBundle/System/FilePath=>.']
+        },
+        {
+            label: 'String utilities',
+            group: 'C++ bundles',
+            category: 'System',
+            description: 'Create C++17 std::string/std::string_view helpers.',
+            detail: 'Trim, case conversion, case-insensitive compare, starts/ends/contains, replace, split and join.',
+            defaultFolder: 'Bundle/C++/System/String',
+            entries: ['CppBundle/System/String=>.']
+        },
+        {
+            label: 'Time & periodic timers',
+            group: 'C++ bundles',
+            category: 'System',
+            description: 'Create std::chrono-based time, stopwatch, deadlines and callback scheduling helpers.',
+            detail: 'Elapsed ns/us/ms/s/min/h, duration formatting, Stopwatch/lap, Deadline, PeriodicTimer and poll/background Scheduler.',
+            defaultFolder: 'Bundle/C++/System/Time',
+            entries: ['CppBundle/System/Time=>.']
+        },
+        {
+            label: 'Threads & synchronization',
+            group: 'C++ bundles',
+            category: 'System',
+            description: 'Create higher-level C++17 threading helpers.',
+            detail: 'JoiningThread RAII, ManualResetEvent and type-safe BlockingQueue built on the standard threading library.',
+            defaultFolder: 'Bundle/C++/System/Thread',
+            entries: ['CppBundle/System/Thread=>.']
+        },
+        {
+            label: 'Process & environment utilities',
+            group: 'C++ bundles',
+            category: 'System',
+            description: 'Create qpm::Process plus the maintained cross-platform C backend.',
+            detail: 'Run/capture/detach commands, process ID and environment variables through std::string-friendly APIs.',
+            defaultFolder: 'Bundle/C++/System/Process',
+            entries: ['CppBundle/System/Process=>.']
+        },
+        {
+            label: 'JSON document & writer',
+            group: 'C++ bundles',
+            category: 'Data & serialization',
+            description: 'Create qpm::JsonDocument / qpm::JsonWriter plus the maintained C tokenizer.',
+            detail: 'std::string/std::vector wrapper with object/array navigation, typed values and JSON generation.',
+            defaultFolder: 'Bundle/C++/Data/JSON',
+            entries: ['CppBundle/Data/JSON=>.']
+        },
+        {
+            label: 'CSV reader & writer',
+            group: 'C++ bundles',
+            category: 'Data & serialization',
+            description: 'Create std::vector<std::string>-based CSV helpers.',
+            detail: 'Parse lines, read complete CSV files and append quoted rows using the maintained C backend.',
+            defaultFolder: 'Bundle/C++/Data/CSV',
+            entries: ['CppBundle/Data/CSV=>.']
+        },
+        {
+            label: 'Byte buffer & endian utilities',
+            group: 'C++ bundles',
+            category: 'Data & serialization',
+            description: 'Create type-safe C++ binary buffer/reader helpers.',
+            detail: 'std::vector<uint8_t>-based binary construction, LE/BE reading and hexadecimal formatting.',
+            defaultFolder: 'Bundle/C++/Data/Buffer',
+            entries: ['CppBundle/Data/Buffer=>.']
+        },
+        {
+            label: 'Containers (ring buffer)',
+            group: 'C++ bundles',
+            category: 'Data & serialization',
+            description: 'Create type-safe RingBuffer and SynchronizedRingBuffer templates.',
+            detail: 'C++ templates complementing std::vector/deque with bounded FIFO and optional overwrite semantics.',
+            defaultFolder: 'Bundle/C++/Data/Containers',
+            entries: ['CppBundle/Data/Containers=>.']
+        },
+        {
+            label: 'Checksums & CRC',
+            group: 'C++ bundles',
+            category: 'Integrity & diagnostics',
+            description: 'Create container-friendly CRC/checksum helpers plus the maintained C backend.',
+            detail: 'CRC16 CCITT/MODBUS, CRC32, XOR8 and Sum8 usable directly with std::vector/std::string-like containers.',
+            defaultFolder: 'Bundle/C++/Diagnostics/Checksum',
+            entries: ['CppBundle/Diagnostics/Checksum=>.']
+        },
+        {
+            label: 'Logging',
+            group: 'C++ bundles',
+            category: 'Integrity & diagnostics',
+            description: 'Create qpm::Logger plus the maintained leveled logging backend.',
+            detail: 'RAII logger configuration for console/file output, levels and hexadecimal dumps.',
+            defaultFolder: 'Bundle/C++/Diagnostics/Logging',
+            entries: ['CppBundle/Diagnostics/Logging=>.']
+        },
+        {
+            label: 'General C++ utility stack',
+            group: 'C++ bundles',
+            category: 'Configuration & utilities',
+            description: 'Create the complete maintained C++17 utility stack.',
+            detail: 'INI plus focused System, Data & serialization and Integrity & diagnostics modules. Preferred replacement for monolithic QPM_Utility in new projects.',
+            defaultFolder: 'Bundle/C++/Utilities',
+            entries: ['CppBundle/README_GENERAL_UTILITIES.md=>README.md', 'CppBundle/Configuration=>Configuration', 'CppBundle/System=>System', 'CppBundle/Data=>Data', 'CppBundle/Diagnostics=>Diagnostics']
         },
         {
             label: 'UART communication',
             group: 'C++ bundles',
-            description: 'Copy the cross-platform UART class.',
-            detail: 'Serial port wrapper with text, byte and packet helpers.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/uart/uart.cpp', 'Communication/uart/uart.h']
+            category: 'Communication',
+            description: 'Create qpm::SerialPort plus its maintained C backend.',
+            detail: 'C++17 move-only RAII serial-port wrapper with flow control, DTR/RTS, purge/flush and exact/line I/O.',
+            defaultFolder: 'Bundle/C++/Communication/UART',
+            entries: ['CppBundle/Communication/UART=>.']
+        },
+        {
+            label: 'RS-485 communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::Rs485Bus plus the maintained C UART/RS-485 backend.',
+            detail: 'C++17 move-only RAII half-duplex bus with RTS direction control and optional Linux kernel RS-485 mode.',
+            defaultFolder: 'Bundle/C++/Communication/RS485',
+            entries: ['CppBundle/Communication/RS485=>.']
+        },
+        {
+            label: 'LIN communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::LinMaster plus the maintained C LIN/UART backend.',
+            detail: 'C++17 LIN master helper with protected IDs, checksums, publish and request operations.',
+            defaultFolder: 'Bundle/C++/Communication/LIN',
+            entries: ['CppBundle/Communication/LIN=>.']
+        },
+        {
+            label: 'USB HID communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::HidDevice plus the maintained C HID backend.',
+            detail: 'RAII HID reports with native Windows discovery and optional HIDAPI support on Linux/macOS.',
+            defaultFolder: 'Bundle/C++/Communication/USBHID',
+            entries: ['CppBundle/Communication/USBHID=>.'],
+            requiredWindowsLibraries: ['hid', 'setupapi']
         },
         {
             label: 'IPC communication',
             group: 'C++ bundles',
-            description: 'Copy the IPC pipe class.',
-            detail: 'Named-pipe, local-socket and anonymous-pipe helpers.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/IPC/IPC.cpp', 'Communication/IPC/IPC.h']
+            category: 'Communication',
+            description: 'Create qpm::IpcChannel plus its maintained C backend.',
+            detail: 'C++17 RAII named-pipe / Unix-domain-socket wrapper with reconnectable servers and length-prefixed messages.',
+            defaultFolder: 'Bundle/C++/Communication/IPC',
+            entries: ['CppBundle/Communication/IPC=>.']
         },
         {
             label: 'Ethernet TCP-UDP communication',
             group: 'C++ bundles',
-            description: 'Copy the TCP/UDP EthernetLink class.',
-            detail: 'Client/server TCP and UDP helpers with packet framing.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/ethernet/ethernet.cpp', 'Communication/ethernet/ethernet.h'],
+            category: 'Communication',
+            description: 'Create qpm::TcpClient, TcpServer and UdpSocket.',
+            detail: 'C++17 RAII network classes over the maintained socket backend, including multicast, endpoints, exact/line reads and socket options.',
+            defaultFolder: 'Bundle/C++/Communication/Ethernet',
+            entries: ['CppBundle/Communication/Ethernet=>.'],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
             label: 'Wi-Fi communication',
             group: 'C++ bundles',
-            description: 'Copy the C++ Wi-Fi TCP/UDP link class.',
-            detail: 'Application-layer Wi-Fi communication using regular TCP/UDP sockets once the OS network is connected.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/wifi/wifi.cpp', 'Communication/wifi/wifi.h'],
+            category: 'Communication',
+            description: 'Create Wi-Fi TCP/UDP aliases over the maintained socket layer.',
+            detail: 'Application-layer Wi-Fi communication using qpm::WifiTcpClient, WifiTcpServer and WifiUdpSocket after the OS associates with an AP.',
+            defaultFolder: 'Bundle/C++/Communication/WiFi',
+            entries: ['CppBundle/Communication/WiFi=>.'],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
-            label: 'Bluetooth communication',
+            label: 'Bluetooth RFCOMM communication',
             group: 'C++ bundles',
-            description: 'Copy the C++ Bluetooth communication class.',
-            detail: 'Bluetooth helper from the original QPM_Utility communication set, kept separate from the full stack.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/bluetooth/bluetooth.cpp', 'Communication/bluetooth/bluetooth.h'],
+            category: 'Communication',
+            description: 'Create qpm::BluetoothRfcomm plus the Windows RFCOMM backend.',
+            detail: 'C++17 RAII Bluetooth Classic client with connect timeout, send-all and line receive helpers. BLE/GATT remains a separate API family.',
+            defaultFolder: 'Bundle/C++/Communication/Bluetooth',
+            entries: ['CppBundle/Communication/Bluetooth=>.'],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
             label: 'CAN communication',
             group: 'C++ bundles',
-            description: 'Copy the C++ SocketCAN communication class.',
-            detail: 'C++ CAN helper with classical CAN, CAN FD, filters, timeout and diagnostic formatting. Linux SocketCAN backend by default.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/can/can.cpp', 'Communication/can/can.h']
+            category: 'Communication',
+            description: 'Create qpm::CanBus plus the SocketCAN backend.',
+            detail: 'C++17 RAII CAN/CAN-FD wrapper with vector-based receive filters, loopback and timeout receive.',
+            defaultFolder: 'Bundle/C++/Communication/CAN',
+            entries: ['CppBundle/Communication/CAN=>.']
         },
         {
             label: 'I2C communication',
             group: 'C++ bundles',
-            description: 'Copy the C++ I2C class.',
-            detail: 'Linux I2C helper from the original QPM_Utility communication set.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/I2C/I2C.cpp', 'Communication/I2C/I2C.h']
+            category: 'Communication',
+            description: 'Create qpm::I2cDevice plus the Linux I2C backend.',
+            detail: 'C++17 RAII I2C wrapper with repeated-start transactions and register helpers.',
+            defaultFolder: 'Bundle/C++/Communication/I2C',
+            entries: ['CppBundle/Communication/I2C=>.']
         },
         {
             label: 'SPI communication',
             group: 'C++ bundles',
-            description: 'Copy the C++ SPI class.',
-            detail: 'Linux SPI helper from the original QPM_Utility communication set.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication/SPI/SPI.cpp', 'Communication/SPI/SPI.h']
+            category: 'Communication',
+            description: 'Create qpm::SpiDevice plus the Linux spidev backend.',
+            detail: 'C++17 RAII SPI wrapper with vector transfers, per-segment options and read helpers.',
+            defaultFolder: 'Bundle/C++/Communication/SPI',
+            entries: ['CppBundle/Communication/SPI=>.']
+        },
+        {
+            label: 'VISA instrument communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::VisaRuntime and qpm::VisaSession.',
+            detail: 'C++17 RAII wrappers over the dynamically-loaded Windows VISA backend; no vendor VISA headers are required to compile.',
+            defaultFolder: 'Bundle/C++/Communication/VISA',
+            entries: ['CppBundle/Communication/VISA=>.']
+        },
+        {
+            label: 'TLS client transport',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::TlsClient plus the maintained OpenSSL-backed C transport.',
+            detail: 'RAII TLS client with verified peer/hostname by default and explicit OpenSSL availability reporting.',
+            defaultFolder: 'Bundle/C++/Communication/TLS',
+            entries: ['CppBundle/Communication/TLS=>.']
+        },
+        {
+            label: 'Generic USB / libusb communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::UsbRuntime / qpm::UsbDevice plus the dynamic libusb backend.',
+            detail: 'RAII generic USB access for enumeration, interface claims and control/bulk/interrupt transfers.',
+            defaultFolder: 'Bundle/C++/Communication/USB',
+            entries: ['CppBundle/Communication/USB=>.']
+        },
+        {
+            label: 'BLE GATT communication',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::BleGattDevice plus the native Windows GATT backend.',
+            detail: 'RAII BLE GATT service/characteristic discovery and characteristic reads/writes.',
+            defaultFolder: 'Bundle/C++/Communication/BLEGATT',
+            entries: ['CppBundle/Communication/BLEGATT=>.'],
+            requiredWindowsLibraries: ['setupapi', 'BluetoothApis']
+        },
+        {
+            label: 'Binary framing (COBS / SLIP / length prefix)',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create C++ framing helpers plus the maintained C backend.',
+            detail: 'std::vector-based COBS/SLIP helpers and the underlying C framing API.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/Framing',
+            entries: ['CppBundle/Communication/Protocols/Framing=>.']
+        },
+        {
+            label: 'SCPI instrument protocol',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::ScpiClient plus the transport-independent C backend.',
+            detail: 'C++17 std::function-based SCPI client supporting UART/TCP/IPC adapters, typed queries and binary blocks.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/SCPI',
+            entries: ['CppBundle/Communication/Protocols/SCPI=>.']
+        },
+        {
+            label: 'Modbus RTU / TCP protocol',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create C++ Modbus frame helpers plus the maintained C codec.',
+            detail: 'std::vector-based RTU/TCP request helpers with CRC/MBAP parsing provided by the C backend.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/Modbus',
+            entries: ['CppBundle/Communication/Protocols/Modbus=>.']
+        },
+        {
+            label: 'Retry / reconnect policy',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::retry plus the maintained C retry backend.',
+            detail: 'std::function-based retry operations with fixed/linear/exponential backoff and std::chrono delays.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/Retry',
+            entries: ['CppBundle/Communication/Protocols/Retry=>.']
+        },
+        {
+            label: 'HTTP / REST client',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::HttpClient plus the maintained C HTTP/socket backend.',
+            detail: 'C++17 vector/string wrapper for HTTP/1.1 requests. Plain HTTP only; TLS is intentionally separate.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/HTTP',
+            entries: ['CppBundle/Communication/Protocols/HTTP=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'MQTT 3.1.1 client',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::MqttClient plus the maintained C MQTT/socket backend.',
+            detail: 'RAII MQTT client with QoS 0/1 publish, subscribe, Last Will and incoming message support over plain TCP.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/MQTT',
+            entries: ['CppBundle/Communication/Protocols/MQTT=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'WebSocket client',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::WebSocket plus the maintained RFC 6455 C/socket backend.',
+            detail: 'C++17 RAII ws:// client with text/binary frames and ping/pong. WSS/TLS remains a separate transport concern.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols/WebSocket',
+            entries: ['CppBundle/Communication/Protocols/WebSocket=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'SCPI over TCP / VISA stack',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::ScpiTcpSession plus the composed C SCPI transport adapters.',
+            detail: 'Ready-to-use SCPI over TCP and VISA without manual callback binding.',
+            defaultFolder: 'Bundle/C++/Communication/Stacks/SCPI',
+            entries: ['CppBundle/Communication/Stacks/SCPI=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Modbus RTU over RS-485 stack',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::ModbusRs485Client plus the maintained RS-485/Modbus backends.',
+            detail: 'RAII-friendly Modbus RTU master operations over a QPM RS-485 bus.',
+            defaultFolder: 'Bundle/C++/Communication/Stacks/ModbusRS485',
+            entries: ['CppBundle/Communication/Stacks/ModbusRS485=>.']
+        },
+        {
+            label: 'MQTT automatic reconnect stack',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create qpm::AutoMqttClient with reconnect and subscription restoration.',
+            detail: 'C++17 convenience wrapper over the maintained MQTT + retry + socket composition.',
+            defaultFolder: 'Bundle/C++/Communication/Stacks/MQTTAuto',
+            entries: ['CppBundle/Communication/Stacks/MQTTAuto=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Ready-to-use communication stacks',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create all maintained high-level C++ communication stacks.',
+            detail: 'SCPI over TCP/VISA, Modbus RTU over RS-485 and MQTT automatic reconnect.',
+            defaultFolder: 'Bundle/C++/Communication/Stacks',
+            entries: ['CppBundle/Communication/Stacks=>.'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Communication protocol stack',
+            group: 'C++ bundles',
+            category: 'Communication',
+            description: 'Create Framing, SCPI and Modbus C++/C modules.',
+            detail: 'C++17 framing, SCPI, Modbus, retry, HTTP, MQTT and WebSocket layer paired with the maintained transport backends.',
+            defaultFolder: 'Bundle/C++/Communication/Protocols',
+            entries: ['CppBundle/Communication/Protocols=>.']
         },
         {
             label: 'Full communication stack',
             group: 'C++ bundles',
-            description: 'Copy Communication/* modules.',
-            detail: 'UART, Bluetooth, Wi-Fi, Ethernet, CAN, I2C, SPI, IPC, CommsManager and listen service.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['Communication'],
-            requiredWindowsLibraries: ['ws2_32']
+            category: 'Communication',
+            description: 'Create the complete maintained C++17 communication stack.',
+            detail: 'RAII wrappers/backends for UART, RS-485, LIN, IPC, TCP/UDP, Wi-Fi, Bluetooth RFCOMM, USB HID, generic USB, BLE GATT, CAN, I2C, SPI, VISA, TLS plus protocols and composed high-level stacks.',
+            defaultFolder: 'Bundle/C++/Communication',
+            entries: ['CppBundle/Communication=>.'],
+            requiredWindowsLibraries: ['ws2_32', 'hid', 'setupapi', 'BluetoothApis']
         },
         {
             label: 'Python execution bridge',
             group: 'C++ bundles',
-            description: 'Copy only the Python execution bridge.',
-            detail: 'C++ bridge files only: launch a Python process and exchange lines/JSON through pipes.',
-            defaultFolder: 'Bundle/C++/QPM_Utility',
-            entries: ['external/pythonExec']
+            description: 'Create the maintained Python process bridge with a C ABI usable from C++.',
+            detail: 'Self-contained generated bridge for launching Python, exchanging stdin/stdout and keeping a persistent worker session.',
+            defaultFolder: 'Bundle/C++/PythonExec',
+            generator: 'c-python-bridge',
+            entries: []
         },
         {
             label: 'Lua execution bridge',
@@ -11100,14 +11728,44 @@ function getBuiltInMyUtilModules() {
         {
             label: 'Web UI backend server',
             group: 'C++ bundles',
-            description: 'Copy only webui.cpp and webui.h.',
-            detail: 'C++ HTTP/Web UI backend source only. Static HTML/JS/CSS assets are available from Scripts > Minimal Web UI frontend or Scripts > Embedded demo Web UI frontend.',
+            description: 'Create the maintained HTTP/Web UI backend with a C ABI usable from C++.',
+            detail: 'Self-contained backend for static files plus /api/state and /api/action. Pair it with the Scripts > Web UI frontend bundle.',
             defaultFolder: 'Bundle/C++/WebUI',
-            entries: ['webui/webui.cpp=>webui.cpp', 'webui/webui.h=>webui.h'],
+            generator: 'c-webui-server',
+            entries: [],
             requiredWindowsLibraries: ['ws2_32']
         },
         {
-            label: 'Complete bundle',
+            label: 'QPM_Utility error management (legacy)',
+            category: 'Legacy & compatibility',
+            group: 'C++ bundles',
+            description: 'Copy errorManagement.cpp/.h plus required core utility files.',
+            detail: 'check_negerror, check_zeroerror, set_error macros and a runtime utility.ini configuration file.',
+            defaultFolder: 'Bundle/C++/QPM_Utility',
+            entries: ['qpm_utility.cpp', 'qpm_utility.h', 'utility.ini', 'ErrorManagement/errorManagement.cpp', 'ErrorManagement/errorManagement.h']
+        },
+        {
+            label: 'QPM_Utility communication classes (legacy)',
+            category: 'Legacy & compatibility',
+            group: 'C++ bundles',
+            description: 'Copy Communication/* modules.',
+            detail: 'UART, Bluetooth, Wi-Fi, Ethernet, CAN, I2C, SPI, IPC, CommsManager and listen service.',
+            defaultFolder: 'Bundle/C++/QPM_Utility',
+            entries: ['Communication'],
+            requiredWindowsLibraries: ['ws2_32']
+        },
+        {
+            label: 'Python execution bridge (QPM_Utility classes)',
+            category: 'Interoperability & UI',
+            group: 'C++ bundles',
+            description: 'Copy only the Python execution bridge.',
+            detail: 'C++ bridge files only: launch a Python process and exchange lines/JSON through pipes.',
+            defaultFolder: 'Bundle/C++/QPM_Utility',
+            entries: ['external/pythonExec']
+        },
+        {
+            label: 'Complete QPM_Utility bundle (legacy)',
+            category: 'Legacy & compatibility',
             group: 'C++ bundles',
             description: 'Copy the curated QPM_Utility C++ modules.',
             detail: 'QPM_Utility, error management, communication stack, Python bridge and Web UI backend. Demo/static frontend files and OpenCV realtime demo are not included.',
@@ -11134,14 +11792,6 @@ function getBuiltInMyUtilModules() {
             entries: []
         },
         {
-            label: 'Robot demo Python scripts',
-            group: 'Script bundles',
-            description: 'Copy the original project-specific Python demo scripts.',
-            detail: 'Robot/Raspberry Pi/ESP32/LiDAR/camera scripts kept separate from the generic worker protocol starter.',
-            defaultFolder: 'Bundle/Scripts/RobotDemoPython',
-            entries: ['external/pythonScript']
-        },
-        {
             label: 'Minimal Web UI frontend',
             group: 'Script bundles',
             description: 'Create a generic HTML/JS/CSS frontend.',
@@ -11149,6 +11799,14 @@ function getBuiltInMyUtilModules() {
             defaultFolder: 'Bundle/Scripts/WebUI/MinimalFrontend',
             generator: 'script-minimal-webui',
             entries: []
+        },
+        {
+            label: 'Robot demo Python scripts',
+            group: 'Script bundles',
+            description: 'Copy the original project-specific Python demo scripts.',
+            detail: 'Robot/Raspberry Pi/ESP32/LiDAR/camera scripts kept separate from the generic worker protocol starter.',
+            defaultFolder: 'Bundle/Scripts/RobotDemoPython',
+            entries: ['external/pythonScript']
         },
         {
             label: 'Embedded demo Web UI frontend',
@@ -11569,6 +12227,9 @@ class QpmTemplateService {
             case 'dll': return this.generateDll(projectDirectory);
             case 'error-module': return this.generateErrorModule(projectDirectory);
             case 'error-ini': return this.generateSingleTextFile(projectDirectory, '.ini', 'error', ERROR_INI_TEMPLATE, 'Error logging configuration');
+            case 'c-bundles': return this.generateBundledMyUtilModule(projectDirectory, 'C bundles');
+            case 'cpp-bundles': return this.generateBundledMyUtilModule(projectDirectory, 'C++ bundles');
+            case 'script-bundles': return this.generateBundledMyUtilModule(projectDirectory, 'Script bundles');
             case 'my-util-module': return this.generateBundledMyUtilModule(projectDirectory);
             case 'python-source': return this.generateSingleTextFile(projectDirectory, '.py', 'script', `#!/usr/bin/env python3\n\n\ndef main():\n    pass\n\n\nif __name__ == "__main__":\n    main()\n`, 'Python script file');
             case 'text': return this.generateSingleTextFile(projectDirectory, '.txt', 'new_file', '', 'Text file');
@@ -11625,16 +12286,19 @@ class QpmTemplateService {
                 { label: 'Header file', description: 'Create a guarded header usable from C or C++', value: 'c-header' },
                 { label: 'Windows DLL starter (.c + .h)', description: 'Create a minimal DllMain and export header', value: 'dll' },
                 { label: 'Error/logging module (.c + .h + .ini)', description: 'Create configurable C error handling with INI-controlled logging', value: 'error-module' },
-                { label: 'Error/logging configuration (.ini)', description: 'Create only the runtime error logging configuration file', value: 'error-ini' }
+                { label: 'Error/logging configuration (.ini)', description: 'Create only the runtime error logging configuration file', value: 'error-ini' },
+                { label: '$(package) Bundles...', description: 'INI, system, data, logging, communication, protocols, Python/Lua and Web UI bundles', value: 'c-bundles' }
             ],
             'group-cpp': [
                 { label: 'Source file', description: 'Create an empty C++ source or a generic C++ main() template', value: 'cpp-source' },
                 { label: 'Class (.cpp + .hpp)', description: 'Create a minimal C++ class declaration and implementation', value: 'cpp-class' },
-                { label: 'Header file', description: 'Create a guarded header usable from C or C++', value: 'c-header' }
+                { label: 'Header file', description: 'Create a guarded header usable from C or C++', value: 'c-header' },
+                { label: '$(package) Bundles...', description: 'C++17 utilities, communication, protocols, bridges and reusable modules', value: 'cpp-bundles' }
             ],
             'group-scripts': [
                 { label: 'Python script file', description: 'Create an empty .py script file', value: 'python-source' },
-                { label: 'Text file', description: 'Create an empty .txt file', value: 'text' }
+                { label: 'Text file', description: 'Create an empty .txt file', value: 'text' },
+                { label: '$(package) Bundles...', description: 'Python/Lua workers and Web UI frontend bundles', value: 'script-bundles' }
             ]
         };
         const selected = await vscode.window.showQuickPick(choicesByGroup[group.value] ?? [], {
@@ -12568,22 +13232,66 @@ TestCase
             { absolutePath: iniPath, contents: toCrlf(renderTemplateText(ERROR_INI_TEMPLATE, variables)) }
         ], sourcePath);
     }
-    async generateBundledMyUtilModule(projectDirectory) {
-        const modules = getBuiltInMyUtilModules();
-        const categories = [
+    isBundledModuleAvailable(module) {
+        if (module.generator) {
+            return true;
+        }
+        if (!module.entries.length) {
+            return false;
+        }
+        const bundleRoot = path.join(this.context.extensionPath, BUNDLED_QPM_UTILITY_ROOT);
+        return module.entries.every((entry) => {
+            const rawSourceEntry = entry.split('=>')[0].trim();
+            const source = path.resolve(bundleRoot, rawSourceEntry);
+            return source.startsWith(path.resolve(bundleRoot)) && fs.existsSync(source);
+        });
+    }
+    async generateBundledMyUtilModule(projectDirectory, requestedGroup) {
+        const allModules = getBuiltInMyUtilModules();
+        const unavailableModules = allModules.filter((module) => !this.isBundledModuleAvailable(module));
+        const modules = allModules.filter((module) => this.isBundledModuleAvailable(module));
+        if (unavailableModules.length > 0) {
+            this.output.appendLine(`[Qt/C++ Templates] ${unavailableModules.length} legacy bundle choice(s) hidden because their bundled source files are not present in this build: ${unavailableModules.map((module) => module.label).join(', ')}`);
+        }
+        const languageGroups = [
             { label: 'C', description: 'Generated C utility bundles', group: 'C bundles' },
-            { label: 'C++', description: 'QPM_Utility and generated C++ bundles', group: 'C++ bundles' },
+            { label: 'C++', description: 'C++17 RAII bundles, maintained C backends, bridges and the legacy QPM_Utility classes', group: 'C++ bundles' },
             { label: 'Scripts', description: 'Companion scripts and non-compiled helpers', group: 'Script bundles' }
         ].filter((category) => modules.some((module) => module.group === category.group));
-        const selectedCategory = await vscode.window.showQuickPick(categories, {
-            title: 'Module bundles',
-            placeHolder: 'Select a bundle folder'
-        });
-        if (!selectedCategory) {
-            return undefined;
+        let selectedGroup = requestedGroup;
+        let selectedGroupLabel = languageGroups.find((entry) => entry.group === requestedGroup)?.label;
+        if (!selectedGroup) {
+            const selectedLanguage = await vscode.window.showQuickPick(languageGroups, {
+                title: 'Reusable bundles',
+                placeHolder: 'Select the bundle language'
+            });
+            if (!selectedLanguage) {
+                return undefined;
+            }
+            selectedGroup = selectedLanguage.group;
+            selectedGroupLabel = selectedLanguage.label;
         }
-        const quickPickItems = modules
-            .filter((module) => module.group === selectedCategory.group)
+        const languageModules = modules.filter((module) => module.group === selectedGroup);
+        const bundleCategories = Array.from(new Set(languageModules.map((module) => getBundledModuleCategory(module))));
+        let selectedCategory;
+        if (bundleCategories.length > 1) {
+            const categoryChoice = await vscode.window.showQuickPick(bundleCategories.map((category) => ({
+                label: category,
+                description: `${languageModules.filter((module) => getBundledModuleCategory(module) === category).length} bundle(s)`,
+                category
+            })), {
+                title: `Create > ${selectedGroupLabel ?? selectedGroup} > Bundles`,
+                placeHolder: 'Select a bundle category'
+            });
+            if (!categoryChoice) {
+                return undefined;
+            }
+            selectedCategory = categoryChoice.category;
+        }
+        const filteredModules = selectedCategory
+            ? languageModules.filter((module) => getBundledModuleCategory(module) === selectedCategory)
+            : languageModules;
+        const quickPickItems = filteredModules
             .map((module) => ({
             label: module.label,
             description: module.description,
@@ -12591,7 +13299,7 @@ TestCase
             module
         }));
         const selected = await vscode.window.showQuickPick(quickPickItems, {
-            title: `Module bundles > ${selectedCategory.label}`,
+            title: `Create > ${selectedGroupLabel ?? selectedGroup} > Bundles${selectedCategory ? ` > ${selectedCategory}` : ''}`,
             matchOnDescription: true,
             matchOnDetail: true
         });
@@ -12623,7 +13331,7 @@ TestCase
         if (selected.module.generator) {
             const result = await this.generateBuiltInModuleBundle(projectDirectory, normalizedFolder, selected.module);
             if (result) {
-                await this.applyBundledModuleProjectHints(selected.module);
+                await this.applyBundledModuleProjectHints(selected.module, projectDirectory);
             }
             return result;
         }
@@ -12636,12 +13344,27 @@ TestCase
         const primary = files.find((file) => /\.(?:c|cc|cpp|cxx)$/i.test(file.absolutePath))?.absolutePath ?? files[0].absolutePath;
         const result = await this.writeFiles(files, primary);
         if (result) {
-            await this.applyBundledModuleProjectHints(selected.module);
+            await this.applyBundledModuleProjectHints(selected.module, projectDirectory);
         }
         return result;
     }
-    async applyBundledModuleProjectHints(module) {
+    async applyBundledModuleProjectHints(module, projectDirectory) {
         if (process.platform !== 'win32' || !module.requiredWindowsLibraries?.length) {
+            return;
+        }
+        // Native Qt projects keep their link libraries in the .qtproject.json manifest.
+        const manifests = projectDirectory && fs.existsSync(projectDirectory)
+            ? fs.readdirSync(projectDirectory).filter((name) => name.toLowerCase().endsWith('.qtproject.json')).map((name) => path.join(projectDirectory, name))
+            : [];
+        if (manifests.length === 1) {
+            const manifest = (0, qtProjectManifest_1.readQtProjectManifest)(manifests[0]);
+            const present = new Set(manifest.libraries.map((entry) => String(entry).replace(/^-l/, '').trim().toLowerCase()).filter(Boolean));
+            const additions = module.requiredWindowsLibraries.filter((entry) => !present.has(entry.toLowerCase()));
+            if (!additions.length)
+                return;
+            manifest.libraries = [...manifest.libraries, ...additions];
+            (0, qtProjectManifest_1.writeQtProjectManifest)(manifests[0], manifest);
+            this.output.appendLine(`[Qt/C++ Templates] Added Windows link libraries for ${module.label} to ${path.basename(manifests[0])}: ${additions.join(', ')}`);
             return;
         }
         const configuration = vscode.workspace.getConfiguration('qpm');

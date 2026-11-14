@@ -92,6 +92,40 @@ export class QpmQtPlatformService implements vscode.Disposable {
     }
   }
 
+  /**
+   * Points a Remote Linux platform profile of the active project at an OpenSSH alias
+   * (Network & Wireless › SSH Devices). Reuses the active profile when it is Remote Linux,
+   * otherwise the first Remote Linux profile, otherwise creates one; the profile becomes active.
+   */
+  async useSshAliasAsRemoteTarget(alias: { host: string; user?: string; port?: number }): Promise<{ project: string; profile: string } | undefined> {
+    const context = this.readContext();
+    if (!context) return undefined;
+    const { manifestPath, manifest } = context;
+    const active = getActiveQtPlatformProfile(manifest);
+    let profile = active.type === 'remote-linux' ? active : manifest.profiles.platforms.find((entry) => entry.type === 'remote-linux');
+    if (!profile) {
+      const name = `Remote Linux (${alias.host})`;
+      profile = {
+        ...JSON.parse(JSON.stringify(active)) as QtPlatformProfile,
+        id: uniqueProfileId(name, manifest.profiles.platforms.map((entry) => entry.id)),
+        name,
+        type: 'remote-linux',
+        buildLocation: 'local'
+      };
+      manifest.profiles.platforms.push(profile);
+    }
+    // Keep the name of a profile created by this action in step with its host.
+    if (/^Remote Linux \(.*\)$/.test(profile.name)) profile.name = `Remote Linux (${alias.host})`;
+    profile.sshHost = alias.host;
+    if (alias.user) profile.sshUser = alias.user;
+    if (alias.port && Number.isFinite(alias.port) && alias.port > 0) profile.sshPort = alias.port;
+    manifest.profiles.active.platformProfileId = profile.id;
+    writeQtProjectManifest(manifestPath, manifest);
+    this.workspaces.refresh();
+    this.changed.fire();
+    return { project: manifest.name, profile: profile.name };
+  }
+
   async selectActivePlatform(manifestPath?: string, manifest?: QtProjectManifest): Promise<QtPlatformProfile | undefined> {
     const context = manifestPath && manifest ? { manifestPath, manifest } : this.readContext();
     if (!context) return undefined;

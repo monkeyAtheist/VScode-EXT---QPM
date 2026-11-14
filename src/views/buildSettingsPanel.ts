@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { hardenHtml } from './webviewKit';
 import { QpmNativeTargetSettings, QpmParser } from '../model/qpmParser';
 import { QpmBuildMode, QpmWorkspaceProjectRef } from '../model/types';
 import { QpmProjectBuildSettings, QpmProjectSettingsService } from '../services/qpmProjectSettingsService';
@@ -111,13 +112,13 @@ export class BuildSettingsPanel implements vscode.Disposable {
       this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
     }
     this.panel.title = `Compatibility C/C++ Build Settings — ${ref.name}`;
-    this.panel.webview.html = this.render(ref);
+    this.panel.webview.html = hardenHtml(this.render(ref), this.panel.webview, { harmonize: true });
     this.panel.reveal(vscode.ViewColumn.Active);
   }
 
   update(): void {
     if (this.panel && this.projectRef?.exists) {
-      this.panel.webview.html = this.render(this.projectRef);
+      this.panel.webview.html = hardenHtml(this.render(this.projectRef), this.panel.webview, { harmonize: true });
     }
   }
 

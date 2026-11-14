@@ -77,13 +77,15 @@ export class QuickActionsView implements vscode.TreeDataProvider<QuickActionNode
         info('No workspace loaded', 'Open or create a Qt workspace to display the active target summary.', 'info'),
         action('Open workspace or project…', 'qpm.openWorkspace', 'folder-opened'),
         action('Create native Qt project…', 'qpm.createQtProject', 'new-folder'),
-        action('Create workspace and native Qt project…', 'qpm.createWorkspaceProject', 'root-folder')
+        action('Create workspace and native Qt project…', 'qpm.createWorkspaceProject', 'root-folder'),
+        ...benchTools()
       ];
     }
     if (!ref?.exists) {
       return [
         info('No active project', 'Select an existing project in the workspace tree.', 'info'),
-        action('Open workspace or project…', 'qpm.openWorkspace', 'folder-opened')
+        action('Open workspace or project…', 'qpm.openWorkspace', 'folder-opened'),
+        ...benchTools()
       ];
     }
 
@@ -111,9 +113,11 @@ export class QuickActionsView implements vscode.TreeDataProvider<QuickActionNode
       ] : []),
       action('Open settings in safe mode…', 'qpm.editBuildSettingsSafeMode', 'shield'),
       action('Enable automatic suggestions', 'qpm.enableAutomaticSuggestions', 'sparkle'),
-      action('Build & Debug', 'qpm.debugInQpm', 'debug-alt-small'),
+      action('Build & Debug', 'qpm.debugWithGdb', 'debug-alt'),
       action('Build & Run', 'qpm.run', 'play'),
-      action('Run without build', 'qpm.runWithoutBuild', 'run')
+      action('Run without build', 'qpm.runWithoutBuild', 'run'),
+      action('Select build configuration…', 'qpm.selectConfiguration', 'settings'),
+      ...benchTools()
     ];
   }
 
@@ -168,6 +172,16 @@ function info(label: string, description: string, icon: string): QuickActionNode
 
 function action(label: string, command: string, icon: string): QuickActionNode {
   return { label, icon, contextValue: 'qpmQuickActionCommand', command: { command, title: label } };
+}
+
+/** Project-independent bench tools (instruments, network, devices, SSH). */
+function benchTools(): QuickActionNode[] {
+  return [
+    action('Open Instrument Diagnostics…', 'qpm.openInstrumentDiagnostics', 'radio-tower'),
+    action('Open Network & Wireless Diagnostics…', 'qpm.openNetworkDiagnostics', 'globe'),
+    action('Open QPM Device Manager…', 'qpm.openDeviceManager', 'device-desktop'),
+    action('OpenSSH Device Manager…', 'qpm.openSshDeviceManager', 'remote-explorer')
+  ];
 }
 
 function configuredLabel(value: string): string { return value.trim() ? 'Configured' : 'Empty'; }

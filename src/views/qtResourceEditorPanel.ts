@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { hardenHtml } from './webviewKit';
 
 export interface QtResourceFileEntry {
   id: string;
@@ -216,7 +217,7 @@ export class QtResourceEditorPanel implements vscode.Disposable {
     const state = JSON.stringify(this.document).replace(/</g, '\\u003c');
     const dirty = JSON.stringify(this.document) !== this.savedSnapshot;
     const status = escapeHtml(this.statusMessage);
-    webview.html = `<!DOCTYPE html>
+    webview.html = hardenHtml(`<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <title>Qt Resource Editor</title>
@@ -239,7 +240,7 @@ const prefix=box.querySelector('.prefix');prefix.value=group.prefix;prefix.oninp
 const tbody=box.querySelector('tbody');if(!group.files.length){const emptyRow=document.createElement('tr');emptyRow.className='emptyRow';emptyRow.innerHTML='<td colspan="5" class="empty">No file in this prefix. Use “Add files”.</td>';tbody.appendChild(emptyRow);}group.files.forEach((file,fi)=>{const tr=document.createElement('tr');tr.dataset.fileIndex=String(fi);tr.innerHTML='<td><input class="source" type="text"></td><td><input class="alias" type="text" placeholder="optional"></td><td><input class="emptyFlag" type="checkbox"></td><td class="runtime"></td><td><button class="open secondary">Open</button> <button class="remove danger">Remove</button></td>';const src=tr.querySelector('.source');src.value=file.source;src.oninput=e=>{file.source=e.target.value;tr.querySelector('.runtime').textContent=runtimePath(group,file)};const alias=tr.querySelector('.alias');alias.value=file.alias;alias.oninput=e=>{file.alias=e.target.value;tr.querySelector('.runtime').textContent=runtimePath(group,file)};const empty=tr.querySelector('.emptyFlag');empty.checked=file.empty;empty.onchange=e=>file.empty=e.target.checked;tr.querySelector('.runtime').textContent=runtimePath(group,file);tr.querySelector('.open').onclick=()=>send('openFile',{source:file.source});tr.querySelector('.remove').onclick=()=>{group.files.splice(fi,1);render();};tbody.appendChild(tr)});groups.appendChild(box)});}
 function renderRuntime(box,group){box.querySelectorAll('tbody tr[data-file-index]').forEach(tr=>{const i=Number(tr.dataset.fileIndex);const runtime=tr.querySelector('.runtime');if(runtime&&group.files[i])runtime.textContent=runtimePath(group,group.files[i]);});}
 document.getElementById('addGroup').onclick=()=>{state.groups.push({id:cryptoId(),prefix:'/',language:'',files:[]});render();};document.getElementById('addFilesTop').onclick=()=>send('addFiles',{groupId:state.groups[0]?.id});document.getElementById('save').onclick=()=>send('save');document.getElementById('validate').onclick=()=>send('validate');document.getElementById('openXml').onclick=()=>send('openXml');document.getElementById('revert').onclick=()=>send('revert');function cryptoId(){return 'web-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}render();
-</script></body></html>`;
+</script></body></html>`, webview, { harmonize: true });
   }
 }
 

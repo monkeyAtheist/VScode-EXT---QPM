@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.QpmColorValueService = void 0;
 exports.formatColorValueForTest = formatColorValueForTest;
 const vscode = __importStar(require("vscode"));
+const webviewKit_1 = require("../views/webviewKit");
 class QpmColorValueService {
     async openColorValuePicker() {
         const editor = vscode.window.activeTextEditor;
@@ -49,7 +50,7 @@ class QpmColorValueService {
             : '#000000';
         const initialFormat = inferInitialFormat(selectedText);
         const panel = vscode.window.createWebviewPanel('qpmColorValuePicker', 'QPM: Insert color value', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
-        panel.webview.html = buildColorValuePickerHtml(initialHex, initialFormat, 255);
+        panel.webview.html = (0, webviewKit_1.hardenHtml)(buildColorValuePickerHtml(initialHex, initialFormat, 255), panel.webview, { harmonize: true });
         panel.webview.onDidReceiveMessage(async (message) => {
             if (!message || typeof message !== 'object') {
                 return;

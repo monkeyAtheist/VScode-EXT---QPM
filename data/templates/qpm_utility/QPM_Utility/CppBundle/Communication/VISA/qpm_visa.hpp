@@ -1,0 +1,9 @@
+#pragma once
+#include "qpm_visa.h"
+#include <chrono>
+#include <string>
+#include <vector>
+namespace qpm {
+class VisaRuntime { public: VisaRuntime(){QpmVisa_RuntimeInit(&r_);} ~VisaRuntime(){QpmVisa_Unload(&r_);} VisaRuntime(const VisaRuntime&)=delete; VisaRuntime& operator=(const VisaRuntime&)=delete; bool load(){return QpmVisa_Load(&r_)==0;} bool load(const std::string&p){return QpmVisa_LoadLibrary(&r_,p.c_str())==0;} bool loaded()const{return QpmVisa_IsLoaded(&r_)!=0;} std::vector<std::string> find(const std::string&expr="?*INSTR",std::size_t max=128){std::vector<QpmVisaResource> raw(max);size_t n=0;(void)QpmVisa_FindResources(&r_,expr.c_str(),raw.data(),raw.size(),&n);std::vector<std::string> out;for(size_t i=0;i<n;i++)out.emplace_back(raw[i].name);return out;} QpmVisaRuntime* native(){return &r_;} private:QpmVisaRuntime r_{};};
+class VisaSession { public: VisaSession(){QpmVisa_SessionInit(&s_);} ~VisaSession(){QpmVisa_Close(&s_);} VisaSession(const VisaSession&)=delete; VisaSession& operator=(const VisaSession&)=delete; bool open(VisaRuntime&r,const std::string&resource,std::chrono::milliseconds t=std::chrono::milliseconds{3000}){return QpmVisa_Open(r.native(),&s_,resource.c_str(),(int)t.count())==0;} void close(){QpmVisa_Close(&s_);} int write(const void*d,std::size_t n){return QpmVisa_Write(&s_,d,n);} int write(const std::string&t){return write(t.data(),t.size());} int read(void*d,std::size_t n,std::chrono::milliseconds t=std::chrono::milliseconds{1000}){return QpmVisa_Read(&s_,d,n,(int)t.count());} std::string readText(std::size_t max=4096,std::chrono::milliseconds t=std::chrono::milliseconds{1000}){std::vector<char>b(max+1);int n=read(b.data(),max,t);return n>0?std::string(b.data(),(size_t)n):std::string{};} QpmVisaSession* native(){return &s_;} private:QpmVisaSession s_{};};
+}

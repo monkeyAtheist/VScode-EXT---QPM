@@ -37,7 +37,6 @@ import { QpmQtKitsProvider } from './providers/qpmQtKitsProvider';
 import { QpmQtDebugService } from './services/qpmQtDebugService';
 import { QpmQtDebugProvider } from './providers/qpmQtDebugProvider';
 import { QpmQtPlatformService } from './services/qpmQtPlatformService';
-import { openSshDeviceManager } from './services/qpmSshDeviceManager';
 import { QpmQtPlatformProvider } from './providers/qpmQtPlatformProvider';
 import { QpmQtPackagingService } from './services/qpmQtPackagingService';
 import { QpmQtPackagingProvider } from './providers/qpmQtPackagingProvider';
@@ -58,12 +57,22 @@ import { QpmQtPythonProvider } from './providers/qpmQtPythonProvider';
 import { QpmQtDependencyService } from './services/qpmQtDependencyService';
 import { QpmInstrumentProfileService } from './services/qpmInstrumentProfileService';
 import { QpmQtDependencyProvider } from './providers/qpmQtDependencyProvider';
-import { getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, readQtProjectManifest } from './model/qtProjectManifest';
+import { getActiveQtPlatformProfile, getQtInstallationPreference, isQtProjectManifestPath, isQtPythonProject, readQtProjectManifest } from './model/qtProjectManifest';
+import { initWebviewKit } from './views/webviewKit';
+import { QpmInstrumentService } from './services/qpmInstrumentService';
+import { InstrumentDiagnosticsPanel } from './views/instrumentDiagnosticsPanel';
+import { QpmNetworkDiagnosticsService } from './services/qpmNetworkDiagnosticsService';
+import { NetworkDiagnosticsPanel } from './views/networkDiagnosticsPanel';
+import { QpmDeviceEndpoint, QpmDeviceRegistry } from './services/qpmDeviceRegistry';
+import { disposeQpmRunSessions, qpmRunSessions } from './services/qpmRunSessions';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  initWebviewKit(context);
   const output = vscode.window.createOutputChannel('Qt Project Manager');
   const programOutput = vscode.window.createOutputChannel('Qt Project Manager - Program Output');
   const buildTrace = vscode.window.createOutputChannel('Qt Project Manager - Build Trace');
+  qpmRunSessions(output);
+  context.subscriptions.push({ dispose: disposeQpmRunSessions });
   await migrateLegacyConfiguration(output);
   const parser = new QpmParser();
   const installations = new QpmInstallationService(output);
@@ -94,6 +103,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const profiling = new QpmQtProfilingService(workspaces, builds, qtInstallations, output);
   const quality = new QpmQtQualityService(workspaces, qtInstallations, output);
   const testing = new QpmQtTestingService(workspaces, builds, qtInstallations, quality, output);
+  const instruments = new QpmInstrumentService(output);
+  const networkDiagnosticsService = new QpmNetworkDiagnosticsService(output);
+  const deviceRegistry = new QpmDeviceRegistry(context);
+  const instrumentDiagnostics = new InstrumentDiagnosticsPanel(context, instruments, output, deviceRegistry);
+  const networkDiagnostics = new NetworkDiagnosticsPanel(context, networkDiagnosticsService, instruments, output, platforms, deviceRegistry);
   const treeProvider = new QpmTreeProvider(workspaces);
   const treeView = vscode.window.createTreeView('qpm.workspaceExplorer', { treeDataProvider: treeProvider, dragAndDropController: treeProvider, showCollapseAll: true, canSelectMany: true });
   const symbols = new QpmSymbolService(context.extensionPath, workspaces);
@@ -149,24 +163,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     [{ language: 'c', scheme: 'file' }, { language: 'cpp', scheme: 'file' }],
     completionProvider
   );
-  const home = new HomePanel(context, workspaces, builds, installations);
+  const home = new HomePanel(context, workspaces, builds, installations, qtInstallations, qtPython);
   const buildSettings = new BuildSettingsPanel(workspaces, parser, projectSettings);
   const qtProjectSettings = new QtProjectSettingsPanel(workspaces, qtInstallations, projectSettings, builds);
   const quickActions = new QuickActionsView(workspaces, builds, projectSettings);
   const quickActionsRegistration = vscode.window.registerTreeDataProvider('qpm.quickActions', quickActions);
 
-  const statusBarItems = [
-    createStatusBarAction('$(versions)', 'Select the active Qt installation', 'qpm.selectQtInstallation', 100),
-    createStatusBarAction('$(home)', 'Qt Project Manager home', 'qpm.openHome', 99),
-    createStatusBarAction('$(folder-opened)', 'Open a Qt workspace or project', 'qpm.openWorkspace', 98),
-    createStatusBarAction('$(tools)', 'Build / rebuild / clean the active Qt project', 'qpm.chooseBuildAction', 97),
-    createStatusBarAction('$(play)', 'Build and run the active Qt target', 'qpm.run', 96),
-    createStatusBarAction('$(list-selection)', 'Advanced Qt run options', 'qpm.chooseRunAction', 95),
-    createStatusBarAction('$(debug-alt)', 'Run the active Qt debug profile without rebuilding', 'qpm.startQtDebugProfileWithoutBuild', 94.7),
-    createStatusBarAction('$(debug-alt-small)', 'Build and debug with the active Qt kit debugger', 'qpm.debugWithGdb', 94.5),
-    createStatusBarAction('D32', 'Select the Qt build mode', 'qpm.selectBuildMode', 94),
-    createStatusBarAction('EXE', 'Select the Qt target type', 'qpm.selectTargetType', 93)
-  ];
+  // Status bar: Qt / PySide6 version, one configuration item (project · mode · target · platform),
+  // Build / Run / Debug and the build-problem counter. Everything stays hidden until a workspace is loaded.
+  const qtStatusItem = createStatusBarAction('$(versions) Qt', 'Select the active Qt installation', 'qpm.selectQtInstallation', 100);
+  const configStatusItem = createStatusBarAction('$(project) QPM', 'QPM configuration — click to change the build mode, target type or platform', 'qpm.selectConfiguration', 99);
+  const buildStatusItem = createStatusBarAction('$(tools)', 'Build / rebuild / clean the active Qt project (Ctrl+F7 builds)', 'qpm.chooseBuildAction', 98);
+  const runStatusItem = createStatusBarAction('$(play)', 'Build and run the active Qt target (Ctrl+F5)', 'qpm.run', 97);
+  const debugStatusItem = createStatusBarAction('$(debug-alt)', 'Build and debug the active Qt target (F5)', 'qpm.debugWithGdb', 96);
+  const problemsStatusItem = createStatusBarAction('', 'QPM build problems — click to open the Problems view', 'workbench.actions.view.problems', 95);
+  const statusBarItems = [qtStatusItem, configStatusItem, buildStatusItem, runStatusItem, debugStatusItem, problemsStatusItem];
+  const BUILD_MODE_SHORT: Record<string, string> = { debug: 'D32', release: 'R32', debug64: 'D64', release64: 'R64' };
+  const TARGET_SHORT: Record<string, string> = { 'Executable': 'EXE', 'Dynamic Link Library': 'DLL', 'Static Library': 'LIB' };
+  const PLATFORM_SHORT: Record<string, string> = { 'linux-local': 'Linux', 'remote-linux': 'Remote Linux', docker: 'Docker', webassembly: 'WASM', android: 'Android', macos: 'macOS', 'ios-simulator': 'iOS Sim', 'ios-device': 'iOS' };
+
+  const activePlatformProfile = () => {
+    const ref = workspaces.activeProjectRef;
+    if (!ref?.exists || !isQtProjectManifestPath(ref.absolutePath)) return undefined;
+    try { return getActiveQtPlatformProfile(readQtProjectManifest(ref.absolutePath)); } catch { return undefined; }
+  };
 
   const updateToolbarContexts = (): void => {
     const activeRef = workspaces.activeProjectRef;
@@ -177,6 +197,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (nativeQtProjectActive && activeRef?.exists) {
       try { qtPythonProjectActive = isQtPythonProject(readQtProjectManifest(activeRef.absolutePath)); } catch { qtPythonProjectActive = false; }
     }
+    void vscode.commands.executeCommand('setContext', 'qpm.workspaceLoaded', Boolean(workspaces.currentWorkspace));
     void vscode.commands.executeCommand('setContext', 'qpm.buildMode', builds.buildMode);
     void vscode.commands.executeCommand('setContext', 'qpm.targetType', targetKey);
     void vscode.commands.executeCommand('setContext', 'qpm.nativeQtProjectActive', nativeQtProjectActive);
@@ -184,11 +205,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.commands.executeCommand('setContext', 'qpm.qtCppProjectActive', nativeQtProjectActive && !qtPythonProjectActive);
   };
 
-  const updateStatusBar = (): void => {
-    const targetType = workspaces.activeProject?.targetType;
-    const modeText = builds.buildMode === 'debug64' ? 'D64' : builds.buildMode === 'release64' ? 'R64' : builds.buildMode === 'release' ? 'REL' : 'DBG';
-    const targetText = targetType === 'Dynamic Link Library' ? 'DLL' : targetType === 'Static Library' ? 'LIB' : targetType === 'Executable' ? 'EXE' : '---';
+  const updateProblemsStatus = (): void => {
+    let errors = 0;
+    let warnings = 0;
+    builds.diagnostics.forEach((_uri, diagnostics) => {
+      for (const diagnostic of diagnostics) {
+        if (diagnostic.severity === vscode.DiagnosticSeverity.Error) errors++;
+        else if (diagnostic.severity === vscode.DiagnosticSeverity.Warning) warnings++;
+      }
+    });
+    if (!workspaces.currentWorkspace || (errors === 0 && warnings === 0)) { problemsStatusItem.hide(); return; }
+    problemsStatusItem.text = `$(error) ${errors}  $(warning) ${warnings}`;
+    problemsStatusItem.backgroundColor = errors > 0 ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+    problemsStatusItem.show();
+  };
+
+  const configurationSummary = (): string => {
     const activeRef = workspaces.activeProjectRef;
+    const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
+    const parts = [activeRef?.name ?? 'No project'];
+    if (isQtPythonActive()) parts.push('PySide6');
+    else {
+      parts.push(BUILD_MODE_SHORT[builds.buildMode] ?? builds.buildMode);
+      if (targetType) parts.push(TARGET_SHORT[targetType] ?? targetType);
+    }
+    const platform = activePlatformProfile();
+    if (platform && platform.type !== 'desktop') parts.push(PLATFORM_SHORT[platform.type] ?? platform.name);
+    return parts.join(' · ');
+  };
+
+  const updateStatusBar = (): void => {
+    const loaded = Boolean(workspaces.currentWorkspace);
+    const showActions = loaded && vscode.workspace.getConfiguration('qpm').get<boolean>('showPersistentStatusBarActions', true);
+    const activeRef = workspaces.activeProjectRef;
+    const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
     let qtInstallation = qtInstallations.getActive();
     if (activeRef?.exists && isQtProjectManifestPath(activeRef.absolutePath)) {
       try {
@@ -201,29 +251,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const pythonProject = isQtPythonActive();
     if (pythonProject) {
       const pythonStatus = qtPython.status;
-      statusBarItems[0].text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : '$(symbol-class) PySide6';
-      statusBarItems[0].tooltip = pythonStatus?.message ?? 'Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.';
-      statusBarItems[6].text = '$(debug-alt-small) Python Debug';
-      statusBarItems[6].tooltip = 'Build and debug the active PySide6 application with the VS Code Python debugger.';
-      statusBarItems[7].text = 'PY';
-      statusBarItems[7].tooltip = 'Qt for Python project. Build variants are managed by Python deployment tooling.';
-      statusBarItems[8].text = 'APP';
-      statusBarItems[8].tooltip = 'Qt for Python application target.';
+      qtStatusItem.text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : '$(symbol-class) PySide6';
+      qtStatusItem.tooltip = pythonStatus?.message ?? 'Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.';
+      qtStatusItem.command = 'qpm.python.selectInterpreter';
+      debugStatusItem.tooltip = 'Build and debug the active PySide6 application with the VS Code Python debugger (F5)';
     } else {
-      statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
-      statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : 'Select the Qt installation used by Qt Project Manager.';
-      statusBarItems[6].text = '$(debug-alt-small) Debug';
-      statusBarItems[6].tooltip = 'Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).';
-      statusBarItems[7].text = modeText;
-      statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
-      statusBarItems[8].text = targetText;
-      statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+      qtStatusItem.text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
+      qtStatusItem.tooltip = qtInstallation ? `${qtInstallation.label} — click to change the Qt installation` : 'Select the Qt installation used by Qt Project Manager.';
+      qtStatusItem.command = 'qpm.selectQtInstallation';
+      debugStatusItem.tooltip = 'Build and debug the active target with the debugger of the Qt kit — GDB, LLDB or Visual Studio (F5)';
     }
-    const show = vscode.workspace.getConfiguration('qpm').get<boolean>('showPersistentStatusBarActions', true);
-    for (const item of statusBarItems) {
-      if (show) item.show(); else item.hide();
-    }
+    configStatusItem.text = `$(project) ${configurationSummary()}`;
+    for (const item of [qtStatusItem, configStatusItem]) { if (loaded) item.show(); else item.hide(); }
+    for (const item of [buildStatusItem, runStatusItem]) { if (showActions) item.show(); else item.hide(); }
+    if (showActions && (pythonProject || targetType !== 'Static Library')) debugStatusItem.show(); else debugStatusItem.hide();
+    updateProblemsStatus();
     updateToolbarContexts();
+  };
+
+  const selectConfiguration = async (): Promise<void> => {
+    type ConfigItem = vscode.QuickPickItem & { apply?: () => unknown };
+    const activeRef = workspaces.activeProjectRef;
+    const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
+    const items: ConfigItem[] = [];
+    if (isQtPythonActive()) {
+      items.push({ label: 'Qt for Python', kind: vscode.QuickPickItemKind.Separator });
+      items.push({ label: '$(symbol-class) Select Python interpreter…', description: qtPython.status?.interpreter ?? '', apply: () => vscode.commands.executeCommand('qpm.python.selectInterpreter') });
+    } else {
+      const modes: Array<[string, string, string]> = [['debug', 'D32', 'Debug, 32-bit'], ['release', 'R32', 'Release, 32-bit'], ['debug64', 'D64', 'Debug, 64-bit'], ['release64', 'R64', 'Release, 64-bit']];
+      items.push({ label: 'Build mode', kind: vscode.QuickPickItemKind.Separator });
+      for (const [value, short, description] of modes) {
+        items.push({ label: `${value === builds.buildMode ? '$(check)' : '$(blank)'} ${short}`, description, apply: () => builds.setBuildMode(value as QpmBuildMode) });
+      }
+      if (activeRef?.exists) {
+        const targets: Array<['Executable' | 'Dynamic Link Library' | 'Static Library', string, string]> = [['Executable', 'EXE', 'Application (.exe)'], ['Dynamic Link Library', 'DLL', 'Shared library (.dll / .so + import library)'], ['Static Library', 'LIB', 'Static library (.lib / .a)']];
+        items.push({ label: `Target type — ${activeRef.name}`, kind: vscode.QuickPickItemKind.Separator });
+        for (const [value, short, description] of targets) {
+          items.push({ label: `${value === targetType ? '$(check)' : '$(blank)'} ${short}`, description, apply: () => workspaces.setTargetType(activeRef, value) });
+        }
+      }
+    }
+    items.push({ label: 'Qt', kind: vscode.QuickPickItemKind.Separator });
+    if (!isQtPythonActive()) items.push({ label: '$(versions) Select Qt installation…', description: qtStatusItem.text.replace(/^\$\([^)]*\)\s*/, ''), apply: () => vscode.commands.executeCommand('qpm.selectQtInstallation') });
+    const platform = activePlatformProfile();
+    if (platform) items.push({ label: '$(remote) Select platform…', description: platform.name, apply: () => vscode.commands.executeCommand('qpm.selectQtPlatform') });
+    items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: '$(settings-gear) Open project settings…', apply: () => vscode.commands.executeCommand('qpm.editBuildSettings') });
+    const picked = await vscode.window.showQuickPick(items, { title: 'QPM configuration', placeHolder: `Current: ${configurationSummary()}` });
+    if (picked?.apply) { await picked.apply(); updateStatusBar(); quickActions.update(); }
   };
 
   const register = (command: string, handler: (...args: any[]) => unknown): vscode.Disposable => vscode.commands.registerCommand(command, async (...args: any[]) => {
@@ -319,6 +394,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     projectHealthView,
     completionRegistration,
     ...statusBarItems,
+    instrumentDiagnostics,
+    networkDiagnostics,
+    deviceRegistry,
+    builds.onDidFinishBuild(() => updateStatusBar()),
+    vscode.languages.onDidChangeDiagnostics(() => updateProblemsStatus()),
     treeView.onDidChangeSelection((event) => {
       const selected = event.selection[0];
       if (selected?.kind === 'file' && isSourceOrHeader(selected.file.absolutePath)) {
@@ -562,7 +642,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     register('qpm.deployToPlatform', () => platforms.deployActive()),
     register('qpm.runOnPlatform', () => platforms.runActive()),
     register('qpm.buildDeployRunPlatform', () => platforms.buildDeployRun()),
-    register('qpm.openSshDeviceManager', () => openSshDeviceManager(context)),
+    register('qpm.openSshDeviceManager', () => networkDiagnostics.show('ssh')),
+    register('qpm.openInstrumentDiagnostics', (endpoint?: QpmDeviceEndpoint) => instrumentDiagnostics.show(endpoint)),
+    register('qpm.openNetworkDiagnostics', () => networkDiagnostics.show()),
+    register('qpm.openDeviceManager', () => networkDiagnostics.show('devices')),
+    register('qpm.selectConfiguration', () => selectConfiguration()),
+    register('qpm.openGettingStarted', () => vscode.commands.executeCommand('workbench.action.openWalkthrough', 'JerryCrozet-ElectronicEngineer.qt-project-manager-and-build#qpm.gettingStarted', false)),
     register('qpm.openRemoteTerminal', () => platforms.openRemoteTerminal()),
     register('qpm.openDockerShell', () => platforms.openDockerShell()),
     register('qpm.serveWebAssembly', () => platforms.serveWebAssembly()),

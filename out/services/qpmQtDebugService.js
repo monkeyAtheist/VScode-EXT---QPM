@@ -45,6 +45,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
+const qpmRunSessions_1 = require("./qpmRunSessions");
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 class QpmQtDebugService {
     workspaces;
@@ -143,6 +144,8 @@ class QpmQtDebugService {
         this.output.appendLine(`[Qt Debug] Starting ${profile.name} (${profile.request}) with ${String(configuration.type)}.`);
         this.output.appendLine(`[Qt Debug] Program: ${String(configuration.program ?? 'not applicable')}`);
         const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(ref.absolutePath));
+        if (profile.request === 'launch')
+            (0, qpmRunSessions_1.qpmRunSessions)(this.output).stopPrevious('Debug');
         const started = await vscode.debug.startDebugging(folder, configuration);
         if (!started) {
             vscode.window.showErrorMessage('Unable to start the Qt debug session. Verify the debugger selected by the active kit and the Microsoft C/C++ extension.');

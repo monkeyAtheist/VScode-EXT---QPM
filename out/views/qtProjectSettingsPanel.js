@@ -38,6 +38,8 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
+const webviewKit_1 = require("./webviewKit");
+const toolStatus_1 = require("../utils/toolStatus");
 const QT_MODULES = [
     'Core', 'Core5Compat', 'Gui', 'Widgets', 'Network', 'Concurrent',
     'SerialPort', 'SerialBus', 'Bluetooth', 'Sql', 'Xml',
@@ -520,18 +522,19 @@ const SECTION_HELP = {
     files: 'Summary of files registered in the native Qt project manifest.'
 };
 const SETTINGS_PAGES = [
-    { id: 'overview', label: 'Overview', description: 'Project status and the most common QPM actions.' },
-    { id: 'project', label: 'Project', description: 'Target identity, language settings and project file summary.' },
-    { id: 'build', label: 'Build', description: 'Qt kit, modules, backend, compiler, linker and build-step configuration.' },
-    { id: 'libraries', label: 'Libraries', description: 'Static/import-library formats, Windows .lib generation and binary analyzers.' },
-    { id: 'run', label: 'Run & Deploy', description: 'Local execution and standalone runtime deployment.' },
-    { id: 'debug', label: 'Debug & Diagnostics', description: 'Native/QML debugging, profiling and diagnostics.' },
-    { id: 'qt', label: 'Qt & Languages', description: 'QML language tooling and Qt for Python / PySide6.' },
-    { id: 'platforms', label: 'Platforms', description: 'Desktop, Remote Linux, Docker, WebAssembly, Android and Apple targets.' },
-    { id: 'quality', label: 'Tests & Quality', description: 'Automated tests, static analysis and quality settings.' },
-    { id: 'dependencies', label: 'Dependencies', description: 'vcpkg, Conan, pkg-config and project dependency integration.' },
-    { id: 'distribution', label: 'Distribution', description: 'Portable packages, installers, signing, publication and updates.' }
+    { id: 'overview', group: 'Project', label: 'Overview', description: 'Project status, build actions and shortcuts to every QPM tool.' },
+    { id: 'project', group: 'Project', label: 'Target & Identity', description: 'Target identity, language settings, icons and project file summary.' },
+    { id: 'build', group: 'Build', label: 'Kit & Build', description: 'Qt kit, modules, backend, compiler, linker and build-step configuration.' },
+    { id: 'libraries', group: 'Build', label: 'Libraries', description: 'Static/import-library formats, Windows .lib generation and binary analyzers.' },
+    { id: 'dependencies', group: 'Build', label: 'Dependencies', description: 'vcpkg, Conan, pkg-config and project dependency integration.' },
+    { id: 'run', group: 'Run & Debug', label: 'Run & Deploy', description: 'Local execution and standalone runtime deployment.' },
+    { id: 'debug', group: 'Run & Debug', label: 'Debug & Diagnostics', description: 'Native/QML debugging, profiling and diagnostics.' },
+    { id: 'platforms', group: 'Run & Debug', label: 'Platforms', description: 'Desktop, Remote Linux, Docker, WebAssembly, Android and Apple targets.' },
+    { id: 'qt', group: 'Qt & Quality', label: 'QML & Python', description: 'QML language tooling and Qt for Python / PySide6.' },
+    { id: 'quality', group: 'Qt & Quality', label: 'Tests & Quality', description: 'Automated tests, static analysis and quality settings.' },
+    { id: 'distribution', group: 'Release', label: 'Distribution', description: 'Portable packages, installers, signing, publication and updates.' }
 ];
+const TILE_STATE_LABEL = { ok: 'Ready', warn: 'Check', error: 'Missing', off: 'Off' };
 class QtProjectSettingsPanel {
     workspaces;
     installations;
@@ -540,6 +543,8 @@ class QtProjectSettingsPanel {
     panel;
     projectRef;
     variant = 'debug';
+    /** True while the page has unsaved edits: external refreshes are then announced instead of re-rendering. */
+    webviewDirty = false;
     constructor(workspaces, installations, settings, builds) {
         this.workspaces = workspaces;
         this.installations = installations;
@@ -562,13 +567,20 @@ class QtProjectSettingsPanel {
             this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
         }
         this.panel.title = `Qt Project Settings — ${ref.name}`;
-        this.panel.webview.html = this.render(ref);
+        this.webviewDirty = false;
+        this.panel.webview.html = (0, webviewKit_1.hardenHtml)(this.render(ref), this.panel.webview);
         this.panel.reveal(vscode.ViewColumn.Active);
     }
-    update() {
-        if (this.panel && this.projectRef?.exists) {
-            this.panel.webview.html = this.render(this.projectRef);
+    update(force = false) {
+        if (!this.panel || !this.projectRef?.exists)
+            return;
+        if (this.webviewDirty && !force) {
+            // Never throw away unsaved edits: tell the page the project changed and let the user decide.
+            void this.panel.webview.postMessage({ type: 'externalChange' });
+            return;
         }
+        this.webviewDirty = false;
+        this.panel.webview.html = (0, webviewKit_1.hardenHtml)(this.render(this.projectRef), this.panel.webview);
     }
     async showSafeMode(projectRef) {
         const ref = projectRef ?? this.workspaces.activeProjectRef;
@@ -638,9 +650,34 @@ class QtProjectSettingsPanel {
         const ref = this.projectRef;
         if (!ref?.exists)
             return;
+        if (message?.type === 'dirtyState') {
+            this.webviewDirty = message.dirty === true;
+            return;
+        }
+        if (message?.type === 'validatePaths') {
+            const baseDir = path.dirname(ref.absolutePath);
+            const results = {};
+            for (const [field, raw] of Object.entries((message.fields ?? {}))) {
+                const browse = PATH_BROWSE_FIELDS[field];
+                const value = String(raw ?? '').trim();
+                if (!browse || !value) {
+                    results[field] = { status: 'ok', message: '' };
+                    continue;
+                }
+                if (browse.kind === 'folder') {
+                    // Relative folders are outputs created on demand; absolute ones (SDK roots, sysroots) must exist.
+                    results[field] = browse.relative || !path.isAbsolute(value) || value.includes('${') ? { status: 'ok', message: '' } : (fs.existsSync(value) ? { status: 'ok', message: '' } : { status: 'missing', message: `Folder not found: ${value}` });
+                }
+                else {
+                    results[field] = /[\\/]/.test(value) || path.isAbsolute(value) ? (0, toolStatus_1.resolveFileStatus)(value, baseDir) : (0, toolStatus_1.resolveToolStatus)(value, baseDir, '');
+                }
+            }
+            await this.panel?.webview.postMessage({ type: 'pathValidation', results });
+            return;
+        }
         if (message?.type === 'changeVariant') {
             this.variant = message.variant === 'release' ? 'release' : 'debug';
-            this.update();
+            this.update(true);
             return;
         }
         if (message?.type === 'selectQtKit') {
@@ -695,7 +732,7 @@ class QtProjectSettingsPanel {
             return;
         }
         if (message?.type === 'reload') {
-            this.update();
+            this.update(true);
             return;
         }
         if (message?.type === 'browsePath' && typeof message.id === 'string') {
@@ -703,19 +740,22 @@ class QtProjectSettingsPanel {
             return;
         }
         if (message?.type === 'runCommand' && typeof message.command === 'string') {
-            await vscode.commands.executeCommand(message.command);
+            await (0, webviewKit_1.executeWebviewCommand)(message.command);
             this.update();
             return;
         }
         if (message?.type === 'save') {
             try {
                 await this.savePayload(ref, message);
+                this.webviewDirty = false;
                 this.workspaces.refresh();
                 await vscode.commands.executeCommand('qpm.syncCppTools');
                 vscode.window.showInformationMessage(`Qt project settings saved for ${ref.name} (${this.variant}).`);
                 this.update();
             }
             catch (error) {
+                this.webviewDirty = true;
+                void this.panel?.webview.postMessage({ type: 'saveFailed', message: error instanceof Error ? error.message : String(error) });
                 vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
             }
         }
@@ -1340,7 +1380,26 @@ class QtProjectSettingsPanel {
         const qmlToolDetails = installation
             ? `qmllint ${installation.qmlLintPath ? 'ready' : 'missing'} · qmlformat ${installation.qmlFormatPath ? 'ready' : 'missing'} · qmlls ${installation.qmlLanguageServerPath ? 'ready' : 'missing'} · preview ${installation.qmlRuntimePath || installation.qmlScenePath ? 'ready' : 'missing'}`
             : 'QML tools not resolved';
-        const pageNavigation = SETTINGS_PAGES.map((page, index) => `<button type="button" class="page-tab ${index === 0 ? 'active' : ''}" data-settings-page-target="${page.id}" title="${escapeAttribute(page.description)}">${escapeHtml(page.label)}</button>`).join('');
+        const navGroups = Array.from(new Set(SETTINGS_PAGES.map((page) => page.group)));
+        const pageNavigation = navGroups.map((group) => `<div class="nav-group"><div class="nav-group-title">${escapeHtml(group)}</div>${SETTINGS_PAGES.filter((page) => page.group === group).map((page) => `<button type="button" class="page-tab${page.id === 'overview' ? ' active' : ''}" data-settings-page-target="${page.id}" title="${escapeAttribute(page.description)}">${escapeHtml(page.label)}</button>`).join('')}</div>`).join('');
+        // ---- Overview dashboard: one tile per area, each opening its page.
+        const pythonProject = (0, qtProjectManifest_1.isQtPythonProject)(manifest);
+        const backendLabel = buildProfile.system === 'qmake' ? 'qmake' : buildProfile.system === 'cmake' ? 'CMake' : 'QPM direct build';
+        const platformReady = platformProfile.type !== 'remote-linux' || Boolean(platformProfile.sshHost);
+        const dependenciesOn = manifest.dependencies.enabled && (manifest.dependencies.vcpkg.enabled || manifest.dependencies.conan.enabled || manifest.dependencies.pkgConfig.enabled);
+        const tiles = [
+            pythonProject
+                ? { page: 'qt', title: 'Qt for Python', state: manifest.python.enabled ? 'ok' : 'warn', value: `PySide6${manifest.python.pySideVersion ? ' ' + manifest.python.pySideVersion : ''}`, detail: manifest.python.entryPoint || 'Entry point not set' }
+                : { page: 'build', title: 'Qt kit', state: toolchainState === 'error' ? 'error' : toolchainState === 'warning' ? 'warn' : 'ok', value: installation ? installation.label : (kitProfile.qtInstallation || 'No Qt installation'), detail: toolchainDiagnosticText || compilerPath },
+            { page: 'project', title: 'Target', state: 'ok', value: `${manifest.targetName || manifest.name}`, detail: `${manifest.kind} · ${counts.sources.length} source${counts.sources.length === 1 ? '' : 's'}` },
+            { page: 'build', title: 'Build backend', state: 'ok', value: backendLabel, detail: `${buildProfile.name} · C++ ${buildProfile.cppStandard || 'default'}` },
+            { page: 'build', title: 'Qt modules', state: manifest.qt.modules.length ? 'ok' : 'warn', value: `${manifest.qt.modules.length} module${manifest.qt.modules.length === 1 ? '' : 's'}`, detail: manifest.qt.modules.slice(0, 6).join(', ') + (manifest.qt.modules.length > 6 ? '…' : '') },
+            { page: 'platforms', title: 'Platform', state: platformReady ? 'ok' : 'warn', value: platformProfile.name, detail: platformReady ? `${platformProfile.type} · ${platformProfile.buildLocation}` : 'SSH host not set' },
+            { page: 'dependencies', title: 'Dependencies', state: dependenciesOn ? 'ok' : 'off', value: dependenciesOn ? [manifest.dependencies.vcpkg.enabled ? 'vcpkg' : '', manifest.dependencies.conan.enabled ? 'Conan' : '', manifest.dependencies.pkgConfig.enabled ? 'pkg-config' : ''].filter(Boolean).join(' · ') : 'None', detail: dependenciesOn ? (manifest.dependencies.autoInstallBeforeBuild ? 'Installed before each build' : 'Manual install') : 'No package manager' },
+            { page: 'run', title: 'Deployment', state: deployProfile.enabled ? 'ok' : 'off', value: deployProfile.enabled ? 'After each build' : 'Manual', detail: deployProfile.enabled ? `${deployProfile.name} · standalone folder` : 'Run Deploy Qt runtime when needed' },
+            { page: 'distribution', title: 'Distribution', state: manifest.packaging.enabled ? 'ok' : 'off', value: manifest.packaging.enabled ? (manifest.packaging.productName || manifest.name) : 'Not configured', detail: manifest.packaging.enabled ? `Version ${manifest.packaging.productVersion || '—'}` : 'Portable packages and installers' }
+        ];
+        const tileHtml = tiles.map((tile) => `<button type="button" class="status-tile" data-settings-page-target="${escapeAttribute(tile.page)}"><span class="tile-head"><span class="tile-title">${escapeHtml(tile.title)}</span><span class="state-pill ${tile.state}">${TILE_STATE_LABEL[tile.state]}</span></span><span class="tile-value">${escapeHtml(tile.value)}</span>${tile.detail ? `<span class="tile-detail">${escapeHtml(tile.detail)}</span>` : ''}</button>`).join('');
         const settingsPageMetadata = JSON.stringify(SETTINGS_PAGES);
         const nonce = makeNonce();
         return `<!DOCTYPE html>
@@ -1385,24 +1444,76 @@ label{font-weight:600}input,select,textarea{width:100%;background:var(--vscode-i
 button{border:1px solid var(--vscode-button-border,transparent);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:7px 11px;border-radius:3px;cursor:pointer;font:inherit}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:not(.page-tab):hover{background:var(--vscode-button-hoverBackground)}code{font-family:var(--vscode-editor-font-family)}
 @media(max-width:900px){body{padding:14px}.grid,.fields{grid-template-columns:1fr}.wide{grid-column:auto}.settings-sticky-header{position:static;box-shadow:none}.toolbar{align-items:flex-start;flex-direction:column}.settings-nav{grid-template-columns:1fr}.page-context span{white-space:normal}.help:hover::after,.help:focus::after{left:0;transform:none}}
 
+:root{--qpm-sticky-offset:88px}
+body{padding:0;max-width:none;margin:0}
+button.secondary:not(.page-tab):hover{background:var(--vscode-button-secondaryHoverBackground)}
+.settings-shell{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+.settings-sidebar{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:16px 10px 80px 12px;border-right:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);display:flex;flex-direction:column;gap:12px}
+.sidebar-project{display:grid;gap:3px;padding:0 4px 12px;border-bottom:1px solid var(--vscode-panel-border)}
+.sidebar-name{font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.sidebar-path{font-family:var(--vscode-editor-font-family);font-size:11px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-scope{display:grid;gap:4px;margin-top:8px;font-size:11px;font-weight:400;color:var(--vscode-descriptionForeground)}
+.sidebar-scope-note{font-size:11px;color:var(--vscode-descriptionForeground);line-height:1.4}
+#settingsFilter{width:100%}
+.page-nav{display:flex;flex-direction:column;gap:12px;overflow:visible;padding:0;background:transparent}
+.nav-group{display:flex;flex-direction:column;gap:1px}
+.nav-group-title{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--vscode-descriptionForeground);padding:0 8px 4px}
+button.page-tab{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;text-align:left;border:0;border-left:2px solid transparent;border-radius:3px;background:transparent;color:var(--vscode-foreground);padding:5px 8px;font-weight:400}
+button.page-tab:hover{background:var(--vscode-list-hoverBackground);color:var(--vscode-foreground)}
+button.page-tab.active{border-left-color:var(--vscode-focusBorder);background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground);font-weight:600}
+.page-tab[data-matches]:not([data-matches=""])::after{content:attr(data-matches);font-size:10px;line-height:15px;padding:0 6px;border-radius:999px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground)}
+.page-tab.no-match{opacity:.45}
+.section-links{display:flex;flex-direction:column;margin:2px 0 6px 12px;border-left:1px solid var(--vscode-panel-border)}
+button.section-link{background:transparent;border:0;color:var(--vscode-descriptionForeground);text-align:left;padding:3px 10px;font-size:12px;border-radius:0;font-weight:400}
+button.section-link:hover{color:var(--vscode-foreground);background:var(--vscode-list-hoverBackground)}
+.settings-main{min-width:0;padding:0 24px 96px}
+.settings-page-header{position:sticky;top:0;z-index:6;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:18px 0 12px;margin-bottom:14px;background:var(--vscode-editor-background);border-bottom:1px solid var(--vscode-panel-border)}
+.settings-page-header h1{font-size:20px;margin:0 0 3px}
+.external-banner{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:8px 12px;border-radius:6px;border:1px solid var(--vscode-editorWarning-foreground);background:color-mix(in srgb,var(--vscode-editorWarning-foreground) 10%,transparent)}
+.external-banner[hidden]{display:none}
+.save-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;gap:10px;padding:8px 20px;background:var(--vscode-sideBar-background);border-top:1px solid var(--vscode-panel-border)}
+body.is-dirty .save-bar{background:color-mix(in srgb,var(--vscode-editorWarning-foreground) 13%,var(--vscode-sideBar-background));border-top-color:var(--vscode-editorWarning-foreground)}
+.save-bar .dirty{font-size:12px}
+body.is-dirty .save-bar .dirty{color:var(--vscode-editorWarning-foreground);font-weight:600}
+.save-bar.flash{animation:qpmFlash .9s ease 2}
+@keyframes qpmFlash{50%{border-top-color:var(--vscode-focusBorder);box-shadow:0 -2px 0 var(--vscode-focusBorder)}}
+.save-hint{font-size:11px;color:var(--vscode-descriptionForeground)}
+.spacer{flex:1}
+body:not(.is-dirty) #save{opacity:.75}
+.dashboard-actions{display:flex;gap:8px;flex-wrap:wrap}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:14px}
+button.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:4px;text-align:left;padding:12px;border:1px solid var(--vscode-panel-border);border-radius:6px;background:var(--vscode-editor-background);color:var(--vscode-foreground);font-weight:400}
+button.status-tile:hover{border-color:var(--vscode-focusBorder);background:var(--vscode-list-hoverBackground)}
+.tile-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tile-title{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--vscode-descriptionForeground)}
+.tile-value{font-weight:600;overflow-wrap:anywhere}
+.tile-detail{font-size:12px;color:var(--vscode-descriptionForeground);overflow-wrap:anywhere}
+.state-pill{font-size:10.5px;font-weight:600;line-height:16px;padding:0 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.state-pill.ok{color:var(--vscode-testing-iconPassed)}.state-pill.warn{color:var(--vscode-editorWarning-foreground)}.state-pill.error{color:var(--vscode-errorForeground)}.state-pill.off{color:var(--vscode-descriptionForeground)}
+input.invalid{border-color:var(--vscode-inputValidation-errorBorder,var(--vscode-errorForeground))}
+input.unresolved{border-color:var(--vscode-inputValidation-warningBorder,var(--vscode-editorWarning-foreground))}
+.field-note{font-size:11px;font-weight:400;color:var(--vscode-errorForeground)}
+.field-note.warn{color:var(--vscode-editorWarning-foreground)}
+body.searching .card::before{content:attr(data-page-label);display:inline-block;margin-bottom:8px;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:3px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground)}
+@media(max-width:900px){body{padding:0}.settings-shell{grid-template-columns:1fr}.settings-sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--vscode-panel-border);padding-bottom:12px}.page-nav{flex-direction:row;flex-wrap:wrap}.nav-group{flex-direction:row;flex-wrap:wrap;align-items:center}.nav-group-title{width:100%}button.page-tab{width:auto}.section-links{display:none}.settings-main{padding:0 14px 96px}}
+
 </style>
 </head>
 <body>
-<h1>Qt Project Settings</h1>
-<div class="subtitle">${escapeHtml(manifest.name)} · schema v${manifest.schemaVersion} · ${escapeHtml(buildProfile.name)} / ${escapeHtml(kitProfile.name)} · <code>${escapeHtml(ref.absolutePath)}</code></div>
-<div id="settingsStickyHeader" class="settings-sticky-header">
-  <div id="settingsToolbar" class="toolbar">
-    <div>${selectField('Edited build variant', 'variant', `<option value="debug" ${this.variant === 'debug' ? 'selected' : ''}>Debug</option><option value="release" ${this.variant === 'release' ? 'selected' : ''}>Release</option>`)}</div>
-    <div class="actions"><button id="save">Save Qt settings</button><button class="secondary" id="reloadSettings" title="Discard unsaved edits and reload the manifest">Reload</button><button class="secondary" id="openManifest">Open manifest JSON</button></div>
-  </div>
+<div class="settings-shell">
+<aside class="settings-sidebar" aria-label="Settings navigation">
+  <div class="sidebar-project"><div class="sidebar-name">${escapeHtml(manifest.name)}</div><div class="sidebar-path" title="${escapeAttribute(ref.absolutePath)}">${escapeHtml(path.basename(ref.absolutePath))}</div>
+    <label class="sidebar-scope" for="variant">Edited build variant<select id="variant"><option value="debug" ${this.variant === 'debug' ? 'selected' : ''}>Debug</option><option value="release" ${this.variant === 'release' ? 'selected' : ''}>Release</option></select></label>
+    <div class="sidebar-scope-note">${escapeHtml(buildProfile.name)} · ${escapeHtml(kitProfile.name)} · schema v${manifest.schemaVersion}</div></div>
+  <input id="settingsFilter" type="search" placeholder="Search all settings…" aria-label="Search all settings pages">
   <nav id="pageNav" class="page-nav" aria-label="Settings pages">${pageNavigation}</nav>
-  <div id="settingsNavigation" class="settings-nav">
-    <input id="settingsFilter" type="search" placeholder="Filter settings on this page…" aria-label="Filter current settings page">
-    <select id="sectionNav" aria-label="Jump to a section"><option value="">Jump to a section…</option></select>
-    <div class="page-context"><strong id="pageTitle">Overview</strong><span id="pageDescription">Project status and the most common QPM actions.</span><span id="dirtyState" class="dirty">Saved state</span></div>
-  </div>
-</div>
-<section id="section-control" data-settings-section data-settings-page="overview" data-settings-title="Control center" class="card wide" style="margin-bottom:18px"><h2>${sectionHeading('control', 'Project control center')}</h2><div class="control-grid">
+  <select id="sectionNav" hidden aria-hidden="true"></select>
+</aside>
+<main class="settings-main">
+<header id="settingsStickyHeader" class="settings-page-header"><div><h1 id="pageTitle">Overview</h1><div id="pageDescription" class="muted">Project status, build actions and shortcuts to every QPM tool.</div></div><div class="actions"><button class="secondary" id="openManifest" type="button" title="Open the .qtproject.json manifest">Open manifest JSON</button></div></header>
+<div id="externalChange" class="external-banner" role="status" hidden><span>The project changed outside this page (another view, command or editor). Your unsaved edits are kept.</span><span class="spacer"></span><button type="button" class="secondary" id="externalReload">Reload and discard my edits</button></div>
+<section id="section-status" data-settings-section data-settings-page="overview" data-settings-title="Project status" class="card wide"><div class="dashboard-actions"><button data-command="qpm.build" title="Build the active project (Ctrl+F7)">Build</button><button class="secondary" data-command="qpm.rebuild">Rebuild</button><button class="secondary" data-command="qpm.clean">Clean</button>${manifest.kind === 'static-library' ? '' : '<button class="secondary" data-command="qpm.run" title="Build and run (Ctrl+F5)">Run</button><button class="secondary" data-command="qpm.debugWithGdb" title="Build and debug (F5)">Debug</button>'}<button class="secondary" data-command="qpm.selectConfiguration">Configuration…</button></div><div class="status-grid">${tileHtml}</div></section>
+<section id="section-control" data-settings-section data-settings-page="overview" data-settings-title="Shortcuts" class="card wide" style="margin-bottom:18px"><h2>${sectionHeading('control', 'Shortcuts')}</h2><div class="control-grid">
   <div class="control-group"><h3>Build and run</h3><div class="actions"><button class="secondary" data-command="qpm.selectBuildMode">Build mode</button><button class="secondary" data-command="qpm.selectQtBackend">Backend</button><button class="secondary" data-command="qpm.configureQtBackend">Configure</button><button class="secondary" data-command="qpm.chooseBuildAction">Build / rebuild / clean</button><button class="secondary" data-command="qpm.chooseRunAction">Run options</button><button class="secondary" data-command="qpm.startQtDebugProfile">Start debugging</button></div></div>
   <div class="control-group"><h3>Project and kits</h3><div class="actions"><button class="secondary" id="manageProfilesControl">Profiles</button><button class="secondary" id="manageNamedKitsControl">Named kits</button><button class="secondary" data-command="qpm.syncCppTools">IntelliSense</button><button class="secondary" data-command="qpm.openProjectHealthReport">Project health</button><button class="secondary" data-command="qpm.editQtModules">Qt modules</button></div></div>
   <div class="control-group"><h3>Qt tools</h3><div class="actions"><button class="secondary" id="selectDesignerControl">Designer</button><button class="secondary" data-command="qpm.updateTranslations">Update translations</button><button class="secondary" data-command="qpm.releaseTranslations">Release translations</button><button class="secondary" data-command="qpm.qmlLintProject">Lint QML</button><button class="secondary" data-command="qpm.qmlFormatProject">Format QML</button><button class="secondary" data-command="qpm.restartQmlLanguageServer">Restart qmlls</button><button class="secondary" data-command="qpm.openQtDocumentation">Documentation</button></div></div>
@@ -1987,12 +2098,25 @@ button{border:1px solid var(--vscode-button-border,transparent);background:var(-
   ${pill('Sources', counts.sources.length)}${pill('Headers', counts.headers.length)}${pill('Forms', counts.forms.length)}${pill('Resources', counts.resources.length)}${pill('QML', counts.qml.length)}${pill('Translations', counts.translations.length)}${pill('Other', counts.other.length)}
 </div><p class="muted" style="margin-top:10px">Files are managed from the project tree with “Add Existing File” and the Qt creation templates.</p></section>
 </div>
+</main>
+</div>
+<div id="saveBar" class="save-bar" role="region" aria-label="Save changes"><span id="dirtyState" class="dirty">All changes saved</span><span class="save-hint">Ctrl+S to save</span><span class="spacer"></span><button id="reloadSettings" class="secondary" type="button" disabled title="Discard unsaved edits and reload the manifest">Discard changes</button><button id="save" type="button">Save Qt settings</button></div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const byId = (id) => document.getElementById(id);
 const on = (id, event, handler) => { const element = byId(id); if (element) element.addEventListener(event, handler); };
 const post = (type) => () => vscode.postMessage({ type });
-on('variant', 'change', () => { vscode.setState({ ...(vscode.getState() || {}), activePage }); vscode.postMessage({ type:'changeVariant', variant:byId('variant').value }); });
+let isDirty = false;
+on('variant', 'change', () => {
+  if (isDirty) {
+    // Switching variant re-renders the page: keep the user's edits and ask to save or discard first.
+    byId('variant').value = byId('variant').value === 'debug' ? 'release' : 'debug';
+    const bar = byId('saveBar'); if (bar) { bar.classList.remove('flash'); void bar.offsetWidth; bar.classList.add('flash'); }
+    if (dirtyState) dirtyState.textContent = 'Save or discard your changes before switching variant';
+    return;
+  }
+  vscode.setState({ ...(vscode.getState() || {}), activePage }); vscode.postMessage({ type:'changeVariant', variant:byId('variant').value });
+});
 ['manageProfiles','manageProfilesControl'].forEach((id) => on(id, 'click', post('manageProfiles')));
 on('manageDebugProfilesInline', 'click', post('manageDebugProfiles'));
 ['managePlatformProfilesInline','managePlatformProfilesControl'].forEach((id) => on(id, 'click', post('managePlatformProfiles')));
@@ -2003,6 +2127,7 @@ on('selectKit', 'click', post('selectQtKit'));
 on('repairToolchain', 'click', post('repairQtToolchain'));
 ['openManifest','openManifestProject'].forEach((id) => on(id, 'click', post('openManifest')));
 on('reloadSettings', 'click', post('reload'));
+on('externalReload', 'click', post('reload'));
 document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => vscode.postMessage({ type:'runCommand', command:button.dataset.command })));
 document.querySelectorAll('[data-browse-id]').forEach((button) => button.addEventListener('click', () => {
   const target = byId(button.dataset.browseId);
@@ -2052,25 +2177,47 @@ const pageTitle = byId('pageTitle');
 const pageDescription = byId('pageDescription');
 const sections = [...document.querySelectorAll('[data-settings-section]')];
 const pageButtons = [...document.querySelectorAll('[data-settings-page-target]')];
-const refreshSectionNavigation = () => {
-  if (!sectionNav) return;
-  const previous = sectionNav.value;
-  sectionNav.innerHTML = '<option value="">Jump to a section…</option>';
-  sections.filter((section) => section.dataset.settingsPage === activePage).forEach((section) => {
-    const option = document.createElement('option');
-    option.value = section.id;
-    option.textContent = section.dataset.settingsTitle || section.querySelector('h2')?.textContent?.replace(/\\?+$/, '').trim() || section.id;
-    sectionNav.appendChild(option);
+const navButtons = pageButtons.filter((button) => button.classList.contains('page-tab'));
+const populateSections = () => {
+  document.querySelectorAll('.section-links').forEach((node) => node.remove());
+  if ((settingsFilter ? settingsFilter.value : '').trim()) return;
+  const active = navButtons.find((button) => button.dataset.settingsPageTarget === activePage);
+  if (!active) return;
+  const visible = sections.filter((section) => section.dataset.settingsPage === activePage && !section.classList.contains('page-hidden') && !section.classList.contains('filter-hidden') && getComputedStyle(section).display !== 'none');
+  if (visible.length < 2) return;
+  const box = document.createElement('div');
+  box.className = 'section-links';
+  visible.forEach((section) => {
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'section-link';
+    link.textContent = section.dataset.settingsTitle || section.id;
+    link.addEventListener('click', () => section.scrollIntoView({ behavior:'smooth', block:'start' }));
+    box.appendChild(link);
   });
-  if ([...sectionNav.options].some((option) => option.value === previous)) sectionNav.value = previous;
+  active.insertAdjacentElement('afterend', box);
 };
 const applySettingsFilter = () => {
   const query = settingsFilter ? settingsFilter.value.trim().toLowerCase() : '';
+  let matches = 0;
   sections.forEach((section) => {
-    const belongsToPage = section.dataset.settingsPage === activePage;
-    section.classList.toggle('page-hidden', !belongsToPage);
-    section.classList.toggle('filter-hidden', belongsToPage && Boolean(query) && !section.textContent.toLowerCase().includes(query));
+    const belongs = section.dataset.settingsPage === activePage;
+    const text = ((section.dataset.settingsTitle || '') + ' ' + section.textContent).toLowerCase();
+    const match = !query || text.includes(query);
+    section.classList.toggle('page-hidden', query ? false : !belongs);
+    section.classList.toggle('filter-hidden', !match);
+    if (query && match) matches++;
   });
+  document.body.classList.toggle('searching', Boolean(query));
+  navButtons.forEach((button) => {
+    const count = query ? sections.filter((section) => section.dataset.settingsPage === button.dataset.settingsPageTarget && !section.classList.contains('filter-hidden')).length : 0;
+    button.dataset.matches = query ? String(count) : '';
+    button.classList.toggle('no-match', Boolean(query) && count === 0);
+  });
+  const meta = settingsPages.find((page) => page.id === activePage) || settingsPages[0];
+  if (pageTitle) pageTitle.textContent = query ? 'Search results' : meta.label;
+  if (pageDescription) pageDescription.textContent = query ? (matches + ' matching section' + (matches === 1 ? '' : 's') + ' across all pages — clear the search to go back to ' + meta.label + '.') : meta.description;
+  populateSections();
 };
 const activatePage = (pageId, scrollToTop = false) => {
   const meta = settingsPages.find((page) => page.id === pageId) || settingsPages[0];
@@ -2080,29 +2227,33 @@ const activatePage = (pageId, scrollToTop = false) => {
     button.classList.toggle('active', selected);
     button.setAttribute('aria-current', selected ? 'page' : 'false');
   });
-  if (pageTitle) pageTitle.textContent = meta.label;
-  if (pageDescription) pageDescription.textContent = meta.description;
-  if (settingsFilter) settingsFilter.value = '';
-  vscode.setState({ ...webviewState, activePage });
-  refreshSectionNavigation();
+  vscode.setState({ ...(vscode.getState() || {}), activePage });
   applySettingsFilter();
   window.requestAnimationFrame(updateStickyOffsets);
-  if (scrollToTop) {
-    const first = sections.find((section) => section.dataset.settingsPage === activePage && !section.classList.contains('filter-hidden'));
-    if (first) first.scrollIntoView({ behavior:'smooth', block:'start' });
-  }
+  if (scrollToTop) window.scrollTo(0, 0);
 };
 document.querySelectorAll('[data-run-command]').forEach((button) => button.addEventListener('click', () => { vscode.postMessage({ type:'runCommand', command:button.dataset.runCommand }); }));
-pageButtons.forEach((button) => button.addEventListener('click', () => activatePage(button.dataset.settingsPageTarget, true)));
+pageButtons.forEach((button) => button.addEventListener('click', () => {
+  if (settingsFilter && settingsFilter.value && button.classList.contains('page-tab')) settingsFilter.value = '';
+  activatePage(button.dataset.settingsPageTarget, true);
+}));
+sections.forEach((section) => { const meta = settingsPages.find((page) => page.id === section.dataset.settingsPage); if (meta) section.dataset.pageLabel = meta.group + ' › ' + meta.label; });
 on('sectionNav', 'change', () => { const target = byId(sectionNav.value); if (target) target.scrollIntoView({ behavior:'smooth', block:'start' }); });
 on('settingsFilter', 'input', applySettingsFilter);
 activatePage(activePage, false);
 const dirtyState = byId('dirtyState');
-const markDirty = () => { if (dirtyState) { dirtyState.textContent = 'Unsaved changes'; dirtyState.classList.add('changed'); } };
+const markDirty = () => {
+  document.body.classList.add('is-dirty');
+  if (dirtyState) { dirtyState.textContent = 'Unsaved changes'; dirtyState.classList.add('changed'); }
+  const revert = byId('reloadSettings'); if (revert) revert.disabled = false;
+  if (!isDirty) { isDirty = true; vscode.postMessage({ type:'dirtyState', dirty:true }); }
+};
 document.querySelectorAll('input,select,textarea').forEach((element) => {
   if (!['variant','settingsFilter','sectionNav'].includes(element.id)) { element.addEventListener('input', markDirty); element.addEventListener('change', markDirty); }
 });
-on('save', 'click', () => {
+const saveNow = () => {
+  if (dirtyState) { dirtyState.textContent = 'Saving…'; dirtyState.classList.remove('changed'); }
+  document.body.classList.remove('is-dirty');
   const value = (id) => byId(id).value;
   const checked = (id) => byId(id).checked;
   vscode.postMessage({
@@ -2139,7 +2290,44 @@ on('save', 'click', () => {
     publicationGithubEnabled:checked('publicationGithubEnabled'), publicationGithubGhPath:value('publicationGithubGhPath'), publicationGithubRepository:value('publicationGithubRepository'), publicationGithubTagPattern:value('publicationGithubTagPattern'), publicationGithubReleaseNamePattern:value('publicationGithubReleaseNamePattern'), publicationGithubDraft:checked('publicationGithubDraft'), publicationGithubPrerelease:checked('publicationGithubPrerelease'), publicationGithubGenerateNotes:checked('publicationGithubGenerateNotes'), publicationGithubClobberAssets:checked('publicationGithubClobberAssets'), publicationPublishTarget:value('publicationPublishTarget'), publicationLocalDirectory:value('publicationLocalDirectory'), publicationSshHost:value('publicationSshHost'), publicationSshUser:value('publicationSshUser'), publicationSshPort:value('publicationSshPort'), publicationSshDirectory:value('publicationSshDirectory'), publicationScpPath:value('publicationScpPath'), publicationRsyncPath:value('publicationRsyncPath'), publicationUseRsync:checked('publicationUseRsync'), publicationDeleteRemote:checked('publicationDeleteRemote'),
         preBuildActions:value('preBuildActions'), customBuildActions:value('customBuildActions'), postBuildActions:value('postBuildActions')
   });
+};
+on('save', 'click', saveNow);
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && String(event.key).toLowerCase() === 's') { event.preventDefault(); saveNow(); }
 });
+let scrollTimer;
+window.addEventListener('scroll', () => {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => { const current = vscode.getState() || {}; const scrolls = Object.assign({}, current.scrolls || {}); scrolls[activePage] = window.scrollY; vscode.setState({ ...current, activePage, scrolls }); }, 150);
+});
+const savedScroll = ((vscode.getState() || {}).scrolls || {})[activePage];
+if (savedScroll) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+const pathFields = [...document.querySelectorAll('[data-browse-id]')].map((button) => button.dataset.browseId).filter((id, index, all) => id && all.indexOf(id) === index && byId(id) && byId(id).tagName === 'INPUT');
+const requestValidation = () => { const fields = {}; pathFields.forEach((id) => { fields[id] = byId(id).value; }); if (pathFields.length) vscode.postMessage({ type:'validatePaths', fields }); };
+pathFields.forEach((id) => byId(id).addEventListener('change', requestValidation));
+window.addEventListener('message', (event) => {
+  const message = event.data || {};
+  if (message.type === 'pathSelected') requestValidation();
+  if (message.type === 'externalChange') { const banner = byId('externalChange'); if (banner) banner.hidden = false; }
+  if (message.type === 'saveFailed') { markDirty(); if (dirtyState) dirtyState.textContent = 'Not saved: ' + (message.message || 'error'); }
+  if (message.type === 'pathValidation') {
+    Object.entries(message.results || {}).forEach(([id, result]) => {
+      const input = byId(id); if (!input) return;
+      const host = input.closest('.field') || input.parentElement;
+      const bad = result && result.status === 'missing';
+      const unresolved = result && result.status === 'unresolved';
+      input.classList.toggle('invalid', bad);
+      input.classList.toggle('unresolved', unresolved);
+      let note = host ? host.querySelector('.field-note[data-for="' + id + '"]') : null;
+      if ((bad || unresolved) && host) {
+        if (!note) { note = document.createElement('div'); note.className = 'field-note'; note.dataset.for = id; host.appendChild(note); }
+        note.classList.toggle('warn', unresolved);
+        note.textContent = result.message;
+      } else if (note) note.remove();
+    });
+  }
+});
+requestValidation();
 </script>
 </body></html>`;
     }

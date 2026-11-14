@@ -73,7 +73,6 @@ const qpmQtKitsProvider_1 = require("./providers/qpmQtKitsProvider");
 const qpmQtDebugService_1 = require("./services/qpmQtDebugService");
 const qpmQtDebugProvider_1 = require("./providers/qpmQtDebugProvider");
 const qpmQtPlatformService_1 = require("./services/qpmQtPlatformService");
-const qpmSshDeviceManager_1 = require("./services/qpmSshDeviceManager");
 const qpmQtPlatformProvider_1 = require("./providers/qpmQtPlatformProvider");
 const qpmQtPackagingService_1 = require("./services/qpmQtPackagingService");
 const qpmQtPackagingProvider_1 = require("./providers/qpmQtPackagingProvider");
@@ -95,10 +94,20 @@ const qpmQtDependencyService_1 = require("./services/qpmQtDependencyService");
 const qpmInstrumentProfileService_1 = require("./services/qpmInstrumentProfileService");
 const qpmQtDependencyProvider_1 = require("./providers/qpmQtDependencyProvider");
 const qtProjectManifest_1 = require("./model/qtProjectManifest");
+const webviewKit_1 = require("./views/webviewKit");
+const qpmInstrumentService_1 = require("./services/qpmInstrumentService");
+const instrumentDiagnosticsPanel_1 = require("./views/instrumentDiagnosticsPanel");
+const qpmNetworkDiagnosticsService_1 = require("./services/qpmNetworkDiagnosticsService");
+const networkDiagnosticsPanel_1 = require("./views/networkDiagnosticsPanel");
+const qpmDeviceRegistry_1 = require("./services/qpmDeviceRegistry");
+const qpmRunSessions_1 = require("./services/qpmRunSessions");
 async function activate(context) {
+    (0, webviewKit_1.initWebviewKit)(context);
     const output = vscode.window.createOutputChannel('Qt Project Manager');
     const programOutput = vscode.window.createOutputChannel('Qt Project Manager - Program Output');
     const buildTrace = vscode.window.createOutputChannel('Qt Project Manager - Build Trace');
+    (0, qpmRunSessions_1.qpmRunSessions)(output);
+    context.subscriptions.push({ dispose: qpmRunSessions_1.disposeQpmRunSessions });
     await migrateLegacyConfiguration(output);
     const parser = new qpmParser_1.QpmParser();
     const installations = new qpmInstallationService_1.QpmInstallationService(output);
@@ -129,6 +138,11 @@ async function activate(context) {
     const profiling = new qpmQtProfilingService_1.QpmQtProfilingService(workspaces, builds, qtInstallations, output);
     const quality = new qpmQtQualityService_1.QpmQtQualityService(workspaces, qtInstallations, output);
     const testing = new qpmQtTestingService_1.QpmQtTestingService(workspaces, builds, qtInstallations, quality, output);
+    const instruments = new qpmInstrumentService_1.QpmInstrumentService(output);
+    const networkDiagnosticsService = new qpmNetworkDiagnosticsService_1.QpmNetworkDiagnosticsService(output);
+    const deviceRegistry = new qpmDeviceRegistry_1.QpmDeviceRegistry(context);
+    const instrumentDiagnostics = new instrumentDiagnosticsPanel_1.InstrumentDiagnosticsPanel(context, instruments, output, deviceRegistry);
+    const networkDiagnostics = new networkDiagnosticsPanel_1.NetworkDiagnosticsPanel(context, networkDiagnosticsService, instruments, output, platforms, deviceRegistry);
     const treeProvider = new qpmTreeProvider_1.QpmTreeProvider(workspaces);
     const treeView = vscode.window.createTreeView('qpm.workspaceExplorer', { treeDataProvider: treeProvider, dragAndDropController: treeProvider, showCollapseAll: true, canSelectMany: true });
     const symbols = new qpmSymbolService_1.QpmSymbolService(context.extensionPath, workspaces);
@@ -181,23 +195,34 @@ async function activate(context) {
     const colorValues = new qpmColorValueService_1.QpmColorValueService();
     const editorUtilities = new qpmEditorUtilitiesService_1.QpmEditorUtilitiesService();
     const completionRegistration = vscode.languages.registerCompletionItemProvider([{ language: 'c', scheme: 'file' }, { language: 'cpp', scheme: 'file' }], completionProvider);
-    const home = new homePanel_1.HomePanel(context, workspaces, builds, installations);
+    const home = new homePanel_1.HomePanel(context, workspaces, builds, installations, qtInstallations, qtPython);
     const buildSettings = new buildSettingsPanel_1.BuildSettingsPanel(workspaces, parser, projectSettings);
     const qtProjectSettings = new qtProjectSettingsPanel_1.QtProjectSettingsPanel(workspaces, qtInstallations, projectSettings, builds);
     const quickActions = new quickActionsView_1.QuickActionsView(workspaces, builds, projectSettings);
     const quickActionsRegistration = vscode.window.registerTreeDataProvider('qpm.quickActions', quickActions);
-    const statusBarItems = [
-        createStatusBarAction('$(versions)', 'Select the active Qt installation', 'qpm.selectQtInstallation', 100),
-        createStatusBarAction('$(home)', 'Qt Project Manager home', 'qpm.openHome', 99),
-        createStatusBarAction('$(folder-opened)', 'Open a Qt workspace or project', 'qpm.openWorkspace', 98),
-        createStatusBarAction('$(tools)', 'Build / rebuild / clean the active Qt project', 'qpm.chooseBuildAction', 97),
-        createStatusBarAction('$(play)', 'Build and run the active Qt target', 'qpm.run', 96),
-        createStatusBarAction('$(list-selection)', 'Advanced Qt run options', 'qpm.chooseRunAction', 95),
-        createStatusBarAction('$(debug-alt)', 'Run the active Qt debug profile without rebuilding', 'qpm.startQtDebugProfileWithoutBuild', 94.7),
-        createStatusBarAction('$(debug-alt-small)', 'Build and debug with the active Qt kit debugger', 'qpm.debugWithGdb', 94.5),
-        createStatusBarAction('D32', 'Select the Qt build mode', 'qpm.selectBuildMode', 94),
-        createStatusBarAction('EXE', 'Select the Qt target type', 'qpm.selectTargetType', 93)
-    ];
+    // Status bar: Qt / PySide6 version, one configuration item (project · mode · target · platform),
+    // Build / Run / Debug and the build-problem counter. Everything stays hidden until a workspace is loaded.
+    const qtStatusItem = createStatusBarAction('$(versions) Qt', 'Select the active Qt installation', 'qpm.selectQtInstallation', 100);
+    const configStatusItem = createStatusBarAction('$(project) QPM', 'QPM configuration — click to change the build mode, target type or platform', 'qpm.selectConfiguration', 99);
+    const buildStatusItem = createStatusBarAction('$(tools)', 'Build / rebuild / clean the active Qt project (Ctrl+F7 builds)', 'qpm.chooseBuildAction', 98);
+    const runStatusItem = createStatusBarAction('$(play)', 'Build and run the active Qt target (Ctrl+F5)', 'qpm.run', 97);
+    const debugStatusItem = createStatusBarAction('$(debug-alt)', 'Build and debug the active Qt target (F5)', 'qpm.debugWithGdb', 96);
+    const problemsStatusItem = createStatusBarAction('', 'QPM build problems — click to open the Problems view', 'workbench.actions.view.problems', 95);
+    const statusBarItems = [qtStatusItem, configStatusItem, buildStatusItem, runStatusItem, debugStatusItem, problemsStatusItem];
+    const BUILD_MODE_SHORT = { debug: 'D32', release: 'R32', debug64: 'D64', release64: 'R64' };
+    const TARGET_SHORT = { 'Executable': 'EXE', 'Dynamic Link Library': 'DLL', 'Static Library': 'LIB' };
+    const PLATFORM_SHORT = { 'linux-local': 'Linux', 'remote-linux': 'Remote Linux', docker: 'Docker', webassembly: 'WASM', android: 'Android', macos: 'macOS', 'ios-simulator': 'iOS Sim', 'ios-device': 'iOS' };
+    const activePlatformProfile = () => {
+        const ref = workspaces.activeProjectRef;
+        if (!ref?.exists || !(0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath))
+            return undefined;
+        try {
+            return (0, qtProjectManifest_1.getActiveQtPlatformProfile)((0, qtProjectManifest_1.readQtProjectManifest)(ref.absolutePath));
+        }
+        catch {
+            return undefined;
+        }
+    };
     const updateToolbarContexts = () => {
         const activeRef = workspaces.activeProjectRef;
         const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
@@ -212,17 +237,53 @@ async function activate(context) {
                 qtPythonProjectActive = false;
             }
         }
+        void vscode.commands.executeCommand('setContext', 'qpm.workspaceLoaded', Boolean(workspaces.currentWorkspace));
         void vscode.commands.executeCommand('setContext', 'qpm.buildMode', builds.buildMode);
         void vscode.commands.executeCommand('setContext', 'qpm.targetType', targetKey);
         void vscode.commands.executeCommand('setContext', 'qpm.nativeQtProjectActive', nativeQtProjectActive);
         void vscode.commands.executeCommand('setContext', 'qpm.qtPythonProjectActive', qtPythonProjectActive);
         void vscode.commands.executeCommand('setContext', 'qpm.qtCppProjectActive', nativeQtProjectActive && !qtPythonProjectActive);
     };
-    const updateStatusBar = () => {
-        const targetType = workspaces.activeProject?.targetType;
-        const modeText = builds.buildMode === 'debug64' ? 'D64' : builds.buildMode === 'release64' ? 'R64' : builds.buildMode === 'release' ? 'REL' : 'DBG';
-        const targetText = targetType === 'Dynamic Link Library' ? 'DLL' : targetType === 'Static Library' ? 'LIB' : targetType === 'Executable' ? 'EXE' : '---';
+    const updateProblemsStatus = () => {
+        let errors = 0;
+        let warnings = 0;
+        builds.diagnostics.forEach((_uri, diagnostics) => {
+            for (const diagnostic of diagnostics) {
+                if (diagnostic.severity === vscode.DiagnosticSeverity.Error)
+                    errors++;
+                else if (diagnostic.severity === vscode.DiagnosticSeverity.Warning)
+                    warnings++;
+            }
+        });
+        if (!workspaces.currentWorkspace || (errors === 0 && warnings === 0)) {
+            problemsStatusItem.hide();
+            return;
+        }
+        problemsStatusItem.text = `$(error) ${errors}  $(warning) ${warnings}`;
+        problemsStatusItem.backgroundColor = errors > 0 ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+        problemsStatusItem.show();
+    };
+    const configurationSummary = () => {
         const activeRef = workspaces.activeProjectRef;
+        const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
+        const parts = [activeRef?.name ?? 'No project'];
+        if (isQtPythonActive())
+            parts.push('PySide6');
+        else {
+            parts.push(BUILD_MODE_SHORT[builds.buildMode] ?? builds.buildMode);
+            if (targetType)
+                parts.push(TARGET_SHORT[targetType] ?? targetType);
+        }
+        const platform = activePlatformProfile();
+        if (platform && platform.type !== 'desktop')
+            parts.push(PLATFORM_SHORT[platform.type] ?? platform.name);
+        return parts.join(' · ');
+    };
+    const updateStatusBar = () => {
+        const loaded = Boolean(workspaces.currentWorkspace);
+        const showActions = loaded && vscode.workspace.getConfiguration('qpm').get('showPersistentStatusBarActions', true);
+        const activeRef = workspaces.activeProjectRef;
+        const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
         let qtInstallation = qtInstallations.getActive();
         if (activeRef?.exists && (0, qtProjectManifest_1.isQtProjectManifestPath)(activeRef.absolutePath)) {
             try {
@@ -236,33 +297,73 @@ async function activate(context) {
         const pythonProject = isQtPythonActive();
         if (pythonProject) {
             const pythonStatus = qtPython.status;
-            statusBarItems[0].text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : '$(symbol-class) PySide6';
-            statusBarItems[0].tooltip = pythonStatus?.message ?? 'Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.';
-            statusBarItems[6].text = '$(debug-alt-small) Python Debug';
-            statusBarItems[6].tooltip = 'Build and debug the active PySide6 application with the VS Code Python debugger.';
-            statusBarItems[7].text = 'PY';
-            statusBarItems[7].tooltip = 'Qt for Python project. Build variants are managed by Python deployment tooling.';
-            statusBarItems[8].text = 'APP';
-            statusBarItems[8].tooltip = 'Qt for Python application target.';
+            qtStatusItem.text = pythonStatus?.pySideVersion ? `$(symbol-class) PySide6 ${pythonStatus.pySideVersion}` : '$(symbol-class) PySide6';
+            qtStatusItem.tooltip = pythonStatus?.message ?? 'Qt for Python / PySide6 project. Open the Qt for Python view to configure the interpreter.';
+            qtStatusItem.command = 'qpm.python.selectInterpreter';
+            debugStatusItem.tooltip = 'Build and debug the active PySide6 application with the VS Code Python debugger (F5)';
         }
         else {
-            statusBarItems[0].text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
-            statusBarItems[0].tooltip = qtInstallation ? qtInstallation.label : 'Select the Qt installation used by Qt Project Manager.';
-            statusBarItems[6].text = '$(debug-alt-small) Debug';
-            statusBarItems[6].tooltip = 'Build and debug the active executable with the debugger selected by the Qt kit (GDB, LLDB or Visual Studio).';
-            statusBarItems[7].text = modeText;
-            statusBarItems[7].tooltip = `Qt build mode: ${modeText}. Click to change.`;
-            statusBarItems[8].text = targetText;
-            statusBarItems[8].tooltip = `Qt target type: ${targetText}. Click to change.`;
+            qtStatusItem.text = qtInstallation ? `$(versions) Qt ${qtInstallation.version}` : '$(versions) Select Qt';
+            qtStatusItem.tooltip = qtInstallation ? `${qtInstallation.label} — click to change the Qt installation` : 'Select the Qt installation used by Qt Project Manager.';
+            qtStatusItem.command = 'qpm.selectQtInstallation';
+            debugStatusItem.tooltip = 'Build and debug the active target with the debugger of the Qt kit — GDB, LLDB or Visual Studio (F5)';
         }
-        const show = vscode.workspace.getConfiguration('qpm').get('showPersistentStatusBarActions', true);
-        for (const item of statusBarItems) {
-            if (show)
+        configStatusItem.text = `$(project) ${configurationSummary()}`;
+        for (const item of [qtStatusItem, configStatusItem]) {
+            if (loaded)
                 item.show();
             else
                 item.hide();
         }
+        for (const item of [buildStatusItem, runStatusItem]) {
+            if (showActions)
+                item.show();
+            else
+                item.hide();
+        }
+        if (showActions && (pythonProject || targetType !== 'Static Library'))
+            debugStatusItem.show();
+        else
+            debugStatusItem.hide();
+        updateProblemsStatus();
         updateToolbarContexts();
+    };
+    const selectConfiguration = async () => {
+        const activeRef = workspaces.activeProjectRef;
+        const targetType = activeRef?.exists ? workspaces.getProject(activeRef)?.targetType : undefined;
+        const items = [];
+        if (isQtPythonActive()) {
+            items.push({ label: 'Qt for Python', kind: vscode.QuickPickItemKind.Separator });
+            items.push({ label: '$(symbol-class) Select Python interpreter…', description: qtPython.status?.interpreter ?? '', apply: () => vscode.commands.executeCommand('qpm.python.selectInterpreter') });
+        }
+        else {
+            const modes = [['debug', 'D32', 'Debug, 32-bit'], ['release', 'R32', 'Release, 32-bit'], ['debug64', 'D64', 'Debug, 64-bit'], ['release64', 'R64', 'Release, 64-bit']];
+            items.push({ label: 'Build mode', kind: vscode.QuickPickItemKind.Separator });
+            for (const [value, short, description] of modes) {
+                items.push({ label: `${value === builds.buildMode ? '$(check)' : '$(blank)'} ${short}`, description, apply: () => builds.setBuildMode(value) });
+            }
+            if (activeRef?.exists) {
+                const targets = [['Executable', 'EXE', 'Application (.exe)'], ['Dynamic Link Library', 'DLL', 'Shared library (.dll / .so + import library)'], ['Static Library', 'LIB', 'Static library (.lib / .a)']];
+                items.push({ label: `Target type — ${activeRef.name}`, kind: vscode.QuickPickItemKind.Separator });
+                for (const [value, short, description] of targets) {
+                    items.push({ label: `${value === targetType ? '$(check)' : '$(blank)'} ${short}`, description, apply: () => workspaces.setTargetType(activeRef, value) });
+                }
+            }
+        }
+        items.push({ label: 'Qt', kind: vscode.QuickPickItemKind.Separator });
+        if (!isQtPythonActive())
+            items.push({ label: '$(versions) Select Qt installation…', description: qtStatusItem.text.replace(/^\$\([^)]*\)\s*/, ''), apply: () => vscode.commands.executeCommand('qpm.selectQtInstallation') });
+        const platform = activePlatformProfile();
+        if (platform)
+            items.push({ label: '$(remote) Select platform…', description: platform.name, apply: () => vscode.commands.executeCommand('qpm.selectQtPlatform') });
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        items.push({ label: '$(settings-gear) Open project settings…', apply: () => vscode.commands.executeCommand('qpm.editBuildSettings') });
+        const picked = await vscode.window.showQuickPick(items, { title: 'QPM configuration', placeHolder: `Current: ${configurationSummary()}` });
+        if (picked?.apply) {
+            await picked.apply();
+            updateStatusBar();
+            quickActions.update();
+        }
     };
     const register = (command, handler) => vscode.commands.registerCommand(command, async (...args) => {
         try {
@@ -293,7 +394,7 @@ async function activate(context) {
         }
     };
     const runGdbDebug = async () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile();
-    context.subscriptions.push(output, programOutput, buildTrace, builds, workspaces, home, buildSettings, qtProjectSettings, importLibraries, libraryTools, sdl, quickActions, quickActionsRegistration, cppTools, qtTools, qtKits, qtKitsProvider, qtKitsView, debugging, qtDebugProvider, qtDebugView, platforms, qtPlatformProvider, qtPlatformView, packaging, qtPackagingView, installers, qtInstallerProvider, qtInstallerView, publication, qtPublicationProvider, qtPublicationView, profiling, qtProfilingProvider, qtProfilingView, android, apple, qmlLanguage, qmlLanguageProvider, qmlLanguageView, qtPython, qtPythonProvider, qtPythonView, qtDependencies, instrumentProfiles, qtDependencyProvider, qtDependencyView, qtAndroidProvider, qtAndroidView, qtAppleProvider, qtAppleView, vscode.debug.registerDebugConfigurationProvider('cppdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('cppvsdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppvsdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('qml', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('qml') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), qtToolsProvider, qtToolsView, quality, testing, qtQualityProvider, qtQualityView, treeProvider, treeView, fileSymbolsView, projectHealthProvider, projectHealthView, completionRegistration, ...statusBarItems, treeView.onDidChangeSelection((event) => {
+    context.subscriptions.push(output, programOutput, buildTrace, builds, workspaces, home, buildSettings, qtProjectSettings, importLibraries, libraryTools, sdl, quickActions, quickActionsRegistration, cppTools, qtTools, qtKits, qtKitsProvider, qtKitsView, debugging, qtDebugProvider, qtDebugView, platforms, qtPlatformProvider, qtPlatformView, packaging, qtPackagingView, installers, qtInstallerProvider, qtInstallerView, publication, qtPublicationProvider, qtPublicationView, profiling, qtProfilingProvider, qtProfilingView, android, apple, qmlLanguage, qmlLanguageProvider, qmlLanguageView, qtPython, qtPythonProvider, qtPythonView, qtDependencies, instrumentProfiles, qtDependencyProvider, qtDependencyView, qtAndroidProvider, qtAndroidView, qtAppleProvider, qtAppleView, vscode.debug.registerDebugConfigurationProvider('cppdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('cppvsdbg', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('cppvsdbg') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), vscode.debug.registerDebugConfigurationProvider('qml', { provideDebugConfigurations: () => debugging.provideDebugConfigurationsForType('qml') }, vscode.DebugConfigurationProviderTriggerKind.Dynamic), qtToolsProvider, qtToolsView, quality, testing, qtQualityProvider, qtQualityView, treeProvider, treeView, fileSymbolsView, projectHealthProvider, projectHealthView, completionRegistration, ...statusBarItems, instrumentDiagnostics, networkDiagnostics, deviceRegistry, builds.onDidFinishBuild(() => updateStatusBar()), vscode.languages.onDidChangeDiagnostics(() => updateProblemsStatus()), treeView.onDidChangeSelection((event) => {
         const selected = event.selection[0];
         if (selected?.kind === 'file' && (0, qpmSymbolService_1.isSourceOrHeader)(selected.file.absolutePath)) {
             fileSymbolsProvider.setSelectedFile(selected.file.absolutePath);
@@ -435,7 +536,7 @@ async function activate(context) {
     }), register('qpm.syncCppTools', () => cppTools.synchronizeNativeProject(workspaces.currentWorkspace, { force: true, notify: true, ensureWorkspaceFolder: true, reason: 'manual synchronization' })), register('qpm.diagnoseCppTools', () => cppTools.diagnose(workspaces.currentWorkspace)), register('qpm.repairCppToolsProvider', () => cppTools.repairCppToolsProviderSelection(workspaces.currentWorkspace)), register('qpm.enableAutomaticSuggestions', () => cppTools.enableAutomaticSuggestions(workspaces.currentWorkspace)), register('qpm.addWorkspaceFolderForIntelliSense', () => cppTools.addConfigurationRootToWorkspace(workspaces.currentWorkspace)), register('qpm.selectBuildMode', () => builds.selectBuildMode()), register('qpm.selectBuildModeD32', () => builds.selectBuildMode('debug')), register('qpm.selectBuildModeR32', () => builds.selectBuildMode('release')), register('qpm.selectBuildModeD64', () => builds.selectBuildMode('debug64')), register('qpm.selectBuildModeR64', () => builds.selectBuildMode('release64')), 
     // View-title toolbar helpers keep the current D32/R32/D64/R64 label while
     // opening the same build-mode selector as the persistent status-bar item.
-    register('qpm.toolbarBuildModeD32', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeR32', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeD64', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeR64', () => builds.selectBuildMode()), register('qpm.chooseBuildAction', async () => { const result = await builds.chooseBuildAction(); treeProvider.refresh(); return result; }), register('qpm.showBuildProblems', () => vscode.commands.executeCommand('workbench.actions.view.problems')), register('qpm.showBuildTrace', () => buildTrace.show(true)), register('qpm.build', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(false) : await builds.build(false); treeProvider.refresh(); return result; }), register('qpm.rebuild', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(true) : await builds.build(true); treeProvider.refresh(); return result; }), register('qpm.clean', async () => { const result = await builds.clean(); treeProvider.refresh(); return result; }), register('qpm.run', () => isAndroidPlatformActive() ? android.buildInstallRun() : isApplePlatformActive() ? platforms.buildDeployRun() : builds.buildAndRun()), register('qpm.chooseRunAction', () => builds.chooseRunAction()), register('qpm.runWithoutBuild', () => isAndroidPlatformActive() ? android.runApplication() : isApplePlatformActive() ? platforms.runActive() : builds.runWithoutBuild()), register('qpm.debugWithGdb', () => runGdbDebug()), register('qpm.startQtDebugProfile', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()), register('qpm.startQtDebugProfileWithoutBuild', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })), register('qpm.attachQtProcess', () => debugging.attachToLocalProcess()), register('qpm.debugQtCoreDump', () => debugging.debugCoreDump()), register('qpm.attachQmlDebugger', () => debugging.attachQmlDebugger()), register('qpm.manageQtDebugProfiles', async () => { await debugging.manageProfiles(); qtDebugProvider.refresh(); projectHealthProvider.refresh(); }), register('qpm.generateQtLaunchJson', () => debugging.generateLaunchJson()), register('qpm.manageQtPlatforms', async () => { await platforms.manageProfiles(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.selectQtPlatform', async () => { await platforms.selectActivePlatform(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.detectPlatformCapabilities', async () => { await platforms.openReport(); qtPlatformProvider.refresh(); }), register('qpm.buildForPlatform', () => platforms.buildActive(false)), register('qpm.deployToPlatform', () => platforms.deployActive()), register('qpm.runOnPlatform', () => platforms.runActive()), register('qpm.buildDeployRunPlatform', () => platforms.buildDeployRun()), register('qpm.openSshDeviceManager', () => (0, qpmSshDeviceManager_1.openSshDeviceManager)(context)), register('qpm.openRemoteTerminal', () => platforms.openRemoteTerminal()), register('qpm.openDockerShell', () => platforms.openDockerShell()), register('qpm.serveWebAssembly', () => platforms.serveWebAssembly()), register('qpm.stopWebAssemblyServer', () => platforms.stopWebAssemblyServer()), register('qpm.openPlatformReport', () => platforms.openReport()), register('qpm.configureAndroidEnvironment', async () => { await android.configureEnvironment(); qtAndroidProvider.refresh(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.refreshAndroidDevices', () => { qtAndroidProvider.refresh(); return android.listDevices(); }), register('qpm.selectAndroidDevice', async () => { await android.selectDevice(); qtAndroidProvider.refresh(); qtProjectSettings.update(); }), register('qpm.selectAndroidAvd', async () => { await android.selectAvd(); qtAndroidProvider.refresh(); qtProjectSettings.update(); }), register('qpm.startAndroidAvd', async () => { await android.startAvd(); qtAndroidProvider.refresh(); }), register('qpm.installAndroidSdkPackages', async () => { await android.installRequiredSdkPackages(); qtAndroidProvider.refresh(); projectHealthProvider.refresh(); }), register('qpm.buildAndroidApk', async () => { await android.buildPackage('apk'); qtAndroidProvider.refresh(); }), register('qpm.buildAndroidAab', async () => { await android.buildPackage('aab'); qtAndroidProvider.refresh(); }), register('qpm.buildAndroidAar', async () => { await android.buildPackage('aar'); qtAndroidProvider.refresh(); }), register('qpm.installAndroidPackage', async () => { await android.installPackage(); qtAndroidProvider.refresh(); }), register('qpm.buildInstallRunAndroid', async () => { await android.buildInstallRun(); qtAndroidProvider.refresh(); }), register('qpm.runAndroidApplication', () => android.runApplication()), register('qpm.uninstallAndroidApplication', () => android.uninstallApplication()), register('qpm.prepareAndroidDebug', () => android.prepareDebugApplication()), register('qpm.startAndroidLogcat', async () => { await android.startLogcat(); qtAndroidProvider.refresh(); }), register('qpm.stopAndroidLogcat', () => { android.stopLogcat(); qtAndroidProvider.refresh(); }), register('qpm.openAndroidReport', () => android.openReport()), register('qpm.revealAndroidPackage', () => android.revealLatestPackage()), register('qpm.configureAppleEnvironment', async () => { await apple.configureEnvironment(); qtAppleProvider.refresh(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.refreshAppleDevices', async () => { apple.detectEnvironment(); qtAppleProvider.refresh(); }), register('qpm.selectAppleSimulator', async () => { await apple.selectSimulator(); qtAppleProvider.refresh(); qtProjectSettings.update(); }), register('qpm.bootAppleSimulator', async () => { await apple.bootSimulator(); qtAppleProvider.refresh(); }), register('qpm.buildAppleTarget', async () => { await apple.buildActive(); qtAppleProvider.refresh(); }), register('qpm.deployMacApplication', async () => { await apple.deployMacApplication(false); qtAppleProvider.refresh(); }), register('qpm.createMacDmg', async () => { await apple.deployMacApplication(true); qtAppleProvider.refresh(); }), register('qpm.signAppleArtifacts', async () => { await apple.signArtifacts(); qtAppleProvider.refresh(); }), register('qpm.verifyAppleSignatures', async () => { await apple.verifySignatures(); qtAppleProvider.refresh(); }), register('qpm.notarizeAppleArtifact', async () => { await apple.notarizeArtifact(); qtAppleProvider.refresh(); }), register('qpm.stapleAppleArtifact', async () => { await apple.stapleArtifact(); qtAppleProvider.refresh(); }), register('qpm.installRunIosSimulator', async () => { await apple.installAndRunIosSimulator(); qtAppleProvider.refresh(); }), register('qpm.openAppleReport', () => apple.openReport()), register('qpm.revealAppleOutput', () => apple.revealOutput()), register('qpm.cleanAppleOutput', async () => { await apple.cleanOutput(); qtAppleProvider.refresh(); }), register('qpm.generateProductMetadata', async () => { await packaging.generateMetadata(); qtPackagingProvider.refresh(); }), register('qpm.createPortablePackage', async () => { const ok = await packaging.createPortablePackage(); if (ok)
+    register('qpm.toolbarBuildModeD32', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeR32', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeD64', () => builds.selectBuildMode()), register('qpm.toolbarBuildModeR64', () => builds.selectBuildMode()), register('qpm.chooseBuildAction', async () => { const result = await builds.chooseBuildAction(); treeProvider.refresh(); return result; }), register('qpm.showBuildProblems', () => vscode.commands.executeCommand('workbench.actions.view.problems')), register('qpm.showBuildTrace', () => buildTrace.show(true)), register('qpm.build', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(false) : await builds.build(false); treeProvider.refresh(); return result; }), register('qpm.rebuild', async () => { const result = isAndroidPlatformActive() ? await platforms.buildActive(true) : await builds.build(true); treeProvider.refresh(); return result; }), register('qpm.clean', async () => { const result = await builds.clean(); treeProvider.refresh(); return result; }), register('qpm.run', () => isAndroidPlatformActive() ? android.buildInstallRun() : isApplePlatformActive() ? platforms.buildDeployRun() : builds.buildAndRun()), register('qpm.chooseRunAction', () => builds.chooseRunAction()), register('qpm.runWithoutBuild', () => isAndroidPlatformActive() ? android.runApplication() : isApplePlatformActive() ? platforms.runActive() : builds.runWithoutBuild()), register('qpm.debugWithGdb', () => runGdbDebug()), register('qpm.startQtDebugProfile', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile()), register('qpm.startQtDebugProfileWithoutBuild', () => isQtPythonActive() ? qtPython.debug() : isAndroidPlatformActive() ? android.prepareDebugApplication() : debugging.launchActiveProfile({ build: false })), register('qpm.attachQtProcess', () => debugging.attachToLocalProcess()), register('qpm.debugQtCoreDump', () => debugging.debugCoreDump()), register('qpm.attachQmlDebugger', () => debugging.attachQmlDebugger()), register('qpm.manageQtDebugProfiles', async () => { await debugging.manageProfiles(); qtDebugProvider.refresh(); projectHealthProvider.refresh(); }), register('qpm.generateQtLaunchJson', () => debugging.generateLaunchJson()), register('qpm.manageQtPlatforms', async () => { await platforms.manageProfiles(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.selectQtPlatform', async () => { await platforms.selectActivePlatform(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.detectPlatformCapabilities', async () => { await platforms.openReport(); qtPlatformProvider.refresh(); }), register('qpm.buildForPlatform', () => platforms.buildActive(false)), register('qpm.deployToPlatform', () => platforms.deployActive()), register('qpm.runOnPlatform', () => platforms.runActive()), register('qpm.buildDeployRunPlatform', () => platforms.buildDeployRun()), register('qpm.openSshDeviceManager', () => networkDiagnostics.show('ssh')), register('qpm.openInstrumentDiagnostics', (endpoint) => instrumentDiagnostics.show(endpoint)), register('qpm.openNetworkDiagnostics', () => networkDiagnostics.show()), register('qpm.openDeviceManager', () => networkDiagnostics.show('devices')), register('qpm.selectConfiguration', () => selectConfiguration()), register('qpm.openGettingStarted', () => vscode.commands.executeCommand('workbench.action.openWalkthrough', 'JerryCrozet-ElectronicEngineer.qt-project-manager-and-build#qpm.gettingStarted', false)), register('qpm.openRemoteTerminal', () => platforms.openRemoteTerminal()), register('qpm.openDockerShell', () => platforms.openDockerShell()), register('qpm.serveWebAssembly', () => platforms.serveWebAssembly()), register('qpm.stopWebAssemblyServer', () => platforms.stopWebAssemblyServer()), register('qpm.openPlatformReport', () => platforms.openReport()), register('qpm.configureAndroidEnvironment', async () => { await android.configureEnvironment(); qtAndroidProvider.refresh(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.refreshAndroidDevices', () => { qtAndroidProvider.refresh(); return android.listDevices(); }), register('qpm.selectAndroidDevice', async () => { await android.selectDevice(); qtAndroidProvider.refresh(); qtProjectSettings.update(); }), register('qpm.selectAndroidAvd', async () => { await android.selectAvd(); qtAndroidProvider.refresh(); qtProjectSettings.update(); }), register('qpm.startAndroidAvd', async () => { await android.startAvd(); qtAndroidProvider.refresh(); }), register('qpm.installAndroidSdkPackages', async () => { await android.installRequiredSdkPackages(); qtAndroidProvider.refresh(); projectHealthProvider.refresh(); }), register('qpm.buildAndroidApk', async () => { await android.buildPackage('apk'); qtAndroidProvider.refresh(); }), register('qpm.buildAndroidAab', async () => { await android.buildPackage('aab'); qtAndroidProvider.refresh(); }), register('qpm.buildAndroidAar', async () => { await android.buildPackage('aar'); qtAndroidProvider.refresh(); }), register('qpm.installAndroidPackage', async () => { await android.installPackage(); qtAndroidProvider.refresh(); }), register('qpm.buildInstallRunAndroid', async () => { await android.buildInstallRun(); qtAndroidProvider.refresh(); }), register('qpm.runAndroidApplication', () => android.runApplication()), register('qpm.uninstallAndroidApplication', () => android.uninstallApplication()), register('qpm.prepareAndroidDebug', () => android.prepareDebugApplication()), register('qpm.startAndroidLogcat', async () => { await android.startLogcat(); qtAndroidProvider.refresh(); }), register('qpm.stopAndroidLogcat', () => { android.stopLogcat(); qtAndroidProvider.refresh(); }), register('qpm.openAndroidReport', () => android.openReport()), register('qpm.revealAndroidPackage', () => android.revealLatestPackage()), register('qpm.configureAppleEnvironment', async () => { await apple.configureEnvironment(); qtAppleProvider.refresh(); qtPlatformProvider.refresh(); projectHealthProvider.refresh(); qtProjectSettings.update(); }), register('qpm.refreshAppleDevices', async () => { apple.detectEnvironment(); qtAppleProvider.refresh(); }), register('qpm.selectAppleSimulator', async () => { await apple.selectSimulator(); qtAppleProvider.refresh(); qtProjectSettings.update(); }), register('qpm.bootAppleSimulator', async () => { await apple.bootSimulator(); qtAppleProvider.refresh(); }), register('qpm.buildAppleTarget', async () => { await apple.buildActive(); qtAppleProvider.refresh(); }), register('qpm.deployMacApplication', async () => { await apple.deployMacApplication(false); qtAppleProvider.refresh(); }), register('qpm.createMacDmg', async () => { await apple.deployMacApplication(true); qtAppleProvider.refresh(); }), register('qpm.signAppleArtifacts', async () => { await apple.signArtifacts(); qtAppleProvider.refresh(); }), register('qpm.verifyAppleSignatures', async () => { await apple.verifySignatures(); qtAppleProvider.refresh(); }), register('qpm.notarizeAppleArtifact', async () => { await apple.notarizeArtifact(); qtAppleProvider.refresh(); }), register('qpm.stapleAppleArtifact', async () => { await apple.stapleArtifact(); qtAppleProvider.refresh(); }), register('qpm.installRunIosSimulator', async () => { await apple.installAndRunIosSimulator(); qtAppleProvider.refresh(); }), register('qpm.openAppleReport', () => apple.openReport()), register('qpm.revealAppleOutput', () => apple.revealOutput()), register('qpm.cleanAppleOutput', async () => { await apple.cleanOutput(); qtAppleProvider.refresh(); }), register('qpm.generateProductMetadata', async () => { await packaging.generateMetadata(); qtPackagingProvider.refresh(); }), register('qpm.createPortablePackage', async () => { const ok = await packaging.createPortablePackage(); if (ok)
         qtPackagingProvider.refresh(); }), register('qpm.openPackagingReport', () => packaging.openReport()), register('qpm.revealPackagingOutput', () => packaging.revealOutput()), register('qpm.cleanPackagingOutput', async () => { await packaging.cleanOutput(); qtPackagingProvider.refresh(); }), register('qpm.createDesktopInstaller', async () => { const ok = await installers.createInstaller(); qtInstallerProvider.refresh(); if (ok)
         qtPackagingProvider.refresh(); }), register('qpm.generateInstallerProject', async () => { await installers.generateInstallerProject(); qtInstallerProvider.refresh(); }), register('qpm.createQtIfwRepository', async () => { await installers.createUpdateRepository(); qtInstallerProvider.refresh(); }), register('qpm.signDistributionArtifacts', async () => { await installers.signDistributionArtifacts(); qtInstallerProvider.refresh(); }), register('qpm.verifyDistributionSignatures', async () => { await installers.verifyDistributionSignatures(); qtInstallerProvider.refresh(); }), register('qpm.detectInstallerTools', async () => { await installers.detectTools(); qtInstallerProvider.refresh(); }), register('qpm.openInstallerReport', () => installers.openReport()), register('qpm.revealInstallerOutput', () => installers.revealOutput()), register('qpm.cleanInstallerOutput', async () => { await installers.cleanOutput(); qtInstallerProvider.refresh(); }), register('qpm.detectPublicationTools', async () => { await publication.detectTools(); qtPublicationProvider.refresh(); }), register('qpm.generatePublicationSources', async () => { await publication.generatePublicationSources(); qtPublicationProvider.refresh(); }), register('qpm.createMsixPackage', async () => { await publication.createMsixPackage(); qtPublicationProvider.refresh(); }), register('qpm.generateAppInstaller', async () => { await publication.generateAppInstaller(); qtPublicationProvider.refresh(); }), register('qpm.generateWingetManifests', async () => { await publication.generateWingetManifests(); qtPublicationProvider.refresh(); }), register('qpm.validateWingetManifests', async () => { await publication.validateWingetManifests(); qtPublicationProvider.refresh(); }), register('qpm.createReleaseBundle', async () => { await publication.createReleaseBundle(); qtPublicationProvider.refresh(); }), register('qpm.publishRelease', async () => { await publication.publishRelease(); qtPublicationProvider.refresh(); }), register('qpm.openPublicationReport', () => publication.openReport()), register('qpm.revealPublicationOutput', () => publication.revealOutput()), register('qpm.cleanPublicationOutput', async () => { await publication.cleanOutput(); qtPublicationProvider.refresh(); }), register('qpm.profileQmlApplication', async () => { await profiling.runQmlProfiler(); qtProfilingProvider.refresh(); }), register('qpm.profileCpu', async () => { await profiling.runCpuProfiler(); qtProfilingProvider.refresh(); }), register('qpm.profileMemory', async () => { await profiling.runMemoryProfiler(); qtProfilingProvider.refresh(); }), register('qpm.runCppcheck', async () => { await profiling.runCppcheck(); qtProfilingProvider.refresh(); }), register('qpm.traceSystemCalls', async () => { await profiling.runSystemTrace(); qtProfilingProvider.refresh(); }), register('qpm.stopProfiling', () => { profiling.stopActiveProfilers(); qtProfilingProvider.refresh(); }), register('qpm.openLatestProfilingResult', () => profiling.openLatestOutput()), register('qpm.openProfilingReport', () => profiling.openReport()), register('qpm.revealProfilingOutput', () => profiling.revealOutput()), register('qpm.cleanProfilingOutput', async () => { await profiling.cleanOutput(); qtProfilingProvider.refresh(); }), register('qpm.python.bootstrap', async () => { await qtPython.bootstrapActiveProject(true); qtPythonProvider.refresh(); updateStatusBar(); }), register('qpm.python.selectInterpreter', async () => { await qtPython.selectInterpreter(); qtPythonProvider.refresh(); updateStatusBar(); }), register('qpm.python.createVirtualEnvironment', async () => { await qtPython.createVirtualEnvironment(); qtPythonProvider.refresh(); updateStatusBar(); }), register('qpm.python.installPySide6', async () => { await qtPython.installPySide6(); qtPythonProvider.refresh(); updateStatusBar(); }), register('qpm.python.build', async () => { await qtPython.build(); qtPythonProvider.refresh(); }), register('qpm.python.run', async () => { await qtPython.run(); qtPythonProvider.refresh(); }), register('qpm.python.debug', async () => { await qtPython.debug(); qtPythonProvider.refresh(); }), register('qpm.python.clean', async () => { await qtPython.clean(); qtPythonProvider.refresh(); }), register('qpm.python.compileUi', async () => { await qtPython.compileUiFiles(); qtPythonProvider.refresh(); }), register('qpm.python.compileResources', async () => { await qtPython.compileResourceFiles(); qtPythonProvider.refresh(); }), register('qpm.python.openDesigner', (target) => qtPython.openDesigner(undefined, target)), register('qpm.python.deploy', async () => { await qtPython.deploy(); qtPythonProvider.refresh(); }), register('qpm.python.deployAndroid', async () => { await qtPython.deployAndroid(); qtPythonProvider.refresh(); }), register('qpm.python.openReport', () => qtPython.openReport()), register('qpm.python.revealEnvironment', () => qtPython.revealEnvironment()), register('qpm.dependencies.configure', async () => { await qtDependencies.configure(); qtDependencyProvider.refresh?.(); }), register('qpm.dependencies.detectTools', async () => { await qtDependencies.detectTools(); }), register('qpm.dependencies.generateManifests', async () => { await qtDependencies.generateManifests(); }), register('qpm.dependencies.install', async () => { await qtDependencies.install(); }), register('qpm.dependencies.openReport', () => qtDependencies.openReport()), register('qpm.dependencies.revealOutput', () => qtDependencies.revealOutput()), register('qpm.dependencies.clean', async () => { await qtDependencies.clean(); }), register('qpm.openWorkspaceFile', () => builds.openWorkspaceFile()), register('qpm.setActiveProject', (node) => workspaces.setActiveProject(node?.ref)), register('qpm.buildProject', async (node) => { const result = node ? await builds.build(false, node.ref) : undefined; treeProvider.refresh(); return result; }), register('qpm.rebuildProject', async (node) => { const result = node ? await builds.build(true, node.ref) : undefined; treeProvider.refresh(); return result; }), register('qpm.cleanProject', async (node) => { const result = node ? await builds.clean(node.ref) : undefined; treeProvider.refresh(); return result; }), register('qpm.selectTargetType', (node) => workspaces.selectTargetType(node?.ref)), register('qpm.selectTargetTypeEXE', () => workspaces.selectTargetType()), register('qpm.selectTargetTypeDLL', () => workspaces.selectTargetType()), register('qpm.selectTargetTypeLIB', () => workspaces.selectTargetType()), register('qpm.editBuildSettings', (node) => { const ref = node?.ref ?? workspaces.activeProjectRef; return ref?.exists && (0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath) ? qtProjectSettings.show(ref) : buildSettings.show(ref); }), register('qpm.editBuildSettingsSafeMode', (node) => { const ref = node?.ref ?? workspaces.activeProjectRef; return ref?.exists && (0, qtProjectManifest_1.isQtProjectManifestPath)(ref.absolutePath) ? qtProjectSettings.showSafeMode(ref) : buildSettings.showSafeMode(ref); }), register('qpm.executeProject', (node) => node ? builds.buildAndRun(node.ref) : undefined), register('qpm.debugProjectWithGdb', async (node) => { if (node?.ref)
         await workspaces.setActiveProject(node.ref); return await runGdbDebug(); }), register('qpm.editProjectFile', (node) => node ? builds.openProjectFile(node.ref.absolutePath) : undefined), register('qpm.openProjectFile', (node) => node ? workspaces.openPath(node.ref.absolutePath) : undefined), register('qpm.createProjectInWorkspace', async () => {

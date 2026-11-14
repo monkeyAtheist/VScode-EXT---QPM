@@ -37,6 +37,7 @@ exports.LibraryToolsPanel = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const webviewKit_1 = require("./webviewKit");
 const qpmDllAnalyzerService_1 = require("../services/qpmDllAnalyzerService");
 const qpmLibraryAnalyzerService_1 = require("../services/qpmLibraryAnalyzerService");
 class LibraryToolsPanel {
@@ -72,7 +73,7 @@ class LibraryToolsPanel {
             this.panel.webview.onDidReceiveMessage((message) => void this.handleMessage(message));
         }
         this.panel.title = this.mode === 'dll' ? 'QPM DLL Analyzer' : 'QPM .a / .lib Analyzer';
-        this.panel.webview.html = this.render();
+        this.panel.webview.html = (0, webviewKit_1.hardenHtml)(this.render(), this.panel.webview, { harmonize: true });
         this.panel.reveal(vscode.ViewColumn.Active);
     }
     async handleMessage(message) {

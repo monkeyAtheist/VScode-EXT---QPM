@@ -12,6 +12,17 @@ import { inspectQpmWorkspaceAssociation, removeQpmWorkspaceAssociation, writeQpm
 
 const LAST_WORKSPACE_KEY = 'qpm.lastWorkspace';
 const GLOBAL_LAST_WORKSPACE_KEY = 'qpm.lastWorkspace.global';
+const RECENT_WORKSPACES_KEY = 'qpm.recentWorkspaces.v1';
+const MAX_RECENT_WORKSPACES = 10;
+
+export interface QpmRecentWorkspace {
+  path: string;
+  name: string;
+  lastOpened: number;
+}
+
+
+export type QpmTargetTypeName = 'Executable' | 'Dynamic Link Library' | 'Static Library';
 
 export class QpmWorkspaceService implements vscode.Disposable {
   private workspace: QpmWorkspace | undefined;
@@ -255,6 +266,7 @@ export class QpmWorkspaceService implements vscode.Disposable {
     }
     this.writeWorkspaceAssociationMarkers();
     filePath = await this.persistLastWorkspace(filePath);
+    await this.rememberRecentWorkspace(filePath, this.workspace?.name ?? path.basename(filePath, extension));
     this.output.appendLine(`[QPM] Loaded ${extension === '.cws' ? 'workspace' : nativeManifest ? 'native Qt project' : 'compatibility project'}: ${filePath}`);
     this.changeEmitter.fire();
     if (extension === '.cws') {
@@ -269,6 +281,26 @@ export class QpmWorkspaceService implements vscode.Disposable {
         ).then((answer) => answer === 'Repair workspace' ? this.repairNativeWorkspaceCompatibility() : undefined);
       }
     }
+  }
+
+  /** Last 10 workspaces/projects opened in any window (Home page). */
+  getRecentWorkspaces(): Array<QpmRecentWorkspace & { exists: boolean }> {
+    const stored = this.context.globalState?.get<QpmRecentWorkspace[]>(RECENT_WORKSPACES_KEY, []) ?? [];
+    return (Array.isArray(stored) ? stored : [])
+      .filter((entry) => entry && typeof entry.path === 'string')
+      .map((entry) => ({ path: entry.path, name: String(entry.name || path.basename(entry.path)), lastOpened: Number(entry.lastOpened) || 0, exists: fs.existsSync(entry.path) }));
+  }
+
+  async forgetRecentWorkspace(filePath: string): Promise<void> {
+    const kept = this.getRecentWorkspaces().filter((entry) => !sameRecentPath(entry.path, filePath)).map(({ exists: _exists, ...entry }) => entry);
+    await this.context.globalState?.update(RECENT_WORKSPACES_KEY, kept);
+    this.changeEmitter.fire();
+  }
+
+  private async rememberRecentWorkspace(filePath: string, name: string): Promise<void> {
+    if (!this.context.globalState) return;
+    const others = this.getRecentWorkspaces().filter((entry) => !sameRecentPath(entry.path, filePath)).map(({ exists: _exists, ...entry }) => entry);
+    await this.context.globalState.update(RECENT_WORKSPACES_KEY, [{ path: filePath, name, lastOpened: Date.now() }, ...others].slice(0, MAX_RECENT_WORKSPACES));
   }
 
   private findAssociatedWorkspaceFromOpenFolders(): string | undefined {
@@ -1079,15 +1111,20 @@ export class QpmWorkspaceService implements vscode.Disposable {
     if (!selected) {
       return;
     }
+    this.setTargetType(ref, selected.value as QpmTargetTypeName);
+    vscode.window.showInformationMessage(`${ref.name} target type: ${selected.label}.`);
+  }
+
+  /** Applies a target type without prompting (configuration picker, Home chips). */
+  setTargetType(ref: QpmWorkspaceProjectRef, value: QpmTargetTypeName): void {
     if (isQtProjectManifestPath(ref.absolutePath)) {
       const manifest = readQtProjectManifest(ref.absolutePath);
-      manifest.kind = selected.value === 'Dynamic Link Library' ? 'shared-library' : selected.value === 'Static Library' ? 'static-library' : ['quick-application', 'console-application', 'test-application', 'quick-test-application'].includes(manifest.kind) ? manifest.kind : 'widgets-application';
+      manifest.kind = value === 'Dynamic Link Library' ? 'shared-library' : value === 'Static Library' ? 'static-library' : ['quick-application', 'console-application', 'test-application', 'quick-test-application'].includes(manifest.kind) ? manifest.kind : 'widgets-application';
       writeQtProjectManifest(ref.absolutePath, manifest);
     } else {
-      this.parser.setTargetType(ref.absolutePath, selected.value);
+      this.parser.setTargetType(ref.absolutePath, value);
     }
     this.refresh();
-    vscode.window.showInformationMessage(`${ref.name} target type: ${selected.label}.`);
   }
 
   async generatePrototypes(projectRef: QpmWorkspaceProjectRef, file: QpmProjectFile): Promise<void> {
@@ -1544,4 +1581,9 @@ export function generatePrototypeHeader(source: string, headerName: string): str
   const guard = headerName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
   const body = prototypes.length ? prototypes.join('\n') : '/* No non-static function definitions were detected automatically. */';
   return `#ifndef ${guard}\n#define ${guard}\n\n#ifdef __cplusplus\nextern "C" {\n#endif\n\n${body}\n\n#ifdef __cplusplus\n}\n#endif\n\n#endif /* ${guard} */\n`;
+}
+
+function sameRecentPath(left: string, right: string): boolean {
+  const normalize = (value: string) => path.resolve(value).replace(/[\\/]+$/, '');
+  return process.platform === 'win32' ? normalize(left).toLowerCase() === normalize(right).toLowerCase() : normalize(left) === normalize(right);
 }

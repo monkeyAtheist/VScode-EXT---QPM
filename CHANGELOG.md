@@ -1,3 +1,57 @@
+## 0.36.0
+
+Port of the CPM 0.2.110 → 0.2.114 redesign and of the bench tools that QPM did not have yet.
+
+**New tools (from CPM)**
+
+- **Instrument Diagnostics** (`QPM: Open Instrument Diagnostics`): COM / USB-PnP / VISA-USBTMC terminal with the log next to the command line (Enter sends, ↑/↓ history), SCPI presets, saved commands, PASS/FAIL sequences and instrument profiles. Independent of any project.
+- **Network & Wireless Diagnostics** (`QPM: Open Network & Wireless Diagnostics`): Ethernet/Wi-Fi interfaces, TCP/UDP client and TCP listener terminal, ping / DNS / port checks, mDNS/SSDP discovery, Wi-Fi scan, **BLE advertisement scan** (the PowerShell WinRT watcher that never returned results is rewritten with `Register-ObjectEvent`) and BLE GATT inspection/read/write/monitor.
+- **QPM Device Manager**: one profile per instrument or board grouping its COM, VISA, TCP, UDP and SSH endpoints; export/import as JSON.
+- **OpenSSH Device Manager** now opens on the SSH tab of Network & Wireless (same features plus ping / port test). **Remote Linux target** on an alias points a Remote Linux platform profile of the active Qt project at it (creates one when the project has none).
+- **Utility module bundles**: the QPM_Utility catalog grows from 35 to 101 modules — the full CPM C and C++17 bundles (INI, file/path, string, time & timers, threads, process, JSON, CSV, buffers, containers, CRC, logging, UART, RS-485, LIN, USB HID, libusb, VISA, TLS, BLE GATT, framing, SCPI, Modbus, retry, HTTP, MQTT, WebSocket and ready-to-use stacks). The picker asks language → category → module, and *Bundles…* entries appear in the C, C++ and Scripts creation menus. The former QPM_Utility C++ classes, robot demo scripts and embedded Web UI demo remain available as legacy entries. Windows link libraries a module needs (e.g. `ws2_32`) are added to the `.qtproject.json` of a native project.
+- **Run terminals**: Run (C++ and Qt for Python) reuses a single transient `QPM Run: <project>` terminal — the previous one is closed, the program it ran is stopped, and VS Code no longer re-launches executables from restored terminals after a restart. Debug sessions close the previous Run too. Captured (Program Output) processes are stopped (process tree on Windows); detached launches are left alone. Terminals from QPM ≤ 0.35 are cleaned once.
+
+**Webview security (lot 1)**
+
+- Every QPM webview goes through `src/views/webviewKit.ts` (`hardenHtml`): strict Content-Security-Policy with a per-render nonce. This covers the pages that allowed inline scripts (compatibility Build Settings, Library Tools, DLL import-library batch) and those that had no CSP (Library explorer ×3, editor tools ×4, color picker). Qt Project Settings and Home only execute `qpm.*` commands requested by the page.
+- Fixed the Python "virtual environment bootstrap" snippet: `.venv\Scripts\activate` contained a BEL control character (embedded catalog and `data/python_pack.json`).
+
+**VS Code integration (lot 2)**
+
+- **Status bar**: Qt / PySide6 version, one `project · D64 · EXE` item (plus the platform when it is not Desktop) that opens the new **Select Build Configuration** picker (mode, target type, Qt installation, platform), Build / Run / Debug, and an error/warning counter after a build. Nothing is shown until a QPM workspace is loaded.
+- **Keyboard shortcuts** in QPM workspaces: Ctrl+F7 build, Ctrl+F5 build & run, F5 build & debug (not while debugging, not for static libraries). They can be rebound in Keyboard Shortcuts.
+- **Workspace toolbar** reduced to Build, Run, Run Debug (without build) and Refresh; Home, Open, New Qt project, Configuration, Qt installation, Run options and Project Settings moved to the "…" menu. The D32/R32/D64/R64 and EXE/DLL/LIB buttons are replaced by the configuration picker.
+- All 336 commands use the single **QPM** category and titles no longer start with "Qt Project Manager:". Before, 99 commands appeared twice-prefixed in the Command Palette ("QPM: Qt Project Manager: …") and others, such as "Save All" or "Expand All", had no QPM prefix at all.
+- View names no longer repeat "Qt" inside the Qt PM container; secondary views (Android, Apple, Profiling, Packaging, Installers, Publication…) start collapsed; Project Health, File Symbols, Dependencies, Platforms and Kits show guidance when empty.
+- Activation: the 247 hand-written `onCommand`/`onView` events are removed (inferred by VS Code since 1.74); QPM activates when the folder contains a `.qtproject.json`.
+- Extension settings split into eight titled sections (Qt, Workspace & IntelliSense, Build, Run & Deployment, QML/Resources/Translations, Tests/Quality/Profiling, Platforms & Remote, SDL) with value descriptions for the drop-downs.
+- Fixed the **Build & Debug** action of Quick Actions and Home, which called a command that does not exist (`qpm.debugInQpm`), and Home's **Open workspace file** (`qpm.openWorkspaceInQpm`).
+
+**Qt Project Settings (lot 3)**
+
+- Sidebar navigation grouped by area (Project, Build, Run & Debug, Qt & Quality, Release) with the sections of the current page listed under it; project, manifest and edited build variant at the top.
+- **Search all settings**: matches from every page, with a count per page and the page shown on each result.
+- **Overview dashboard**: Build / Rebuild / Clean / Run / Debug / Configuration, then one tile per area (Qt kit or Qt for Python, target, backend, modules, platform, dependencies, deployment, distribution) with a Ready / Check / Missing / Off state; each tile opens its page.
+- **Save bar** always visible: unsaved-changes state, Ctrl+S, Discard changes. Switching the build variant with unsaved edits is refused instead of silently dropping them, and when the project changes elsewhere while you edit, a banner offers to reload instead of overwriting your edits.
+- File and tool paths are checked as you edit (missing files in red, tools not found on PATH in amber).
+- Scroll position kept per page across refreshes.
+
+**Home (lot 4)**
+
+- **Recent workspaces** (last 10, across windows), with folder, age, "open" and "missing" badges; × to forget.
+- **Project card**: configuration chips (mode, target, platform — or PySide6), Build / Run / Debug with their shortcuts, Rebuild / Clean / Run options, a **last build** line (result, failing phase, age, duration) and the current error/warning counts.
+- **Qt card**: version, compiler, compatibility diagnostic and pills for qmake, compiler, debugger, Designer, lupdate, qmllint and windeployqt; **Qt for Python card** for PySide6 projects (interpreter, PySide6 version, pyside6-uic/rcc/designer/deploy).
+- Tools grouped as Code, Qt & libraries, and Equipment & connectivity.
+- The page is drawn once and updated through messages — no full reload, flicker or lost scroll position. `QpmBuildService` exposes `lastBuild`, `onDidFinishBuild` and its diagnostics; `QpmWorkspaceService` the recent-workspace list.
+
+**Harmonization, catalog and getting started (lot 5)**
+
+- Library explorer pages, editor tools, color picker, DLL import batch, Library Tools, compatibility Build Settings, Qt Resource Editor and SCPI Instrument Profile Editor load `media/webview/qpm-harmonize.css`: same typography, headings, control radius and visible keyboard focus.
+- The 1,380 built-in language/tool starter entries move from `jcLibEmbedded.ts` to `data/starter_catalog.json` (`jcLibEmbedded.ts`: 20,578 → 14,019 lines). Generated by running the former code; an automated comparison confirmed identical results for all 65 pack modes, with and without `data/web_language_pack.json`.
+- **Getting started walkthrough** (Help › Welcome, *QPM: Open the Getting Started Guide*, or the Home start card): Qt installation, project, build, run/debug, bench tools.
+
+**Build note** — the `dist/extension.js` of this release was bundled with an equivalent CommonJS bundler (same layout as esbuild: `vscode` and Node built-ins external, `vscode-languageclient` included) because the esbuild binary in `node_modules` is the Windows one. Running `npm run compile` on Windows regenerates it with esbuild.
+
 ## 0.35.0
 
 - Added a complete **Libraries** toolset ported from the recent CPM library workflow while preserving QPM-specific Qt backends.

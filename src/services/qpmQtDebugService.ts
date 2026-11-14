@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import * as vscode from 'vscode';
+import { qpmRunSessions } from './qpmRunSessions';
 import {
   getActiveQtDebugProfile,
   getActiveQtRunProfile,
@@ -128,6 +129,7 @@ export class QpmQtDebugService implements vscode.Disposable {
     this.output.appendLine(`[Qt Debug] Starting ${profile.name} (${profile.request}) with ${String(configuration.type)}.`);
     this.output.appendLine(`[Qt Debug] Program: ${String(configuration.program ?? 'not applicable')}`);
     const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(ref.absolutePath));
+    if (profile.request === 'launch') qpmRunSessions(this.output).stopPrevious('Debug');
     const started = await vscode.debug.startDebugging(folder, configuration);
     if (!started) {
       vscode.window.showErrorMessage('Unable to start the Qt debug session. Verify the debugger selected by the active kit and the Microsoft C/C++ extension.');

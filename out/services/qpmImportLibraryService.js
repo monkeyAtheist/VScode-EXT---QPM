@@ -42,6 +42,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
+const webviewKit_1 = require("../views/webviewKit");
 const qtProjectManifest_1 = require("../model/qtProjectManifest");
 const qpmProjectSettingsService_1 = require("./qpmProjectSettingsService");
 const qpmSymbolService_1 = require("./qpmSymbolService");
@@ -184,7 +185,7 @@ class QpmImportLibraryService {
                     this.dllBatchRows.push(this.createDllBatchRow(filePath, ref));
             }
         }
-        this.dllPanel.webview.html = this.renderDllBatchPanel();
+        this.dllPanel.webview.html = (0, webviewKit_1.hardenHtml)(this.renderDllBatchPanel(), this.dllPanel.webview, { harmonize: true });
         this.dllPanel.reveal(vscode.ViewColumn.Active);
     }
     createDllBatchRow(filePath, ref) {
